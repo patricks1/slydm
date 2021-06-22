@@ -1,0 +1,10 @@
+#ignore python compile files
+*.pyc
+
+#ignore backup files
+*.bak
+
+#ignore hidden files
+.*
+
+__pycache__
