@@ -51,3 +51,14 @@ def show(f):
     print(a * snapshot['PartType1']['Coordinates'][:])
     
     return None
+
+def load_disp_vc(fname):
+    direc='/export/nfs0home/pstaudt/projects/project01/data/'
+    fname=direc+fname
+    with h5py.File(fname,'r') as f:
+        rs=np.array(f.get('rs'))
+        disps_fire=np.array(f.get('disps_fire'))
+        vcs_fire=np.array(f.get('vcircs_fire'))
+        disps_dmo=np.array(f.get('disps_dmo'))
+        vcs_dmo=np.array(f.get('vcircs_dmo'))
+    return rs, disps_fire, vcs_fire, disps_dmo, vcs_dmo
