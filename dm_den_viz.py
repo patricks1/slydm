@@ -1,13 +1,17 @@
 from scipy.stats.stats import pearsonr
 from adjustText import adjust_text
+from IPython.display import display, Latex
 import numpy as np
 import pandas as pd
 import dm_den
 import sys
+import paths
 import staudt_utils
+import pickle
 import staudt_fire_utils as utils
 
 from astropy import units as u
+from astropy import constants as c
 from astropy.units import cds
 cds.enable()
 
@@ -72,6 +76,26 @@ log_rho_solar_label='$\log(\,\\rho(R_0)\,/\,[\,\mathrm{M}_\odot'\
                     '\mathrm{kpc}^{-3}\,]\,)$'
 log_rho_label='$\log(\,\\rho(R_\mathrm{vir})\,/\,[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]\,)$'
 rho_label='$\\rho(R_\mathrm{vir})\;[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]$'
+den_label = '$\\rho_\mathrm{DM}\,/\,\\left[\mathrm{M_\odot kpc^{-3}}\\right]$'
+disp_label = '$\\sigma_\mathrm{DM}\,/\,'\
+             '\\left[\mathrm{km\,s^{-1}}\\right]$'
+gmr_label = '$\sqrt{Gm/r}\,/\,'\
+              '\\left[\mathrm{km\,s^{-1}}\\right]$'
+vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
+
+# v0 ranges from Sofue 2020
+v0_sofu=238.
+dv0_sofu=14.
+log_dv0_neg = np.log10(v0_sofu/(v0_sofu-dv0_sofu))
+log_dv0_pos = np.log10((v0_sofu+dv0_sofu)/v0_sofu)
+
+# Density ranges from Sofue 2020
+rho_sofu = 0.39*u.GeV/c.c**2.*u.cm**-3.
+drho_sofu = 0.09*u.GeV/c.c**2.*u.cm**-3.
+rho_sofu = rho_sofu.to(u.M_sun*u.kpc**-3.).value
+drho_sofu = drho_sofu.to(u.M_sun*u.kpc**-3.).value
+rho_min_sofu = np.log10(rho_sofu-drho_sofu)
+rho_max_sofu = np.log10(rho_sofu+drho_sofu)
 
 def plt_slr(fname, xcol, ycol,
             xlabel,ylabel,
@@ -80,7 +104,8 @@ def plt_slr(fname, xcol, ycol,
             figsize=(7,6), dpi=100,
             showlabels=True,
             labelsize=15, arrowprops=None, formula_y=-0.2,
-            dropgals=None):
+            dropgals=None, show_formula=True, adjust_text_kwargs={},
+            tgt_fname=None, minarrow=0.02, ax_slr_kwargs={}):
     'Plot a simple linear regression'
 
     fig = plt.figure(figsize=figsize, dpi=dpi)
@@ -92,18 +117,39 @@ def plt_slr(fname, xcol, ycol,
             xscale, yscale, 
             showlabels,
             labelsize, arrowprops, formula_y,
-            dropgals)
+            dropgals, show_formula=show_formula, 
+            adjust_text_kwargs=adjust_text_kwargs, minarrow=minarrow,
+            **ax_slr_kwargs)
 
+    if tgt_fname is not None:
+        plt.draw()
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=140)
     plt.show()
 
 def ax_slr(ax, fname, xcol, ycol,
-            xlabel,ylabel,
-            xadjustment=None, yadjustment=None,
-            xscale='linear', yscale='linear', 
-            showlabels=True,
-            labelsize=15, arrowprops=None, formula_y=-0.2,
-            dropgals=None, showGeV=True):
+           xlabel,ylabel,
+           xadjustment=None, yadjustment=None,
+           xscale='linear', yscale='linear', 
+           showlabels=True,
+           labelsize=15, arrowprops=None, formula_y=-0.2,
+           dropgals=None, showGeV=True, show_formula=True,
+           prediction_x=None, dX=None, fore_sig=1.-0.682, verbose=False,
+           minarrow=0.02, adjust_text_kwargs={}, legend_txt=None):
     'Plot a simple linear regression on ax'
+
+    def plt_forecast(ax1, x_forecast, yhat):
+        delta_f = yhat[1] #uncertainty in the forecast
+        if xadjustment=='log':
+            x = np.log10(x_forecast)
+        # Returns ErrorbarContainer
+        ebc = ax1.errorbar(x_forecast, 
+                     yhat[0],
+                     yerr=delta_f,
+                     c='k', capsize=3,
+                     marker='o', ms=8, mec='r', mfc='r')
+        return ebc 
 
     #Perform the regression in linear space unless we're plotting log data, as
     #opposed to plotting unadjusted data but on a log scale
@@ -123,8 +169,16 @@ def ax_slr(ax, fname, xcol, ycol,
     mlr_res = dm_den.mlr(fname, xcols=[xcol], 
                          ycol=ycol,
                          xscales=[reg_xscale], yscale=reg_yscale,
-                         dropgals=dropgals)
-    coefs, intercept, r2, Xs, ys, ys_pred = mlr_res
+                         dropgals=dropgals, 
+                         prediction_x=prediction_x, fore_sig=fore_sig, dX=dX,
+                         verbose=verbose)
+    coefs, intercept, r2, Xs, ys, ys_pred, r2a, resids = mlr_res[:8]
+    if prediction_x is not None:
+        prediction_y = mlr_res[-1] #[y, y uncertainty] 
+        # ebc is an ErrorbarContainer. I think by telling adjust_texts to avoid
+        # ebc[0], it will avoid the prediction point.
+        ebc = plt_forecast(ax, prediction_x, prediction_y)
+        adjust_text_kwargs['add_objects'] = [ebc[0]]
 
     df = dm_den.load_data(fname)
     if dropgals:
@@ -137,54 +191,82 @@ def ax_slr(ax, fname, xcol, ycol,
     fill_ax_new(ax, df, xcol, ycol, 
                 xlabel=xlabel,
                 ylabel=ylabel, 
+                xscale=xscale,
+                yscale=yscale,
                 xadjustment=xadjustment,
                 yadjustment=yadjustment,
                 showcorr=False,
-                arrowprops=arrowprops)
-    ax.plot(Xs[0], ys_pred)
+                arrowprops=arrowprops, showlabels=showlabels, 
+                minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
+                labelsize=labelsize)
+    ax.plot(Xs[0], ys_pred, label=legend_txt)
 
-    formula_strings = {'vcirc_R0':'v_\mathrm{c}',
-                       'v_cool_gas':'v_\\phi',
-                       'disp_dm_solar':'\sigma_\mathrm{{DM}}', 
-                       'den_solar':'\\rho_\mathrm{{DM}}'}
-    
-    def get_strs():
-        try:
-            xstring = formula_strings[xcol]
-        except:
-            xstring = 'x'
-        try:
-            ystring = formula_strings[ycol]
-        except:
-            ystring = 'y'
-        return xstring, ystring
+    if show_formula:
+        formula_strings = {'vcirc_R0':'v_\mathrm{c}',
+                           'v_cool_gas':'v_\\phi',
+                           'disp_dm_solar':'\sigma_\mathrm{{DM}}', 
+                           'den_solar':'\\rho_\mathrm{{DM}}'}
+        
+        def get_strs():
+            try:
+                xstring = formula_strings[xcol]
+            except:
+                xstring = 'x'
+            try:
+                ystring = formula_strings[ycol]
+            except:
+                ystring = 'y'
+            return xstring, ystring
 
-    if xadjustment=='log' and yadjustment=='log':
-        #if plotting log data on both axes, show the formula of the form y=Ax^m
-        amplitude_str = staudt_utils.mprint(10.**intercept,
-                                            d=1,
-                                            show=False).replace('$','')
-        xstring, ystring = get_strs()
-        ax.annotate('${3:s}={0:s}\,{4:s}^{{{1:0.2f}}}$\n'
-                    '$r^2_\mathrm{{log\,space}}={2:0.2f}$'\
-                    .format(amplitude_str, 
-                            coefs[0], r2, ystring, xstring),
-                    (0,formula_y),
-                    xycoords='axes fraction', fontsize=18)
-    elif xadjustment is None and yadjustment is None:
-        xstring, ystring = get_strs()
-        if intercept<0.:
-            operator = '-'
-        else:
-            operator = '+'
-        ax.annotate('${0:s}={1:0.2f}{2:s}{5:s}{3:0.2f}$\n'
-                    '$r^2={4:0.2f}$'\
-                    .format(ystring, coefs[0], xstring, np.abs(intercept), r2,
-                            operator),
-                    (0., formula_y),
-                    xycoords='axes fraction', fontsize=18)
+        if xadjustment=='log' and yadjustment=='log':
+            #if plotting log data on both axes, show the formula of the form y=Ax^m
+            
+            if intercept <= 1.:
+                amplitude_str = staudt_utils.mprint(10.**intercept,
+                                                    d=1,
+                                                    show=False).replace('$','')
+            
+            else:
+                amplitude_str = '10^{{{0:0.1f}}}'.format(intercept)
+            
+            xstring, ystring = get_strs()
+            if show_formula=='outside':
+                display(Latex('${3:s}={0:s}\,{4:s}^{{{1:0.2f}}}$'
+                            .format(amplitude_str, 
+                                    coefs[0], r2, ystring, xstring)))
+                display(Latex('$r^2_\mathrm{{log\,space}}={2:0.2f}$'\
+                            .format(amplitude_str, 
+                                    coefs[0], r2, ystring, xstring)))
+            else:
+                ax.annotate('${3:s}={0:s}\,{4:s}^{{{1:0.2f}}}$\n'
+                            '$r^2_\mathrm{{log\,space}}={2:0.2f}$'\
+                            .format(amplitude_str, 
+                                    coefs[0], r2, ystring, xstring),
+                            (0,formula_y),
+                            xycoords='axes fraction', fontsize=18)
+        elif xadjustment is None and yadjustment is None:
+            xstring, ystring = get_strs()
+            if intercept<0.:
+                operator = '-'
+            else:
+                operator = '+'
+            if show_formula=='outside':
+                display(Latex('${0:s}={1:0.2f}{2:s}{5:s}{3:0.2f}$'
+                            .format(ystring, coefs[0], xstring, np.abs(intercept), r2,
+                                    operator)))
+                display(Latex('$r^2={4:0.2f}$'
+                            .format(ystring, coefs[0], xstring, np.abs(intercept), r2,
+                                    operator)))
+            else:
+                ax.annotate('${0:s}={1:0.2f}{2:s}{5:s}{3:0.2f}$\n'
+                            '$r^2={4:0.2f}$'\
+                            .format(ystring, coefs[0], xstring, np.abs(intercept), r2,
+                                    operator),
+                            (0., formula_y),
+                            xycoords='axes fraction', fontsize=18)
 
     den_cols = ['den_solar','den_disc','den_shell'] 
+
     if xcol in den_cols and showGeV:
         # If density is on the x axis, put particle units on the top of the
         # plot
@@ -195,7 +277,10 @@ def ax_slr(ax, fname, xcol, ycol,
         # plot
         showGeV_y(ax, yadjustment)
 
-    return coefs, intercept
+    result = [coefs, intercept, resids]
+    if prediction_x is not None:
+        result += [prediction_y]
+    return tuple(result)
 
 def showGeV_x(ax, xadjustment):
     ax2=ax.twiny()
@@ -215,6 +300,7 @@ def showGeV_x(ax, xadjustment):
                         fontsize=12.)
     ax2.set_xlabel('$\mathrm{GeV}\,c^{-2}\,\mathrm{cm^{-3}}$', 
                    fontsize=12.)
+    ax2.grid(False)
     return None
 
 def showGeV_y(ax, yadjustment):
@@ -235,6 +321,7 @@ def showGeV_y(ax, yadjustment):
                         fontsize=12.)
     ax2.set_ylabel('$\mathrm{GeV}\,c^{-2}\,\mathrm{cm^{-3}}$', 
                    fontsize=12.)
+    ax2.grid(False)
     return None
 
 def plotter(df, ycol, ylabel,
@@ -263,7 +350,8 @@ def fill_ax_new(ax, df, xcol, ycol,
                 xscale='linear', yscale='linear', 
                 showlabels=True,
                 labelsize=15, arrowprops=None, color='blue', alpha=1., 
-                showcorr=True, legend_txt=None):
+                showcorr=True, legend_txt=None, minarrow=0.02,
+                adjust_text_kwargs={}):
     if xcol == 'den_solar' and xadjustment == 'log' and xlabel is None:
         xlabel = log_rho_solar_label
     xs=df[xcol]
@@ -281,6 +369,7 @@ def fill_ax_new(ax, df, xcol, ycol,
     ax.plot(xs,ys,'o',color=color,alpha=alpha,label=legend_txt)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    ax.set_xscale(xscale)
     ax.set_yscale(yscale)
     ax.grid(True,which='both')
     
@@ -294,10 +383,21 @@ def fill_ax_new(ax, df, xcol, ycol,
         texts=[] #make a container for labels that adjust_text will tune
         for x,y,name in zip(xs, ys, df.index):
             #add annotation to texts
-            texts+=[ax.annotate(name, (float(x*1.001), float(y*1.0001)), 
+            texts+=[ax.annotate(name, (float(x), float(y)), 
                                 fontsize=labelsize)]
         if arrowprops:
-            adjust_text(texts, arrowprops=arrowprops, ax=ax)
+            adjust_text(texts, arrowprops=arrowprops, ax=ax, 
+                        **adjust_text_kwargs)
+            ###################################################################
+            # Remove short arrows
+            ###################################################################
+            for child in ax.get_children():
+                if isinstance(child, mpl.text.Annotation):
+                    arrowlen = np.linalg.norm(np.array(child.xy)-np.array([child._x, 
+                                                                           child._y]))
+                    if arrowlen < minarrow:
+                        child.arrowprops=None
+            ###################################################################
         else:
             adjust_text(texts, ax=ax)
     return None
@@ -398,6 +498,230 @@ def loglabel(label):
     label = label.replace('$','')
     label = '$\log\\left(\,'+label+'\\right)$'
     return label
+
+def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
+                  fore_sig=1.-0.682, verbose=False, minarrow=0.03,
+                  adjust_text_kwargs={}, show_formula='outside',
+                  figsize=(10,5), labelsize=14.):
+    def convert_log_errors(logyhat):
+        log_yhat_min = logyhat[0]-logyhat[1]
+        log_yhat_max = logyhat[0]+logyhat[1]
+        yhat_min = 10.**log_yhat_min
+        yhat_max = 10.**log_yhat_max
+        dy = (yhat_max-yhat_min)/2.
+        return dy
+
+    def make_err_bars_fr_resids(ax, reg):
+        resids = reg[2]
+        delta_neg = np.percentile(resids, (1.-0.682)/2.*100.)
+        delta_pos = np.percentile(resids, (1.-(1.-0.682)/2.)*100.)
+        delta = np.mean(np.abs((delta_neg, delta_pos)))
+        
+        #returns error bar MatPlotLib object so we can have our labels avoid it
+        ax.errorbar(np.log10(v0_sofu), 
+                    reg[-1][0],
+                    yerr=delta, 
+                    marker='o', ms=8, c='k', mec='r', mfc='r', capsize=3)
+        
+        return None
+
+    def draw_shades(ax1, ycol):
+        if ycol=='den_disc':
+            bounds = (rho_min_sofu, rho_max_sofu)
+            ax1.axhspan(*bounds, 
+                        alpha=0.2, color='gray', ls='none')
+        ax1.axvspan(np.log10(v0_sofu-dv0_sofu), 
+                np.log10(v0_sofu+dv0_sofu), 
+                alpha=0.2, color='gray', ls='none')
+        return None
+
+    df = dm_den.load_data(source_fname)
+
+    fig, axs = plt.subplots(1, 2, figsize=figsize, dpi=110, sharey=True,
+                            sharex=True)
+    fig.subplots_adjust(wspace=0.)
+    ax0 = axs[0]
+    ax1 = axs[1]
+    
+    textxy = (0.04, 0.96)
+    fontsize = 14
+    formula_y = -0.4
+    
+    if ycol=='den_disc':
+        ylabel = den_label
+    elif ycol=='disp_dm_disc_cyl':
+        ylabel = disp_label
+    
+    draw_shades(ax0, ycol)
+    draw_shades(ax1, ycol)
+    
+    reg_gmr = ax_slr(ax0, 
+                      source_fname,
+                      'vcirc',
+                      ycol,
+                      xlabel=gmr_label, ylabel=ylabel,
+                      xadjustment='log', yadjustment='log',
+                      dropgals=['m12w','m12z'],
+                      arrowprops={'arrowstyle':'-'}, 
+                      show_formula=show_formula, prediction_x=[v0_sofu],
+                      dX=[dv0_sofu], showGeV=False, 
+                      showlabels=True, formula_y=formula_y, verbose=verbose,
+                      minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
+                      labelsize=labelsize)
+    yhat_gmr = reg_gmr[-1]
+    #plt_forecast(ax0, yhat_gmr)
+
+    reg_disc = ax_slr(ax1,source_fname,
+                     'v_dot_phihat_disc(T<=1e4)',
+                     ycol,
+                     xlabel=vc_label,
+                     ylabel=ylabel,
+                     xadjustment='log', yadjustment='log',
+                     formula_y=formula_y, dropgals=['m12w','m12z'],
+                     arrowprops={'arrowstyle':'-'}, 
+                     show_formula=show_formula,
+                     showlabels=True, 
+                     prediction_x=[v0_sofu], fore_sig=fore_sig, 
+                     dX=[dv0_sofu], showGeV=True, verbose=verbose,
+                     minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
+                     labelsize=labelsize)
+    yhat_vc = reg_disc[-1]
+    ax1.set_ylabel(None)
+    
+    display(Latex('$r=8.3\pm{0:0.2f}\,\mathrm{{kpc}}$'
+                 .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
+    display(Latex('$|z|\in[0,{1:0.2f}]\,\mathrm{{kpc}}$' \
+                 .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
+    #plt_forecast(ax1, yhat_vc)
+
+    plt.draw()
+    
+    plt.savefig(paths.figures+tgt_fname,
+                bbox_inches='tight',
+                dpi=140)
+
+    plt.show()
+    
+    return yhat_vc
+
+def plt_disc_diffs(df_source='dm_stats_20220715.h5', 
+                   diff_source='den_disp_dict_20220818.pkl',
+                   only_linear=False, 
+                   only_log=False, figsize=None, tgt_fname=None):
+    
+    direc='/export/nfs0home/pstaudt/projects/project01/data/'
+    with open(direc+diff_source, 'rb') as handle:
+        den_disp_dict = pickle.load(handle)
+    df = dm_den.load_data(df_source)
+    galnames = df.drop(['m12w','m12z']).index
+    #galnames = df.index
+    
+    def setup(log):
+        if not log:
+            denlabel = '$\\rho(\phi)/\,\overline{\\rho}$'
+            displabel = '$\sigma(\phi)/\,\overline{\sigma}$'
+
+            dens = np.array([den_disp_dict[galname]['dens/avg'] \
+                             for galname in galnames]).flatten()
+            disps = np.array([den_disp_dict[galname]['disps/avg'] \
+                              for galname in galnames]).flatten()
+        else:
+            denlabel = '$\log\\rho(\phi)\,/\,\log\overline{\\rho}$'
+            displabel = '$\log\sigma(\phi)\,/\,\log\overline{\sigma}$'
+
+            dens = np.array([den_disp_dict[galname]['log(dens)/log(avg)'] \
+                             for galname in galnames]).flatten()
+            disps = np.array([den_disp_dict[galname]['log(disps)/log(avg)'] \
+                              for galname in galnames]).flatten()
+        return denlabel, displabel, dens, disps
+    
+    if only_log or only_linear:
+        dims = (1,2)
+        if figsize is None:
+            figsize = (10,4)
+    else:
+        dims = (2,2)
+        if figsize is None:
+            figsize = (10,10)
+    fig, axs = plt.subplots(*dims, figsize=figsize, sharex='col', sharey='row')
+    axs = axs.ravel()
+    fig.subplots_adjust(wspace=0.05)
+    w = 1.
+    N = 10
+    ec = 'w'
+    ylabel = '$N_\mathrm{\phi\,bin}$'
+    
+    if not only_log:
+        denlabel, displabel, dens, disps = setup(False)
+        axs[0].hist(dens, N, rwidth=w, ec=ec)
+        axs[0].set_xlabel(denlabel)
+        axs[0].set_ylabel(ylabel)
+        axs[1].hist(disps, N, rwidth=w, ec=ec)
+        axs[1].set_xlabel(displabel)
+    
+    if not only_linear:
+        denlabel, displabel, dens, disps = setup(True)
+        if only_log:
+            i = 0
+        else:
+            i = 2
+        axs[i].hist(dens, N, rwidth=w, ec=ec)
+        axs[i].set_xlabel(denlabel)
+        axs[i].set_ylabel(ylabel)
+        i += 1
+        axs[i].hist(disps, N, rwidth=w, ec=ec)
+        axs[i].set_xlabel(displabel)
+
+    if tgt_fname:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=140)
+
+    plt.show()
+    
+    return None
+
+def plt_gmr_vs_vc(df_source='dm_stats_20220715.h5', tgt_fname='gmr_vs_vc.png',
+                  figsize=(8,4),
+                  labelsize=11., minarrow=0.01, adjust_text_kwargs={}):
+    df = dm_den.load_data(df_source).drop(['m12z','m12w'])
+    xcol = 'v_dot_phihat_disc(T<=1e4)'
+    ycol = 'vcirc'
+
+    fig = plt.figure(figsize=figsize, dpi=110)
+    ax = fig.add_subplot(111)
+    ax_slr(ax, df_source, 
+           xcol, ycol, 
+            xlabel=vc_label, ylabel=gmr_label, 
+            xadjustment='log',
+            yadjustment='log',
+            show_formula='outside', dropgals=['m12z','m12w'],
+           labelsize=labelsize, arrowprops={'arrowstyle':'-'},
+           minarrow=minarrow, legend_txt='best fit',
+           adjust_text_kwargs=adjust_text_kwargs)
+    
+    #Plot 1:1 line
+    xs = np.log10(df[xcol])
+    ys = np.log10(df[ycol])
+    ax.plot([xs.min(), xs.max()], [xs.min(), xs.max()], color='gray', 
+            ls='--', label='1:1')
+    errors = (ys-xs).values
+    sse = errors.T @ errors
+    diffs = ys-np.mean(ys)
+    tss = diffs.T @ diffs
+    r2_1to1 = 1.-sse/tss
+    display(Latex('$r^2_\mathrm{{1:1}}={0:0.2f}$'.format(r2_1to1)))
+
+    ax.legend(fontsize=11)
+
+    if tgt_fname:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=140)
+
+    plt.show()
+
+    return None
 
 if __name__=='__main__':
     fname=sys.argv[1]

@@ -4,6 +4,9 @@ import time
 import pickle
 import logging
 import traceback
+import scipy
+import math
+import tabulate
 import numpy as np
 import pandas as pd
 from staudt_fire_utils import get_data, show
@@ -514,6 +517,73 @@ def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
     disp3d_francisco=disp3d_francisco_f()
     assert np.allclose(disp3d,disp3d_francisco)
     return den*10.**10., disp3d
+
+def atan(y,x):
+    atan_val = math.atan2(y,x)
+    if atan_val<0.:
+        atan_val += 2.*np.pi
+    return atan_val
+
+def den_disp_phi_bins(source_fname, tgt_fname=None):
+    import cropper
+
+    df = load_data(source_fname)
+    pbar = ProgressBar()
+    d = {} #initialize dictionary
+    N_bins = 15
+    phi_bins = np.linspace(0., 2.*np.pi, N_bins+1)
+    for k, galname in enumerate(pbar(df.index)):
+        gal = cropper.load_data(galname, getparts=['PartType1'], verbose=False)
+        phis = np.array([atan(y,x) \
+                         for x,y in gal['PartType1']['coord_rot'][:,:2]])
+
+        v_vec_cyls = np.transpose([gal['PartType1'][key] \
+                                   for key in ['v_dot_rhat',
+                                               'v_dot_phihat',
+                                               'v_dot_zhat']],
+                                  (1,0))
+
+        d[galname] = {}
+        d[galname]['dens'] = []
+        d[galname]['disps'] = []
+        d[galname]['phi_bins'] = phi_bins.copy()
+        dens = d[galname]['dens']
+        disps = d[galname]['disps']
+
+        coord_rots = gal['PartType1']['coord_rot'][:,2]
+        for i, phi_bin in enumerate([phi_bins[j:j+2] for j in range(N_bins)]):
+            #using a copy just to make sure phi_bin doesn't get modified
+            bin_ = phi_bin.copy() 
+            if i == N_bins-1:
+                bin_[1] = bin_[1]+1.e-5
+            den_add, disp_add = get_den_disp(8.3,
+                                             gal['PartType1']['r'],
+                                             df.attrs['dr'],
+                                             gal['PartType1']['mass_phys'],
+                                             None,
+                                             v_vec_cyls,
+                                             coord_rots,
+                                             df.attrs['dz'],
+                                             phis,
+                                             bin_,
+                                             verbose=False)
+            dens+=[den_add]
+            disps+=[disp_add]                        
+        d[galname]['dens/avg'] = dens/df.loc[galname,'den_disc']
+        d[galname]['log(dens)/log(avg)'] = np.log10(dens) \
+                                           / np.log10(df.loc[galname,
+                                                             'den_disc'])
+        d[galname]['disps/avg'] = disps/df.loc[galname,'disp_dm_disc_cyl']
+        d[galname]['log(disps)/log(avg)'] = np.log10(disps) \
+                                       / np.log10(df.loc[galname,
+                                                         'disp_dm_disc_cyl'])
+    if tgt_fname:
+        direc='/export/nfs0home/pstaudt/projects/project01/data/'
+        fname=direc+tgt_fname
+        with open(fname,'wb') as f:
+            pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
+
+    return d
 
 def get_disp_btwn(rmin,rmax,rs,v_mags):
     # This is isometric (i.e. wrong). Consider deleting it. 
@@ -1110,7 +1180,8 @@ def make_x_pdfs(bins=50, r=8.3, dr=1.5, fname=None,
             pickle.dump(pdfs, f, pickle.HIGHEST_PROTOCOL)
     return pdfs
 
-def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None):
+def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
+        prediction_x=None, dX=None, fore_sig=1.-0.682, verbose=False):
     '''
     Multi-linear regression
 
@@ -1121,6 +1192,8 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None):
     if dropgals is not None:
         df = df.drop(dropgals)
     ys=df[ycol]
+    if dX is None:
+        dX = np.zeros(len(xcols))
     if yscale=='log':
         ys=np.log10(ys)
     if xscales:
@@ -1132,24 +1205,136 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None):
             xcol, scale = vals
             if scale == 'log':
                 Xs[i]=np.log10(df[xcol])
+                if prediction_x is not None:
+                    prediction_x[i] = np.log10(prediction_x[i])
             elif scale == 'linear':
                 Xs[i]=df[xcol]
             else:
                 raise ValueError('Scale should be \'log\' or \'linear\'')
         Xs=Xs.transpose()
     else:
+        xscales = ['linear']*len(xcols)
         Xs=df[xcols]
 
     model=LinearRegression()
     model.fit(Xs, ys)
     r2=model.score(Xs, ys)
+    N = len(Xs)
+    k = Xs.shape[1]
+    r2a = 1.-(N-1.)/(N-k-1.)*(1.-r2) #adjusted r2
     coefs=model.coef_
     intercept=model.intercept_
     ys_pred = model.predict(Xs)
 
     Xs=Xs.transpose()
 
-    return coefs, intercept, r2, Xs, ys, ys_pred
+    ###########################################################################
+    # Error Analysis
+    ###########################################################################
+    X = Xs.transpose()
+    y = np.reshape(ys.values, (len(ys),-1))
+    yhat = np.reshape(ys_pred, (len(ys_pred),-1))
+    # plus one because LinearRegression adds an intercept term
+
+    #p = len(X.columns) + 1  
+    p = X.shape[1] + 1  
+
+    residuals = np.array(y - yhat)
+    sse = residuals.T @ residuals
+    mse = sse[0, 0] / (N - p)
+
+    X_with_intercept = np.empty(shape=(N, p), dtype=np.float)
+    X_with_intercept[:, 0] = 1
+    #X_with_intercept[:, 1:p] = X.values
+    X_with_intercept[:, 1:p] = X
+    #degrees of freedom
+    deg = N - X_with_intercept.shape[1] 
+
+    #beta_hat = np.linalg.inv(X_with_intercept.T @ X_with_intercept) \
+    #           @ X_with_intercept.T @ y
+    beta_hat = np.concatenate(([[intercept]],
+                               np.reshape(coefs,(len(coefs),-1))))
+    reg_diffs = yhat - np.mean(y)
+    rss = reg_diffs.T @ reg_diffs
+    msr = rss[0,0] / k #mean square due to the regression
+
+    covmat = np.linalg.inv(X_with_intercept.T @ X_with_intercept) \
+             * mse
+    # standard errors of coefficients
+    S = np.sqrt([[covmat[i,i]] for i in range(len(covmat))])
+    T = np.abs(beta_hat) / S #t-stats for coefficients
+    beta_sig = 0.05 #significance
+    tc_beta = scipy.stats.t.ppf(q=1-beta_sig/2., df=deg)
+    delta_beta = S*tc_beta #uncertainties in coefficients
+    P = 2.*(1.-scipy.stats.t.cdf(T, deg)) #p-values
+    F = msr/mse
+    F_sig = 0.01 #significance
+    Fc = scipy.stats.f.ppf(q=1-F_sig, dfn=k, dfd=deg)
+
+    if verbose:
+        table1 = [['','coeff','+/-','t-stat', 'p-values']]
+        rows = [['X_'+str(i)] for i in range(p)]
+        rows = np.concatenate((rows,beta_hat,delta_beta,T,P), axis=1)
+        table1 += list(rows.reshape(p,-1))
+        print(tabulate.tabulate(table1, headers='firstrow', tablefmt='rst')) 
+        print('t_c = {0:0.1f}'.format(tc_beta))
+        print('t-test type: 2 tailed, {0:0.0f}% significance\n' \
+              .format(beta_sig*100.))
+
+        table2 = [['F','F_c','significance'],[F,Fc, F_sig]] 
+        print(tabulate.tabulate(table2, headers='firstrow', tablefmt='rst'))
+        print('r2 = {0:0.2f}'.format(r2))
+        print('r2a = {0:0.2f}'.format(r2a))
+
+    if prediction_x is not None:
+        prediction_x = np.array(prediction_x)
+        W = np.concatenate((np.ones((prediction_x.shape[0],1)), prediction_x),
+                           axis=1)
+        print(covmat)
+        print(W)
+        print(W @ covmat)
+        var_mean = (W @ covmat) @ W.T
+        s_mean = np.sqrt(var_mean) #std error of mean
+        var_f = var_mean + mse #variance of forecast
+        s_f = np.sqrt(var_f) #std error of forecast
+        # critical 2-tailed t value  
+        tc_f = scipy.stats.t.ppf(q=1.-fore_sig/2., df=N-p)
+        delta_f = tc_f*s_f #uncertainty in the forecast
+
+        varY_fr_X = np.empty(len(xcols))
+        for i, vals in enumerate(zip(xcols, xscales)):
+            xcol, scale = vals
+            if scale == 'log':
+                varY_fr_X[i] = beta_hat[i+1]**2. * dX[i]**2. \
+                               / (10.**(prediction_x[i]*2.) * np.log(10.)**2.)
+            elif scale == 'linear':
+                varY_fr_X[i] = beta_hat[i+1]**2. * dX[i]**2.
+
+        delta_f = np.sqrt(delta_f**2. + np.sum(varY_fr_X))
+        prediction_y = [(W @ beta_hat)[0], delta_f]
+
+        if verbose:
+            table3 = np.concatenate((W.reshape(len(W),-1), beta_hat), axis=1)
+            table3 = np.concatenate(([['x_i','coeff']],table3),axis=0)
+            print('')
+            print(tabulate.tabulate(table3, headers='firstrow', tablefmt='rst'))
+
+            
+            table4 = [[prediction_y[0], tc_f, s_f, tc_f*s_f, *np.sqrt(varY_fr_X),
+                       prediction_y[1]]]
+            header4 = [['yhat','t_c','std err of forecast', 't_c * std err',
+                        *['dY/dX{0:d} * err(X{0:d})'.format(i+1) \
+                          for i in range(k)],
+                        'err(yhat)']]
+            table4 = np.concatenate((header4, table4), axis=0)
+            print(tabulate.tabulate(table4, headers='firstrow', tablefmt='rst'))
+            print('(t-test type: 2 tailed, {0:0.0f}% significance)\n' \
+                  .format(fore_sig*100.))
+
+        return coefs, intercept, r2, Xs, ys, ys_pred, r2a, residuals, \
+               prediction_y 
+
+    return coefs, intercept, r2, Xs, ys, ys_pred, r2a, residuals 
 
 def get_v_escs(fname=None):
     '''
