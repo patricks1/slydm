@@ -1191,9 +1191,13 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
     df=load_data(fsource)
     if dropgals is not None:
         df = df.drop(dropgals)
-    ys=df[ycol]
-    if dX is None:
+    if dX is not None:
+        dX = np.array(dX)
+    else:
         dX = np.zeros(len(xcols))
+    if prediction_x is not None:
+        prediction_x = np.array(prediction_x)
+    ys=df[ycol]
     if yscale=='log':
         ys=np.log10(ys)
     if xscales:
@@ -1206,7 +1210,7 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
             if scale == 'log':
                 Xs[i]=np.log10(df[xcol])
                 if prediction_x is not None:
-                    prediction_x[i] = np.log10(prediction_x[i])
+                    prediction_x[:,i] = np.log10(prediction_x[:,i])
             elif scale == 'linear':
                 Xs[i]=df[xcol]
             else:
@@ -1290,10 +1294,7 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         prediction_x = np.array(prediction_x)
         W = np.concatenate((np.ones((prediction_x.shape[0],1)), prediction_x),
                            axis=1)
-        print(covmat)
-        print(W)
-        print(W @ covmat)
-        var_mean = (W @ covmat) @ W.T
+        var_mean = np.array([[(w @ covmat) @ w.T] for w in W])
         s_mean = np.sqrt(var_mean) #std error of mean
         var_f = var_mean + mse #variance of forecast
         s_f = np.sqrt(var_f) #std error of forecast
@@ -1301,17 +1302,21 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         tc_f = scipy.stats.t.ppf(q=1.-fore_sig/2., df=N-p)
         delta_f = tc_f*s_f #uncertainty in the forecast
 
-        varY_fr_X = np.empty(len(xcols))
-        for i, vals in enumerate(zip(xcols, xscales)):
-            xcol, scale = vals
-            if scale == 'log':
-                varY_fr_X[i] = beta_hat[i+1]**2. * dX[i]**2. \
-                               / (10.**(prediction_x[i]*2.) * np.log(10.)**2.)
-            elif scale == 'linear':
-                varY_fr_X[i] = beta_hat[i+1]**2. * dX[i]**2.
+        varY_fr_X = np.empty((len(prediction_x),len(xcols)))
+        #for i, vals in enumerate(zip(xcols, xscales)):
+            #xcol, scale = vals
+        if scale == 'log':
+            varY_fr_X =  beta_hat[1:]**2. * dX**2. \
+                           / (10.**(prediction_x*2.) * np.log(10.)**2.)
+            #varY_fr_X[i] = beta_hat[i+1]**2. * dX[:,i]**2. \
+            #               / (10.**(prediction_x[:,i]*2.) * np.log(10.)**2.)
+        elif scale == 'linear':
+            varY_fr_X = beta_hat[1:]**2. * dX**2.
+            #varY_fr_X[i] = beta_hat[i+1]**2. * dX[:,i]**2.
 
-        delta_f = np.sqrt(delta_f**2. + np.sum(varY_fr_X))
-        prediction_y = [(W @ beta_hat)[0], delta_f]
+        delta_f = np.sqrt(delta_f**2. + np.sum(varY_fr_X,axis=1,
+                          keepdims=True))
+        prediction_y = [(W @ beta_hat), delta_f]
 
         if verbose:
             table3 = np.concatenate((W.reshape(len(W),-1), beta_hat), axis=1)

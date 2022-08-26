@@ -111,7 +111,7 @@ def plt_slr(fname, xcol, ycol,
     fig = plt.figure(figsize=figsize, dpi=dpi)
     ax = fig.add_subplot(111)
 
-    ax_slr(ax, fname, xcol, ycol,
+    res = ax_slr(ax, fname, xcol, ycol,
             xlabel,ylabel,
             xadjustment, yadjustment,
             xscale, yscale, 
@@ -128,6 +128,13 @@ def plt_slr(fname, xcol, ycol,
                     dpi=140)
     plt.show()
 
+    if 'prediction_x' in ax_slr_kwargs:
+        y_hat = res[-1]
+        #print(y_hat)
+        return y_hat
+    else:
+        return None
+
 def ax_slr(ax, fname, xcol, ycol,
            xlabel,ylabel,
            xadjustment=None, yadjustment=None,
@@ -142,14 +149,24 @@ def ax_slr(ax, fname, xcol, ycol,
     def plt_forecast(ax1, x_forecast, yhat):
         delta_f = yhat[1] #uncertainty in the forecast
         if xadjustment=='log':
-            x = np.log10(x_forecast)
-        # Returns ErrorbarContainer
-        ebc = ax1.errorbar(x_forecast, 
-                     yhat[0],
-                     yerr=delta_f,
-                     c='k', capsize=3,
-                     marker='o', ms=8, mec='r', mfc='r')
-        return ebc 
+            x_forecast = np.log10(x_forecast)
+        # Returns a list of errorbar objects 
+        N = len(x_forecast)
+        eb = []
+        colors = [plt.cm.cool(i) 
+                  for i in np.linspace(0, 
+                                       1, 
+                                       N)][::-1]
+        for i in range(N):
+            eb_add = ax1.errorbar(x_forecast.flatten()[i], 
+                         yhat[0].flatten()[i],
+                         yerr=delta_f.flatten()[i],
+                         c='k', capsize=3,
+                         marker='o', ms=8, 
+                         mec=colors[i], mfc=colors[i]
+                         )
+            eb += [eb_add[0]]
+        return eb 
 
     #Perform the regression in linear space unless we're plotting log data, as
     #opposed to plotting unadjusted data but on a log scale
@@ -177,8 +194,8 @@ def ax_slr(ax, fname, xcol, ycol,
         prediction_y = mlr_res[-1] #[y, y uncertainty] 
         # ebc is an ErrorbarContainer. I think by telling adjust_texts to avoid
         # ebc[0], it will avoid the prediction point.
-        ebc = plt_forecast(ax, prediction_x, prediction_y)
-        adjust_text_kwargs['add_objects'] = [ebc[0]]
+        eb = plt_forecast(ax, prediction_x, prediction_y)
+        adjust_text_kwargs['add_objects'] = eb
 
     df = dm_den.load_data(fname)
     if dropgals:
@@ -512,12 +529,14 @@ def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
         return dy
 
     def make_err_bars_fr_resids(ax, reg):
+        '''
+        Make rror bars from residuals
+        '''
         resids = reg[2]
         delta_neg = np.percentile(resids, (1.-0.682)/2.*100.)
         delta_pos = np.percentile(resids, (1.-(1.-0.682)/2.)*100.)
         delta = np.mean(np.abs((delta_neg, delta_pos)))
         
-        #returns error bar MatPlotLib object so we can have our labels avoid it
         ax.errorbar(np.log10(v0_sofu), 
                     reg[-1][0],
                     yerr=delta, 
@@ -563,8 +582,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                       xadjustment='log', yadjustment='log',
                       dropgals=['m12w','m12z'],
                       arrowprops={'arrowstyle':'-'}, 
-                      show_formula=show_formula, prediction_x=[v0_sofu],
-                      dX=[dv0_sofu], showGeV=False, 
+                      show_formula=show_formula, prediction_x=[[v0_sofu]],
+                      dX=[[dv0_sofu]], showGeV=False, 
                       showlabels=True, formula_y=formula_y, verbose=verbose,
                       minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
                       labelsize=labelsize)
@@ -581,8 +600,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                      arrowprops={'arrowstyle':'-'}, 
                      show_formula=show_formula,
                      showlabels=True, 
-                     prediction_x=[v0_sofu], fore_sig=fore_sig, 
-                     dX=[dv0_sofu], showGeV=True, verbose=verbose,
+                     prediction_x=[[v0_sofu]], fore_sig=fore_sig, 
+                     dX=[[dv0_sofu]], showGeV=True, verbose=verbose,
                      minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
                      labelsize=labelsize)
     yhat_vc = reg_disc[-1]
