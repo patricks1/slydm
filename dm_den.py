@@ -1,5 +1,6 @@
 import h5py
 import os
+import csv
 import time
 import pickle
 import logging
@@ -7,6 +8,7 @@ import traceback
 import scipy
 import math
 import tabulate
+import paths
 import numpy as np
 import pandas as pd
 from staudt_fire_utils import get_data, show
@@ -467,9 +469,11 @@ def get_disp_within(r,rs,v_mags):
 
 def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
                  phi_bin=None, verbose=True):
-    # This works correctly (3D disp)
-    # The function doesn't use v_mags, but I'm keeping it in for now so nothing
-    # breaks.
+    '''
+    This works correctly (3D disp)
+    The function doesn't use v_mags, but I'm keeping it in for now so nothing
+    breaks.
+    '''
     rmax=r+dr/2.
     rmin=r-dr/2.
     if rmin<0:
@@ -477,7 +481,7 @@ def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
                          '2x R0.'.format(r))
 
     inshell=(rs<rmax) & (rs>rmin)
-    if dz:
+    if dz is not None:
         indisc = np.abs(zs) < dz/2.
         def calc_vol(r,z):
             '''
@@ -500,8 +504,11 @@ def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
         in_phi_bin = np.repeat(True, len(inshell))
         v=4./3.*np.pi*(rmax**3.-rmin**3.) #kpc^3
     if verbose:
-        print('{0:0.0f} particles in the shell'.format(np.sum(inshell \
+        print('{0:0.0f} particles in the ring'.format(np.sum(inshell \
                                                               & indisc)))
+        print('{0:0.0f} particles in the slice'.format(np.sum(inshell \
+                                                              & indisc \
+                                                              & in_phi_bin)))
     mtot=ms[inshell & indisc & in_phi_bin].sum()
     den=mtot/v
     devs = v_vecs[inshell & indisc & in_phi_bin] \
@@ -524,13 +531,16 @@ def atan(y,x):
         atan_val += 2.*np.pi
     return atan_val
 
-def den_disp_phi_bins(source_fname, tgt_fname=None):
+def den_disp_phi_bins(source_fname, tgt_fname=None, N_bins=15, verbose=False):
+    '''
+    Generate a dictionary of density and dispersion in phi bins, split up by
+    galaxy
+    '''
     import cropper
 
     df = load_data(source_fname)
     pbar = ProgressBar()
     d = {} #initialize dictionary
-    N_bins = 15
     phi_bins = np.linspace(0., 2.*np.pi, N_bins+1)
     for k, galname in enumerate(pbar(df.index)):
         gal = cropper.load_data(galname, getparts=['PartType1'], verbose=False)
@@ -550,7 +560,7 @@ def den_disp_phi_bins(source_fname, tgt_fname=None):
         dens = d[galname]['dens']
         disps = d[galname]['disps']
 
-        coord_rots = gal['PartType1']['coord_rot'][:,2]
+        zs = gal['PartType1']['coord_rot'][:,2]
         for i, phi_bin in enumerate([phi_bins[j:j+2] for j in range(N_bins)]):
             #using a copy just to make sure phi_bin doesn't get modified
             bin_ = phi_bin.copy() 
@@ -558,21 +568,23 @@ def den_disp_phi_bins(source_fname, tgt_fname=None):
                 bin_[1] = bin_[1]+1.e-5
             den_add, disp_add = get_den_disp(8.3,
                                              gal['PartType1']['r'],
-                                             df.attrs['dr'],
+                                             df.attrs['drsolar'],
                                              gal['PartType1']['mass_phys'],
-                                             None,
-                                             v_vec_cyls,
-                                             coord_rots,
-                                             df.attrs['dz'],
-                                             phis,
-                                             bin_,
-                                             verbose=False)
+                                             v_mags = None,
+                                             v_vecs = v_vec_cyls,
+                                             zs = zs,
+                                             dz = df.attrs['dz'],
+                                             phis = phis,
+                                             phi_bin = bin_,
+                                             verbose=verbose)
             dens+=[den_add]
             disps+=[disp_add]                        
         d[galname]['dens/avg'] = dens/df.loc[galname,'den_disc']
         d[galname]['log(dens)/log(avg)'] = np.log10(dens) \
                                            / np.log10(df.loc[galname,
                                                              'den_disc'])
+        #max_den_diff = np.max(max_den_diff,
+        #                      np.abs(1.-d[galname]['log(dens)/log(avg)']))
         d[galname]['disps/avg'] = disps/df.loc[galname,'disp_dm_disc_cyl']
         d[galname]['log(disps)/log(avg)'] = np.log10(disps) \
                                        / np.log10(df.loc[galname,
@@ -1392,6 +1404,29 @@ def get_v_escs(fname=None):
             print('File closed: {0:s}'.format(str(f.closed)))
         raise e 
     return v_escs
+
+def save_var_latex(key, value):
+    import os
+
+    dict_var = {}
+
+    file_path = paths.paper +  "data.txt"
+
+    try:
+        with open(file_path, newline="") as file:
+            reader = csv.reader(file)
+            for row in reader:
+                dict_var[row[0]] = row[1]
+    except FileNotFoundError:
+        pass
+
+    dict_var[key] = value
+
+    with open(file_path, "w") as f:
+        for key in dict_var.keys():
+            f.write(f"{key},{dict_var[key]}\n")
+
+    return None
 
 '''
 def get_gas_speeds(Tcool=1.e4, fname=None):

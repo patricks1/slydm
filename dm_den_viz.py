@@ -8,7 +8,9 @@ import sys
 import paths
 import staudt_utils
 import pickle
+import itertools
 import staudt_fire_utils as utils
+from progressbar import ProgressBar
 
 from astropy import units as u
 from astropy import constants as c
@@ -30,6 +32,7 @@ rcParams['axes.titlepad']=15
 rcParams['legend.frameon'] = True
 rcParams['legend.facecolor']='white'
 rcParams['legend.fontsize']=18
+rcParams['figure.facecolor'] = 'white'
 
 def plotter_old(gals, dat, gal_names, datloc, ylabel,
             yscale='linear', adjustment=None, figsize=(7,8)):
@@ -76,26 +79,30 @@ log_rho_solar_label='$\log(\,\\rho(R_0)\,/\,[\,\mathrm{M}_\odot'\
                     '\mathrm{kpc}^{-3}\,]\,)$'
 log_rho_label='$\log(\,\\rho(R_\mathrm{vir})\,/\,[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]\,)$'
 rho_label='$\\rho(R_\mathrm{vir})\;[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]$'
-den_label = '$\\rho_\mathrm{DM}\,/\,\\left[\mathrm{M_\odot kpc^{-3}}\\right]$'
+den_label = '$\\rho\,/\,\\left[\mathrm{M_\odot kpc^{-3}}\\right]$'
 disp_label = '$\\sigma_\mathrm{DM}\,/\,'\
              '\\left[\mathrm{km\,s^{-1}}\\right]$'
-gmr_label = '$\sqrt{Gm/r}\,/\,'\
+gmr_label = '$\sqrt{Gm/R_0}\,/\,'\
               '\\left[\mathrm{km\,s^{-1}}\\right]$'
 vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
 
+# v0 from Eilers et al. 2019
+v0_eilers = 229.
+dv0_eilers = 0.2
+
 # v0 ranges from Sofue 2020
-v0_sofu=238.
-dv0_sofu=14.
-log_dv0_neg = np.log10(v0_sofu/(v0_sofu-dv0_sofu))
-log_dv0_pos = np.log10((v0_sofu+dv0_sofu)/v0_sofu)
+v0_sofue=238.
+dv0_sofue=14.
+log_dv0_neg = np.log10(v0_sofue/(v0_sofue-dv0_sofue))
+log_dv0_pos = np.log10((v0_sofue+dv0_sofue)/v0_sofue)
 
 # Density ranges from Sofue 2020
-rho_sofu = 0.39*u.GeV/c.c**2.*u.cm**-3.
-drho_sofu = 0.09*u.GeV/c.c**2.*u.cm**-3.
-rho_sofu = rho_sofu.to(u.M_sun*u.kpc**-3.).value
-drho_sofu = drho_sofu.to(u.M_sun*u.kpc**-3.).value
-rho_min_sofu = np.log10(rho_sofu-drho_sofu)
-rho_max_sofu = np.log10(rho_sofu+drho_sofu)
+rho_sofue = 0.39*u.GeV/c.c**2.*u.cm**-3.
+drho_sofue = 0.09*u.GeV/c.c**2.*u.cm**-3.
+rho_sofue = rho_sofue.to(u.M_sun*u.kpc**-3.).value
+drho_sofue = drho_sofue.to(u.M_sun*u.kpc**-3.).value
+rho_min_sofue = np.log10(rho_sofue-drho_sofue)
+rho_max_sofue = np.log10(rho_sofue+drho_sofue)
 
 def plt_slr(fname, xcol, ycol,
             xlabel,ylabel,
@@ -143,10 +150,10 @@ def ax_slr(ax, fname, xcol, ycol,
            labelsize=15, arrowprops=None, formula_y=-0.2,
            dropgals=None, showGeV=True, show_formula=True,
            prediction_x=None, dX=None, fore_sig=1.-0.682, verbose=False,
-           minarrow=0.02, adjust_text_kwargs={}, legend_txt=None):
+           minarrow=0.02, adjust_text_kwargs={}, legend_txt=None, **kwargs):
     'Plot a simple linear regression on ax'
 
-    def plt_forecast(ax1, x_forecast, yhat):
+    def plt_forecast(ax, x_forecast, yhat):
         delta_f = yhat[1] #uncertainty in the forecast
         if xadjustment=='log':
             x_forecast = np.log10(x_forecast)
@@ -156,16 +163,23 @@ def ax_slr(ax, fname, xcol, ycol,
         colors = [plt.cm.cool(i) 
                   for i in np.linspace(0, 
                                        1, 
-                                       N)][::-1]
+                                       N)]
+        colors = itertools.cycle(['r']+colors)
         for i in range(N):
-            eb_add = ax1.errorbar(x_forecast.flatten()[i], 
+            color = next(colors)
+            eb_add = ax.errorbar(x_forecast.flatten()[i], 
                          yhat[0].flatten()[i],
                          yerr=delta_f.flatten()[i],
                          c='k', capsize=3,
                          marker='o', ms=8, 
-                         mec=colors[i], mfc=colors[i]
+                         mec=color, mfc=color
                          )
             eb += [eb_add[0]]
+
+        for x, y, error in zip(x_forecast, yhat[0], yhat[1]):
+            display(Latex('$y(x={0:0.4f})={1:0.4f}\pm {2:0.4f}$'\
+                          .format(x[0], y[0], error[0])))
+
         return eb 
 
     #Perform the regression in linear space unless we're plotting log data, as
@@ -215,7 +229,7 @@ def ax_slr(ax, fname, xcol, ycol,
                 showcorr=False,
                 arrowprops=arrowprops, showlabels=showlabels, 
                 minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
-                labelsize=labelsize)
+                labelsize=labelsize, **kwargs)
     ax.plot(Xs[0], ys_pred, label=legend_txt)
 
     if show_formula:
@@ -368,7 +382,7 @@ def fill_ax_new(ax, df, xcol, ycol,
                 showlabels=True,
                 labelsize=15, arrowprops=None, color='blue', alpha=1., 
                 showcorr=True, legend_txt=None, minarrow=0.02,
-                adjust_text_kwargs={}):
+                adjust_text_kwargs={}, xtickspace=None, ytickspace=None):
     if xcol == 'den_solar' and xadjustment == 'log' and xlabel is None:
         xlabel = log_rho_solar_label
     xs=df[xcol]
@@ -410,13 +424,20 @@ def fill_ax_new(ax, df, xcol, ycol,
             ###################################################################
             for child in ax.get_children():
                 if isinstance(child, mpl.text.Annotation):
-                    arrowlen = np.linalg.norm(np.array(child.xy)-np.array([child._x, 
-                                                                           child._y]))
+                    arrowlen = np.linalg.norm(np.array(child.xy) \
+                                              - np.array([child._x, 
+                                                          child._y]))
                     if arrowlen < minarrow:
                         child.arrowprops=None
             ###################################################################
         else:
             adjust_text(texts, ax=ax)
+
+    if xtickspace is not None:
+        ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(base=xtickspace))
+    if ytickspace is not None:
+        ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(base=ytickspace))
+
     return None
 
 def fill_ax(ax,df, ycol, ylabel,
@@ -516,44 +537,101 @@ def loglabel(label):
     label = '$\log\\left(\,'+label+'\\right)$'
     return label
 
-def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
+def convert_log_errors(logyhat):
+    log_yhat_min = logyhat[0]-logyhat[1]
+    log_yhat_max = logyhat[0]+logyhat[1]
+    yhat_min = 10.**log_yhat_min
+    yhat_max = 10.**log_yhat_max
+    dy = (yhat_max-yhat_min)/2.
+    return dy
+
+def make_err_bars_fr_resids(ax, reg):
+    '''
+    Make rror bars from residuals
+    '''
+    resids = reg[2]
+    delta_neg = np.percentile(resids, (1.-0.682)/2.*100.)
+    delta_pos = np.percentile(resids, (1.-(1.-0.682)/2.)*100.)
+    delta = np.mean(np.abs((delta_neg, delta_pos)))
+    
+    ax.errorbar(np.log10(v0_sofue), 
+                reg[-1][0], #The last element of reg will be the prediction.
+                yerr=delta, 
+                marker='o', ms=8, c='k', mec='r', mfc='r', capsize=3)
+    
+    return None
+
+def draw_xshade(ax, ycol, v0, dv0):
+    if ycol=='den_disc':
+        bounds = (rho_min_sofue, rho_max_sofue)
+        ax.axhspan(*bounds, 
+                    alpha=0.2, color='gray', ls='none')
+    return None
+
+def draw_shades(ax, ycol, v0, dv0):
+
+    draw_xshade(ax, ycol, v0, dv0)
+
+    xlo = np.log10(v0-dv0)
+    xhi = np.log10(v0+dv0)
+    ax.axvspan(xlo, 
+               xhi, 
+               alpha=0.2, color='gray', ls='none')
+    return None
+
+def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
+              fore_sig=1.-0.682, verbose=False, minarrow=0.03,
+              adjust_text_kwargs={}, show_formula='outside',
+              figsize=(10,5), labelsize=14., v0=v0_eilers, dv0=dv0_eilers):
+
+    df = dm_den.load_data(source_fname)
+    textxy = (0.04, 0.96)
+    fontsize = 14
+    formula_y = -0.4
+    
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    if ycol=='den_disc':
+        ylabel = den_label
+    elif ycol=='disp_dm_disc_cyl':
+        ylabel = disp_label
+
+    reg_disc = ax_slr(ax,source_fname,
+                     'v_dot_phihat_disc(T<=1e4)',
+                     ycol,
+                     xlabel=vc_label,
+                     ylabel=ylabel,
+                     xadjustment='log', yadjustment='log',
+                     formula_y=formula_y, dropgals=['m12w','m12z'],
+                     arrowprops={'arrowstyle':'-'}, 
+                     show_formula=show_formula,
+                     showlabels=True, 
+                     prediction_x=[[v0]], fore_sig=fore_sig, 
+                     dX=[[dv0]], showGeV=True, verbose=verbose,
+                     minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
+                     labelsize=labelsize, xtickspace=0.05, ytickspace=0.05)
+    yhat_vc = reg_disc[-1]
+    
+    display(Latex('$r=8.3\pm{0:0.2f}\,\mathrm{{kpc}}$'
+                  .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
+    display(Latex('$|z|\in[0,{1:0.2f}]\,\mathrm{{kpc}}$' \
+                  .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
+
+    plt.draw()
+    
+    plt.savefig(paths.figures+tgt_fname,
+                bbox_inches='tight',
+                dpi=140)
+
+    plt.show()
+    
+    return yhat_vc
+
+
+def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
                   fore_sig=1.-0.682, verbose=False, minarrow=0.03,
                   adjust_text_kwargs={}, show_formula='outside',
-                  figsize=(10,5), labelsize=14.):
-    def convert_log_errors(logyhat):
-        log_yhat_min = logyhat[0]-logyhat[1]
-        log_yhat_max = logyhat[0]+logyhat[1]
-        yhat_min = 10.**log_yhat_min
-        yhat_max = 10.**log_yhat_max
-        dy = (yhat_max-yhat_min)/2.
-        return dy
-
-    def make_err_bars_fr_resids(ax, reg):
-        '''
-        Make rror bars from residuals
-        '''
-        resids = reg[2]
-        delta_neg = np.percentile(resids, (1.-0.682)/2.*100.)
-        delta_pos = np.percentile(resids, (1.-(1.-0.682)/2.)*100.)
-        delta = np.mean(np.abs((delta_neg, delta_pos)))
-        
-        ax.errorbar(np.log10(v0_sofu), 
-                    reg[-1][0],
-                    yerr=delta, 
-                    marker='o', ms=8, c='k', mec='r', mfc='r', capsize=3)
-        
-        return None
-
-    def draw_shades(ax1, ycol):
-        if ycol=='den_disc':
-            bounds = (rho_min_sofu, rho_max_sofu)
-            ax1.axhspan(*bounds, 
-                        alpha=0.2, color='gray', ls='none')
-        ax1.axvspan(np.log10(v0_sofu-dv0_sofu), 
-                np.log10(v0_sofu+dv0_sofu), 
-                alpha=0.2, color='gray', ls='none')
-        return None
-
+                  figsize=(10,5), labelsize=14., v0=v0_eilers, dv0=dv0_eilers):
     df = dm_den.load_data(source_fname)
 
     fig, axs = plt.subplots(1, 2, figsize=figsize, dpi=110, sharey=True,
@@ -571,8 +649,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     elif ycol=='disp_dm_disc_cyl':
         ylabel = disp_label
     
-    draw_shades(ax0, ycol)
-    draw_shades(ax1, ycol)
+    draw_shades(ax0, ycol, v0, dv0)
+    draw_shades(ax1, ycol, v0, dv0)
     
     reg_gmr = ax_slr(ax0, 
                       source_fname,
@@ -582,8 +660,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                       xadjustment='log', yadjustment='log',
                       dropgals=['m12w','m12z'],
                       arrowprops={'arrowstyle':'-'}, 
-                      show_formula=show_formula, prediction_x=[[v0_sofu]],
-                      dX=[[dv0_sofu]], showGeV=False, 
+                      show_formula=show_formula, prediction_x=[[v0]],
+                      dX=[[dv0]], showGeV=False, 
                       showlabels=True, formula_y=formula_y, verbose=verbose,
                       minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
                       labelsize=labelsize)
@@ -600,8 +678,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                      arrowprops={'arrowstyle':'-'}, 
                      show_formula=show_formula,
                      showlabels=True, 
-                     prediction_x=[[v0_sofu]], fore_sig=fore_sig, 
-                     dX=[[dv0_sofu]], showGeV=True, verbose=verbose,
+                     prediction_x=[[v0]], fore_sig=fore_sig, 
+                     dX=[[dv0]], showGeV=True, verbose=verbose,
                      minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
                      labelsize=labelsize)
     yhat_vc = reg_disc[-1]
@@ -615,9 +693,10 @@ def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
 
     plt.draw()
     
-    plt.savefig(paths.figures+tgt_fname,
-                bbox_inches='tight',
-                dpi=140)
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=140)
 
     plt.show()
     
@@ -626,7 +705,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
 def plt_disc_diffs(df_source='dm_stats_20220715.h5', 
                    diff_source='den_disp_dict_20220818.pkl',
                    only_linear=False, 
-                   only_log=False, figsize=None, tgt_fname=None):
+                   only_log=False, figsize=None, tgt_fname=None,
+                   update_val=False):
     
     direc='/export/nfs0home/pstaudt/projects/project01/data/'
     with open(direc+diff_source, 'rb') as handle:
@@ -652,6 +732,21 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
                              for galname in galnames]).flatten()
             disps = np.array([den_disp_dict[galname]['log(disps)/log(avg)'] \
                               for galname in galnames]).flatten()
+            percent_diff = staudt_utils.round_up(
+                100.*np.max(np.abs(1.-np.array([dens,disps]))),
+                3)
+            if update_val:
+                #update the value in data.dat for the paper
+                dm_den.save_var_latex('maxdiff',
+                                      '{0:0.2f}\%'.format(percent_diff))
+            staudt_utils.print_eq('\min\Delta\log\\rho/\log\overline{\\rho}',
+                     np.min(dens-1))
+            staudt_utils.print_eq('\max\Delta\log\\rho/\log\overline{\\rho}',
+                     np.max(dens-1))
+            staudt_utils.print_eq('\min\Delta\log\\sigma/\log\overline{\\sigma}',
+                     np.min(disps-1))
+            staudt_utils.print_eq('\max\Delta\log\\sigma/\log\overline{\\sigma}',
+                     np.max(disps-1))
         return denlabel, displabel, dens, disps
     
     if only_log or only_linear:
@@ -739,6 +834,38 @@ def plt_gmr_vs_vc(df_source='dm_stats_20220715.h5', tgt_fname='gmr_vs_vc.png',
                     dpi=140)
 
     plt.show()
+
+    return None
+
+def plt_particle_counts(df_source='dm_stats_20220715.h5'):
+    import cropper
+
+    df = dm_den.load_data(df_source)
+    dz = df.attrs['dz']
+    r0 = 8.3
+    dr = df.attrs['drsolar']
+    rmax = r0+dr/2.
+    rmin = r0-dr/2.
+    counts = []
+    pbar = ProgressBar()
+    for galname in pbar(df.index):
+        gal = cropper.load_data(galname, getparts=['PartType1'], 
+                                verbose=False) 
+        rs = gal['PartType1']['r']
+        zs = gal['PartType1']['coord_rot'][:,2]
+        inshell = (rs<rmax) & (rs>rmin)
+        indisc = np.abs(zs) < dz/2.
+        counts += [np.sum(inshell & indisc)]
+
+    for split in [1,15,30,100]:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        _, bins, _ = ax.hist(counts, ec='w')
+        ax.set_xticks(bins, 
+                      labels=['{0:0.0f}'.format(b/split) for b in bins])
+        ax.tick_params(axis='x', labelrotation=45)
+        ax.grid()
+        plt.show()
 
     return None
 
