@@ -1428,6 +1428,20 @@ def save_var_latex(key, value):
 
     return None
 
+def save_prediction(string, y, dy):
+    save_var_latex(string, y)
+    if len(dy)==1:
+        save_var_latex('d'+string, dy[0])
+        save_var_latex('d'+string+'_plus', 'n/a')
+        save_var_latex('d'+string+'_minus', 'n/a')
+    elif len(dy)==2:
+        save_var_latex('d'+string, 'n/a')
+        save_var_latex('d'+string+'_plus', dy[0])
+        save_var_latex('d'+string+'_minus', dy[1])
+    else:
+        raise ValueError('Margin of error has a maximum of two elements.')
+    return None
+
 '''
 def get_gas_speeds(Tcool=1.e4, fname=None):
     # This doesn't really do what we want. Consider deleting
