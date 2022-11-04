@@ -1331,13 +1331,20 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         prediction_y = [(W @ beta_hat), delta_f]
 
         if verbose:
+            print(W)
+            print(W.shape)
+            print(W.reshape(len(W),-1))
+            print(W.reshape(len(W),-1).shape)
+            print(beta_hat)
+            print(beta_hat.shape)
             table3 = np.concatenate((W.reshape(len(W),-1), beta_hat), axis=1)
             table3 = np.concatenate(([['x_i','coeff']],table3),axis=0)
             print('')
-            print(tabulate.tabulate(table3, headers='firstrow', tablefmt='rst'))
-
+            print(tabulate.tabulate(table3, headers='firstrow', 
+                                    tablefmt='rst'))
             
-            table4 = [[prediction_y[0], tc_f, s_f, tc_f*s_f, *np.sqrt(varY_fr_X),
+            table4 = [[prediction_y[0], tc_f, s_f, tc_f*s_f, 
+                       *np.sqrt(varY_fr_X),
                        prediction_y[1]]]
             header4 = [['yhat','t_c','std err of forecast', 't_c * std err',
                         *['dY/dX{0:d} * err(X{0:d})'.format(i+1) \
