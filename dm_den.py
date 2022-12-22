@@ -522,6 +522,7 @@ def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
         disp=np.sqrt(np.sum(coord_var))
         return disp
     disp3d_francisco=disp3d_francisco_f()
+    print(disp3d, disp3d_francisco)
     assert np.allclose(disp3d,disp3d_francisco)
     return den*10.**10., disp3d
 
@@ -714,21 +715,26 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
     if source=='original':
         dat  = unpack_new(df, galname, dr, drsolar, typ=typ, 
                           getparts=vcircparts)
-        ms_all, mvir, rs_all, r, v_mags_all, v_vecs_all, \
+        ms_all, mvir, rs_all, rvir, v_mags_all, v_vecs_all, \
             parttypes_all = dat[:7]
 
         isdm = parttypes_all=='PartType1'
         print('{0:0d} dm particles'.format(np.sum(isdm)))
-        ms = ms_all[isdm]
-        rs = rs_all[isdm]
-        v_mags = v_mags_all[isdm]
-        v_vecs = v_vecs_all[isdm]
+        ms_dm = ms_all[isdm]
+        rs_dm = rs_all[isdm]
+        v_mags_dm = v_mags_all[isdm]
+        v_vecs_dm = v_vecs_all[isdm]
 
         isgas=parttypes_all=='PartType0'
         rs_gas = rs_all[isgas]
         ms_gas = ms_all[isgas]
         v_vecs_gas = v_vecs_all[isgas]
         v_mags_gas = v_mags_all[isgas]
+
+        isstellar = parttypes_all=='PartType4'
+        rs_stellar = rs_all[isstellar]
+        ms_stellar = ms_all[isstellar]
+
     elif source=='cropped':
         d = load_cropped(galname)
 
@@ -745,14 +751,14 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         #######################################################################
         '''
         
-        ms = d['PartType1']['mass_phys']
-        rs = d['PartType1']['r']
-        v_vecs = d['PartType1']['v_vec_centered']
+        ms_dm = d['PartType1']['mass_phys']
+        rs_dm = d['PartType1']['r']
+        v_vecs_dm = d['PartType1']['v_vec_centered']
         #velocity vectors in cylindrical coordinates
-        v_vecs_cyl = np.array([d['PartType1']['v_dot_rhat'],
+        v_vecs_dm_cyl = np.array([d['PartType1']['v_dot_rhat'],
                                d['PartType1']['v_dot_phihat'],
                                d['PartType1']['v_dot_zhat']]).transpose(1,0)
-        v_mags = np.linalg.norm(v_vecs, axis=1)
+        v_mags_dm = np.linalg.norm(v_vecs_dm, axis=1)
         zs = d['PartType1']['coord_rot'][:,2]
 
         rs_gas = d['PartType0']['r']
@@ -768,16 +774,18 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         ms_all = flatten_particle_data(d, 'mass_phys')
 
         # limited to the disc
-        den_disc, disp_dm_disc = get_den_disp(rsolar, rs, dr,
-                                                          ms=ms, v_mags=None,
-                                                          v_vecs=v_vecs_cyl,
-                                                          zs=zs, dz=dz)
+        den_disc, disp_dm_disc = get_den_disp(rsolar, rs_dm, dr,
+                                              ms=ms_dm, v_mags=None,
+                                              v_vecs=v_vecs_dm_cyl,
+                                              zs=zs, dz=dz)
+
         df.loc[galname,'den_disc'] = den_disc
+        df.loc[galname,'f_disc'] = 10.**7./den_disc
         df.loc[galname,'disp_dm_disc_cyl'] = disp_dm_disc
 
         # cylindrical coords, in a shell not limited to the disc
-        _, disp_dm_cyl = get_den_disp(rsolar, rs, dr=drsolar, ms=ms, 
-                                            v_mags=None, v_vecs=v_vecs_cyl,
+        _, disp_dm_cyl = get_den_disp(rsolar, rs_dm, dr=drsolar, ms=ms_dm, 
+                                            v_mags=None, v_vecs=v_vecs_dm_cyl,
                                             zs=None, dz=None)
         df.loc[galname,'disp_dm_shell_cyl'] = disp_dm_cyl
 
@@ -837,22 +845,21 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         raise ValueError('source should be \'original\' or \'cropped\'')
 
     # "cart" means "Cartesian coords"
-    den_shell, disp_dm_cart = get_den_disp(rsolar, rs, dr=drsolar, 
-                                                      ms=ms, v_mags=v_mags, 
-                                                      v_vecs=v_vecs)
-    df.loc[galname,['den_shell',
-                    'disp_dm_shell_cart']] = den_shell, \
-                                             disp_dm_cart
+    if 'PartType1' in vcircparts:
+        den_shell, disp_dm_cart = get_den_disp(rsolar, rs_dm, dr=drsolar, 
+                                               ms=ms_dm, v_mags=v_mags_dm, 
+                                               v_vecs=v_vecs_dm)
+        df.loc[galname,['den_shell',
+                        'disp_dm_shell_cart']] = den_shell, \
+                                                 disp_dm_cart
 
-    df.loc[galname,'f_shell'] = 10.**7./den_shell
-    df.loc[galname,'f_disc'] = 10.**7./den_disc
+        df.loc[galname,'f_shell'] = 10.**7./den_shell
     df.loc[galname,'vcirc'] = get_vcirc(rsolar,rs_all,ms_all)
-
      
-    for col in ['mwithin10']:
+    for col in ['mwithin10']: # Set the necessary columns to longdouble
         if col not in df:
             df[col]=np.empty(len(df),dtype=np.longdouble)
-    df.loc[galname,'mwithin10'] = get_mwithin(10.,rs,ms)
+    df.loc[galname,'mwithin10'] = get_mwithin(10.,rs_dm,ms_dm)
     
     if source=='original':
         for col in ['mvir_fromhcat','mvir_calc','m10tovir',
@@ -860,17 +867,22 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
             if col not in df:
                 df[col]=np.empty(len(df),dtype=np.longdouble)
 
-        df.loc[galname,'disp_gas'] = get_den_disp(rsolar, rs_gas, dr,
-                                                        ms_gas, 
-                                                        v_mags_gas,
-                                                        v_vecs_gas)[1]
-        df.loc[galname,['den_vir','disp_dm_vir']] = get_den_disp(rvir, rs, 
-                                                                 dr, ms, 
-                                                                 v_mags, 
-                                                                 v_vecs)
+        if 'PartType0' in vcircparts:
+            df.loc[galname,'disp_gas'] = get_den_disp(rsolar, rs_gas, dr,
+                                                      ms_gas, 
+                                                      v_mags_gas,
+                                                      v_vecs_gas)[1]
+        if 'PartType1' in vcircparts:
+            df.loc[galname,['den_vir','disp_dm_vir']] = get_den_disp(rvir, 
+                                                                     rs_dm, 
+                                                                     dr, ms_dm, 
+                                                                     v_mags_dm, 
+                                                                     v_vecs_dm)
         df.loc[galname,'mvir_fromhcat'] = mvir
-        df.loc[galname,'mvir_calc'] = get_mwithin(rvir,rs,ms)
-        df.loc[galname,'m10tovir'] = get_mbtw(10.,rvir,rs,ms)
+        df.loc[galname,'mvir_calc'] = get_mwithin(rvir,rs_dm,ms_dm)
+        df.loc[galname,'mvir_stellar'] = get_mwithin(rvir, rs_stellar, 
+                                                     ms_stellar)
+        df.loc[galname,'m10tovir'] = get_mbtw(10.,rvir,rs_dm,ms_dm)
         df.loc[galname,'mvir_check'] = df.loc[galname,
                                               'mwithin10'] + df.loc[galname,
                                                                     'm10tovir']
@@ -1081,6 +1093,8 @@ def comp_disp_vc(galname='m12i',dr=1.5,fname=None):
     return rs_axis, disps_fire, vcircs_fire, disps_dmo, vcircs_dmo 
 
 def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False):
+    # I think this function will fail if incl_ve=False. Make sure to 
+    # test/correct this.
     ms, mvir, rs, rvir, v_mags, v_vecs, parttypes = unpack_new(df, galname)[:7]
     if incl_ve:
         if 'disp_dm_solar' in df and not np.isnan(df.loc[galname,'disp_dm_solar']):
@@ -1092,10 +1106,10 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False):
             df.loc[galname,['den_solar','disp_dm_solar']] = den_solar, sigma3d 
     v0 = sigma3d*np.sqrt(2./3.)
     print(v0)
-    day = 60.8 #Gives avg val of ve
-    ve = np.array(vE_f(day, v0))
-    print(ve)
-    v_vecs = v_vecs - ve
+    day = 60.8 #Gives avg val of v_earth
+    v_earth = np.array(vE_f(day, v0))
+    print(v_earth)
+    v_vecs = v_vecs - v_earth
     v_mags = np.linalg.norm(v_vecs,axis=1)
 
     inshell=(rs<r+dr/2.)&(rs>r-dr/2.)
@@ -1193,7 +1207,8 @@ def make_x_pdfs(bins=50, r=8.3, dr=1.5, fname=None,
     return pdfs
 
 def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
-        prediction_x=None, dX=None, fore_sig=1.-0.682, verbose=False):
+        prediction_x=None, dX=None, fore_sig=1.-0.682, beta_sig=0.05,
+        verbose=False, return_band=False, return_coef_errors=False, **kwargs):
     '''
     Multi-linear regression
 
@@ -1279,7 +1294,6 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
     # standard errors of coefficients
     S = np.sqrt([[covmat[i,i]] for i in range(len(covmat))])
     T = np.abs(beta_hat) / S #t-stats for coefficients
-    beta_sig = 0.05 #significance
     tc_beta = scipy.stats.t.ppf(q=1-beta_sig/2., df=deg)
     delta_beta = S*tc_beta #uncertainties in coefficients
     P = 2.*(1.-scipy.stats.t.cdf(T, deg)) #p-values
@@ -1302,50 +1316,48 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         print('r2 = {0:0.2f}'.format(r2))
         print('r2a = {0:0.2f}'.format(r2a))
 
-    if prediction_x is not None:
+    def calc_forecast(prediction_x, dX, verbose):
+        '''
+        Return both the prediction and the margin of
+        error on that prediction
+        '''
         prediction_x = np.array(prediction_x)
-        W = np.concatenate((np.ones((prediction_x.shape[0],1)), prediction_x),
+        W = np.concatenate((np.ones((prediction_x.shape[0],1),dtype=float), 
+                            prediction_x),
                            axis=1)
         var_mean = np.array([[(w @ covmat) @ w.T] for w in W])
         s_mean = np.sqrt(var_mean) #std error of mean
         var_f = var_mean + mse #variance of forecast
-        s_f = np.sqrt(var_f) #std error of forecast
+        s_forecast = np.sqrt(var_f) #std error of forecast
         # critical 2-tailed t value  
         tc_f = scipy.stats.t.ppf(q=1.-fore_sig/2., df=N-p)
-        delta_f = tc_f*s_f #uncertainty in the forecast
+        delta_f = tc_f*s_forecast #uncertainty in the forecast
 
         varY_fr_X = np.empty((len(prediction_x),len(xcols)))
-        #for i, vals in enumerate(zip(xcols, xscales)):
-            #xcol, scale = vals
+        # determine variance in the forecast imparted by the uncertainty in
+        # X_hat (e.g. x_hat =  MW's local circular velocity):
         if scale == 'log':
             varY_fr_X =  beta_hat[1:]**2. * dX**2. \
                            / (10.**(prediction_x*2.) * np.log(10.)**2.)
-            #varY_fr_X[i] = beta_hat[i+1]**2. * dX[:,i]**2. \
-            #               / (10.**(prediction_x[:,i]*2.) * np.log(10.)**2.)
         elif scale == 'linear':
             varY_fr_X = beta_hat[1:]**2. * dX**2.
-            #varY_fr_X[i] = beta_hat[i+1]**2. * dX[:,i]**2.
 
         delta_f = np.sqrt(delta_f**2. + np.sum(varY_fr_X,axis=1,
                           keepdims=True))
-        prediction_y = [(W @ beta_hat), delta_f]
+        Y_hat = W @ beta_hat
 
         if verbose:
-            print(W)
-            print(W.shape)
-            print(W.reshape(len(W),-1))
-            print(W.reshape(len(W),-1).shape)
-            print(beta_hat)
-            print(beta_hat.shape)
-            table3 = np.concatenate((W.reshape(len(W),-1), beta_hat), axis=1)
+            table3 = np.concatenate((W.T, beta_hat), axis=1)
             table3 = np.concatenate(([['x_i','coeff']],table3),axis=0)
             print('')
             print(tabulate.tabulate(table3, headers='firstrow', 
                                     tablefmt='rst'))
             
-            table4 = [[prediction_y[0], tc_f, s_f, tc_f*s_f, 
+            table4 = [np.concatenate([Y_hat.flatten(), [tc_f], 
+                       s_forecast.flatten(), 
+                       (tc_f*s_forecast).flatten(), 
                        *np.sqrt(varY_fr_X),
-                       prediction_y[1]]]
+                       delta_f.flatten()])]
             header4 = [['yhat','t_c','std err of forecast', 't_c * std err',
                         *['dY/dX{0:d} * err(X{0:d})'.format(i+1) \
                           for i in range(k)],
@@ -1354,11 +1366,47 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
             print(tabulate.tabulate(table4, headers='firstrow', tablefmt='rst'))
             print('(t-test type: 2 tailed, {0:0.0f}% significance)\n' \
                   .format(fore_sig*100.))
+         
+        return Y_hat, delta_f
 
-        return coefs, intercept, r2, Xs, ys, ys_pred, r2a, residuals, \
-               prediction_y 
+    ###########################################################################
+    results = [coefs, intercept, r2, Xs, ys, ys_pred, r2a, residuals]
+    ###########################################################################
+    if return_coef_errors:
+        #######################################################################
+        results.append(delta_beta)
+        #######################################################################
+    if return_band:
+        if X.shape[1:] != (1,):
+            raise ValueError('I haven\'t coded this to work with multiple '
+                             'regression.')
+        N_uncert = 20
+        X_band = np.linspace(X.min(), X.max(), N_uncert)
+        X_band = X_band.reshape(N_uncert,1)
+        W_band = np.concatenate((np.ones((X_band.shape[0],1),dtype=float),
+                                 X_band),axis=1)
+        dX_band = np.zeros((N_uncert,1))
+        Yhat_band, delta_band = calc_forecast(X_band, dX_band, False)
+        band = np.array([X_band.flatten(), 
+                         (Yhat_band+delta_band).flatten(),
+                         (Yhat_band-delta_band).flatten(),
+                         Yhat_band.flatten()])
+        #######################################################################
+        results.append(band)
+        #######################################################################
+        
+    if prediction_x is not None:
+        prediction_x = np.array(prediction_x)
+        W = np.concatenate((np.ones((prediction_x.shape[0],1),dtype=float), 
+                            prediction_x),
+                           axis=1)
+        Y_hat, delta_f = calc_forecast(prediction_x, dX, verbose)
+        prediction_y = [Y_hat, delta_f]
+        #######################################################################
+        results.append(prediction_y) 
+        #######################################################################
 
-    return coefs, intercept, r2, Xs, ys, ys_pred, r2a, residuals 
+    return tuple(results) 
 
 def get_v_escs(fname=None):
     '''
@@ -1493,5 +1541,42 @@ def get_gas_speeds(Tcool=1.e4, fname=None):
     return df
 '''
 
+def save_mvir(fname, freq_save=False):
+    df = init_df()
+    for g in df.index:
+        print('Retrieving '+g)
+        analyze(df, g, dr=1.5, drsolar=None, typ='fire', 
+                vcircparts=['PartType4'], source='original', dz=0.5)
+        if freq_save and fname:
+            save_data(df, fname)
+    df_new = df[['mvir_fromhcat','mvir_stellar']]
+    save_data(df, fname)
+    return None
+
+def combine_data(fname1, fname2, newfname):
+    df1 = load_data(fname1)
+    df2 = load_data(fname2)
+    df = pd.concat([df1, df2], axis=1)
+    df.attrs = df1.attrs 
+    save_data(df, newfname)
+    return None
+
+def get_v0(gal):
+    df = init_df()
+    with open('./data/v_pdfs.pkl','rb') as f:
+        pdfs_v=pickle.load(f)
+    v_bins = pdfs_v[gal]['bins']
+    vs = (v_bins[1:] + v_bins[:-1]) / 2.
+    i = np.argmax(pdfs_v[gal]['ps'])
+    v0 = vs[i]
+    return v0
+
+def save_v0s(initial_fname, new_fname):
+    df = load_data(initial_fname)
+    for gal in df.index:
+        df.loc[gal,'v0'] = get_v0(gal) 
+    save_data(df, new_fname)
+    return None 
+    
 if __name__=='__main__':
     gen_data(fname='dm_den_20210623_2.h5')

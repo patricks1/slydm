@@ -3,6 +3,7 @@ from adjustText import adjust_text
 from IPython.display import display, Latex
 import numpy as np
 import pandas as pd
+import cmasher as cmr
 import dm_den
 import sys
 import paths
@@ -33,8 +34,7 @@ rcParams['axes.titlepad']=15
 rcParams['legend.frameon'] = True
 rcParams['legend.facecolor']='white'
 rcParams['legend.fontsize']=18
-rcParams['figure.facecolor'] = 'white'
-#rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
+rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
 def plotter_old(gals, dat, gal_names, datloc, ylabel,
             yscale='linear', adjustment=None, figsize=(7,8)):
@@ -153,6 +153,7 @@ def ax_slr(ax, fname, xcol, ycol,
            dropgals=None, showGeV=True, show_formula=True,
            x_forecast=None, dX=None, forecast_sig=1.-0.682, verbose=False,
            minarrow=0.02, adjust_text_kwargs={}, legend_txt=None, 
+           return_error=False, show_band=False,
            **kwargs):
     'Plot a simple linear regression on ax'
 
@@ -191,6 +192,7 @@ def ax_slr(ax, fname, xcol, ycol,
     #opposed to plotting unadjusted data but on a log scale
     if xadjustment == 'log':
         reg_xscale = 'log'
+        display_xadj = 'log'
     elif xadjustment == 'logreg_linaxunits':
         # If we want the regression to be log but then display the x-axis in
         # linear units (note that we may still want to scale the displayed 
@@ -199,6 +201,7 @@ def ax_slr(ax, fname, xcol, ycol,
         display_xadj = None
     elif xadjustment is None:
         reg_xscale = 'linear'
+        display_xadj = None
     else:
         raise ValueError('x adjustment should be \'log\' or None')
     if yadjustment == 'log':
@@ -222,8 +225,20 @@ def ax_slr(ax, fname, xcol, ycol,
                          xscales=[reg_xscale], yscale=reg_yscale,
                          dropgals=dropgals, 
                          prediction_x=x_forecast, fore_sig=forecast_sig, dX=dX,
-                         verbose=verbose)
-    coefs, intercept, r2, Xs, ys, ys_pred, r2a, resids = mlr_res[:8]
+                         verbose=verbose, return_band=True, 
+                         return_coef_errors=True, **kwargs)
+    coefs, intercept, r2, Xs, ys, ys_pred, r2a, resids, delta_beta, band \
+            = mlr_res[:10]
+
+    if show_band:
+        band_disp = band.copy()
+        if xadjustment == 'logreg_linaxunits':
+            band_disp[0] = 10.**band_disp[0]
+        if yadjustment == 'logreg_linaxunits':
+            band_disp[1:] = 10.**band_disp[1:]
+
+        ax.fill_between(*band_disp, color='grey', alpha=0.2, lw=0.)
+
     if x_forecast is not None:
         prediction_y = mlr_res[-1] #[y, y uncertainty] 
         # ebc is an ErrorbarContainer. I think by telling adjust_texts to avoid
@@ -231,13 +246,13 @@ def ax_slr(ax, fname, xcol, ycol,
         if yadjustment == 'logreg_linaxunits':
             prediction_y = np.array(prediction_y)
             if prediction_y.shape[1:] != (1,1):
-                raise ValueError('I haven\'t written this to work with'
-                                 'more than one prediction nor multiple'
+                raise ValueError('I haven\'t written this to work with '
+                                 'more than one prediction nor multiple '
                                  'regression.')
             conversion = staudt_utils.log2linear(prediction_y[0][0,0],
                                                    prediction_y[1][0,0])
             if conversion.shape != (2,):
-                raise ValueError('I haven\'t written this to work with'
+                raise ValueError('I haven\'t written this to work with '
                                  'asymmetrical errors.')
             prediction_y[0][0,0] = conversion[0]
             prediction_y[1][0,0] = conversion[1]
@@ -286,7 +301,7 @@ def ax_slr(ax, fname, xcol, ycol,
                 ystring = 'y'
             return xstring, ystring
 
-        if xadjustment=='log' and reg_yscale=='log':
+        if reg_xscale == 'log' and reg_yscale=='log':
             # if plotting log data on both axes, show the formula of the form 
             # y=Ax^m
             
@@ -350,6 +365,11 @@ def ax_slr(ax, fname, xcol, ycol,
         showGeV_y(ax, display_yadj)
 
     result = [coefs, intercept, resids]
+    if return_error:
+        pos = band[1] - band[3]
+        neg = band[3] - band[2]
+        pos_neg = np.concatenate((pos,neg)).flatten()
+        result += [delta_beta, pos_neg.mean()]
     if x_forecast is not None:
         result += [prediction_y]
     return tuple(result)
@@ -470,7 +490,26 @@ def fill_ax_new(ax, df, xcol, ycol,
         pass
     else:
         raise ValueError
-    ax.plot(xs,ys,'o',color=color,alpha=alpha,label=legend_txt)
+    if color=='masses':
+        c = dm_den.load_data('dm_stats_stellar_20221110.h5') \
+                  .loc[df.index,['mvir_stellar']].values
+        c = np.log10(c)
+        cmap = cmr.get_sub_cmap('viridis', 0., 0.9)
+        sc = ax.scatter(xs,ys,marker='o',c=c,alpha=alpha,label=legend_txt,
+                        cmap=cmap)
+        '''
+        if ycol == 'den_disc':
+            pad = 0.25
+        else:
+            pad = 0.05
+        '''
+        cb = plt.colorbar(sc, pad=0.2, 
+                          location='bottom')
+        cb.ax.tick_params(labelsize=12)
+        cb.set_label(size=12,
+                     label='$\log M_\mathrm{\star,vir}\,/\,\mathrm{M_\odot}$')
+    else:
+        ax.plot(xs,ys,'o',color=color,alpha=alpha,label=legend_txt)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_xscale(xscale)
@@ -670,7 +709,9 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
         dpi_show = kwargs['dpi_show']
     else:
         dpi_show = 110
+
     fig = plt.figure(figsize=figsize, dpi=dpi_show)
+
     ax = fig.add_subplot(111)
     if ycol=='den_disc':
         ylabel = den_label
@@ -685,6 +726,9 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
 
     if 'ytickspace' not in kwargs:
         kwargs['ytickspace'] = 0.05
+
+    x_forecast = [[v0]]
+    dX = [[dv0]]
     reg_disc = ax_slr(ax,source_fname,
                       'v_dot_phihat_disc(T<=1e4)',
                       ycol,
@@ -696,30 +740,38 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                       arrowprops={'arrowstyle':'-'}, 
                       show_formula=show_formula,
                       showlabels=True, 
-                      x_forecast=[[v0]], forecast_sig=forecast_sig, 
-                      dX=[[dv0]], showGeV=True, verbose=verbose,
+                      x_forecast=x_forecast, forecast_sig=forecast_sig, 
+                      dX=dX, showGeV=True, verbose=verbose,
                       minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
-                      labelsize=labelsize, **kwargs)
+                      labelsize=labelsize, return_error=True, 
+                      show_band=True, **kwargs)
+    delta_beta = reg_disc[-3] #errors on the regression coefficients
+    avg_error = reg_disc[-2]
     yhat_vc = reg_disc[-1]
     # I don't know why, but the following line only works if the user specifies
     # the `xtickspace` kwarg
     ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
 
-    other_texts = [child for child in ax.get_children() \
-                   if isinstance(child, mpl.text.Annotation) \
-                  ]
-    mw_text = ax.annotate('Milky Way', (v0, yhat_vc[0][0,0]), fontsize=labelsize,
-                          color='red')
-    adjust_text_kwargs['add_objects'] += other_texts
-    adjust_text([mw_text], ax=ax, 
-                arrowprops={'arrowstyle':'-|>', 'color':'red'}, 
-                **adjust_text_kwargs)
+    if ycol == 'disp_dm_disc_cyl':
+        mw_text_kwargs = {'xytext':(0.2,0.65)}
+    elif ycol == 'den_disc':
+        mw_text_kwargs = {'xytext':(0.3,0.5)}
+    mw_text = ax.annotate('Milky Way', (v0, yhat_vc[0][0,0]), 
+                          fontsize=labelsize,
+                          color='red', 
+                          arrowprops={'arrowstyle':'-|>', 'color':'red'}, 
+                          textcoords='axes fraction',
+                          **mw_text_kwargs)
     if update_val:
         y_flat = np.array(yhat_vc).flatten()
+        slope, dslope = staudt_utils.sig_figs(reg_disc[0][0], delta_beta[1][0])
+        amp, damp = staudt_utils.sig_figs(reg_disc[1], avg_error)
         if ycol=='disp_dm_disc_cyl':
             #y_save, dy_save = staudt_utils.log2linear(*y_flat)
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
             dm_den.save_prediction('disp', y_save, dy_save)
+            dm_den.save_prediction('disp_slope', slope, dslope)
+            dm_den.save_prediction('disp_amp', amp, damp)
         elif ycol=='den_disc':
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
             dm_den.save_prediction('logrho', y_save, dy_save)
@@ -737,6 +789,9 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                    particle_y[1:].value)
             dm_den.save_prediction('rho_GeV', particle_y_save, 
                                    particle_dy_save)
+            
+            dm_den.save_prediction('den_slope', slope, dslope)
+            dm_den.save_prediction('den_amp', amp, damp)
 
     display(Latex('$r=8.3\pm{0:0.2f}\,\mathrm{{kpc}}$'
                   .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
