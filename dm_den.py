@@ -17,8 +17,10 @@ from progressbar import ProgressBar
 from astropy import units as u
 from astropy import constants as c
 from matplotlib import pyplot as plt
-from SHMpp.SHMpp_gvmin_reconcile import vE as vE_f
-#import dm_den_viz
+try:
+    from SHMpp.SHMpp_gvmin_reconcile import vE as vE_f
+except:
+    print('Note: SHMpp.SHMpp_gvmin_reconcile.vE import failed')
 
 def build_direcs(suffix, res, mass_class, typ='fire', source='original',
                  min_radius=None, max_radius=None):
@@ -1029,7 +1031,9 @@ def save_data(df, fname):
     return None
 
 def load_data(fname):
-    direc='/export/nfs0home/pstaudt/projects/project01/data/'
+    abspath = os.path.abspath(__file__) #path to this script
+    direc = os.path.dirname(abspath) #path to this script's directory
+    direc += '/data/'
     fname=direc+fname
     try:
         with pd.HDFStore(fname) as store:
@@ -1426,7 +1430,7 @@ def get_v_escs(fname=None):
         for theta in pbar(thetas):
             rvec = r * np.array([np.cos(theta), np.sin(theta), 0.])
             v_escs[gal]['v_escs'] += [get_v_esc(dic['mass'], dic['pos'], rvec)]
-        print('')
+        prinkt('')
         v_escs[gal]['std_ve'] = np.std(v_escs[gal]['v_escs'])
         v_escs[gal]['ve_avg'] = np.mean(v_escs[gal]['v_escs'])
 
