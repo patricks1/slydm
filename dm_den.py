@@ -17,10 +17,7 @@ from progressbar import ProgressBar
 from astropy import units as u
 from astropy import constants as c
 from matplotlib import pyplot as plt
-try:
-    from SHMpp.SHMpp_gvmin_reconcile import vE as vE_f
-except:
-    print('Note: SHMpp.SHMpp_gvmin_reconcile.vE import failed')
+from SHMpp.SHMpp_gvmin_reconcile import vE as vE_f
 
 def build_direcs(suffix, res, mass_class, typ='fire', source='original',
                  min_radius=None, max_radius=None):
