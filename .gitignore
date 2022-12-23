@@ -8,6 +8,6 @@
 .*
 
 #ignore data folder
-data/*
+#data/*
 
 __pycache__
