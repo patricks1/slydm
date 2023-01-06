@@ -1019,7 +1019,9 @@ def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
     return df
                     
 def save_data(df, fname):
-    direc='/export/nfs0home/pstaudt/projects/project01/data/'
+    abspath = os.path.abspath(__file__) #path to this script
+    direc = os.path.dirname(abspath) #path to this script's directory
+    direc += '/data/'
     fname=direc+fname
     with pd.HDFStore(fname) as store:
         store.put('data',df)
