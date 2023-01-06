@@ -614,7 +614,6 @@ def get_mwithin(r,rs,ms):
     return mtot*10.**10.
 
 def plot_tests(df, galname, dr=1.5, drsolar=None):
-
     from matplotlib import pyplot as plt
     from dm_den_viz import log_rho_solar_label, disp_vir_label
     
