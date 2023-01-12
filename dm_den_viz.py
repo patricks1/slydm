@@ -288,7 +288,9 @@ def ax_slr(ax, fname, xcol, ycol,
         formula_strings = {'vcirc_R0':'v_\mathrm{c}',
                            'v_cool_gas':'v_\\phi',
                            'disp_dm_solar':'\sigma_\mathrm{{DM}}', 
-                           'den_solar':'\\rho_\mathrm{{DM}}'}
+                           'den_solar':'\\rho_\mathrm{{DM}}',
+                           'v_dot_phihat_disc(T<=1e4)': '$v_\mathrm{c}$',
+                           }
         
         def get_strs():
             try:
@@ -545,12 +547,15 @@ def fill_ax_new(ax, df, xcol, ycol,
         else:
             adjust_text(texts, ax=ax)
 
-    if xtickspace is not None:
-        ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(base=xtickspace))
-    if ytickspace is not None:
-        ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(base=ytickspace))
     if yscale == 'log':
         ax.yaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
+        ax.yaxis.set_minor_formatter(mpl.ticker.ScalarFormatter())
+    if xtickspace is not None:
+        ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(base=xtickspace))
+        ax.xaxis.set_minor_locator(plt.NullLocator())
+    if ytickspace is not None:
+        ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(base=ytickspace))
+        ax.yaxis.set_minor_locator(plt.NullLocator())
 
     return None
 
@@ -750,7 +755,9 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     yhat_vc = reg_disc[-1]
     # I don't know why, but the following line only works if the user specifies
     # the `xtickspace` kwarg
+    # (Adding set_minor_formatter might have fixed it. Check back.)
     ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
+    ax.xaxis.set_minor_formatter(mpl.ticker.ScalarFormatter())
 
     if ycol == 'disp_dm_disc_cyl':
         mw_text_kwargs = {'xytext':(0.2,0.65)}
