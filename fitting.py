@@ -1,26 +1,57 @@
 import scipy
+import warnings
+import lmfit
+import pickle
+import math
 import numpy as np
+from progressbar import ProgressBar
+from matplotlib import pyplot as plt
 
-def gen_max(v,v0,a):
-    f = 4.*np.pi*v**2.*np.exp(-(v/v0)**(2.*a))
-    N = 4./3.*np.pi * v0**3. * scipy.special.gamma(1.+3./(2.*a))
-    return f / N
+with open('./data/v_pdfs.pkl','rb') as f:
+    pdfs_v=pickle.load(f)
+vs_pdfs=np.array([pdfs_v[galname]['bins'] 
+                  for galname in pdfs_v]).flatten()
+vs_shm=np.linspace(vs_pdfs.min(), vs_pdfs.max(), 70)
+with open('./data/vescs_20221222.pkl', 'rb') as f:
+        vesc_dict = pickle.load(f)
+with open('./data/v_pdfs_incl_ve_20220205.pkl','rb') as f:
+    pdfs_v_incl_vearth=pickle.load(f)
 
-def gen_gauss(x,mu,x0,a):
-    y=-(((x-mu)/x0)**2.)**a
-    f = np.exp(y)
-    N = 2.*x0*scipy.special.gamma(1.+1./2./a)
-    '''print(mu)
-    print(x0)
-    print('alpha={0:0.20f}'.format(a))'''
-    return f/N
+def smooth_step_max(v, v0, vesc, k):
+    '''
+    Smooth-step-truncated Maxwellian, as opposed to the immediate cutoff
+    of a Heaviside function used in trunc_max
+    
+    k is the strength of the exponential cutoff
+    '''
+    
+    def calc_pN(v, v0, vesc):
+        '''
+        Probability density before normalizing by N
+        '''
+        fN = np.exp( - v**2. / v0**2. )
+        pN = fN * 4. * np.pi * v**2.
+        trunc = 1. / (1. + np.exp(-k * (vesc-v)))
+        pN *= trunc
+        return pN
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        N = scipy.integrate.quad(calc_pN, 0., np.inf, (v0, vesc), epsabs=0)[0]
+        p = calc_pN(v, v0, vesc) / N
+    return p
 
-def trunc_max(v,v0,a,vesc):
-    f = v**2.*np.exp(-(v/v0)**(2.*a))
-    g1 = scipy.special.gamma(3./2./a)
-    g2 = scipy.special.gammainc((v0/vesc)**(-2.*a),3./2./a)
-    N = v0**3./2./a * (g1 - g2)
-    p = f/N
+def exp_max(v, v0, vesc):
+    '''
+    Maxwellian with an exponential decline (from Macabe 2010 and Lacroix et al. 
+    2020)
+    '''
+    fN = fN = np.exp( - v**2. / v0**2. ) - np.exp( - vesc**2. / v0**2. )
+    pN = fN * 4. * np.pi * v**2.
+    N1 = -2./3. * np.pi*vesc * np.exp( - vesc**2. / v0**2. )
+    N2 = (3.*v0**2. + 2.*vesc**2.)
+    N3 = np.pi**(3./2.) * v0**3. * scipy.special.erf(vesc/v0)
+    N = N1 * N2 + N3
+    p = pN / N
     
     if isinstance(v,(list,np.ndarray)):
         isesc = v>=vesc
@@ -28,141 +59,143 @@ def trunc_max(v,v0,a,vesc):
     else:
         if v>=vesc:
             return 0.
+        
     return p
 
-def fit_dim_gal(galname, dim, pdf_dict, ax, trunc=False, trunc_max=trunc_max):
-    bins=pdf_dict[galname][dim]['bins']
-    xs=(bins[1:]+bins[:-1])/2.
-    xs_fit_plt = np.linspace(xs.min(),xs.max(),int(1e3))
-    ys=pdf_dict[galname][dim]['ps']
-    
-    if dim=='mag':
-        if trunc:
-            res_gen, _ = scipy.optimize.curve_fit(trunc_max, xs, ys,
-                                                  p0=[3.,1.,6.])
-            v0_gen, a_gen, vesc_gen = res_gen
-            ys_fit_gen = trunc_max(xs,*res_gen)
-            ys_fit_gen_plt = trunc_max(xs_fit_plt,*res_gen)
-
-            maxwell = lambda xs,v0: gen_max(xs,v0,1.)
-            res, _ = scipy.optimize.curve_fit(maxwell, xs, ys)
-            v0 = res[0]
-            ys_fit = maxwell(xs,v0)
-            ys_fit_plt = maxwell(xs_fit_plt,v0)
-        else:
-            res_gen, _ = scipy.optimize.curve_fit(gen_max, xs, ys,
-                                                  p0=[10.,1.])
-            v0_gen, a_gen, = res_gen
-            ys_fit_gen = gen_max(xs,*res_gen)
-            ys_fit_gen_plt = gen_max(xs_fit_plt,*res_gen)
-
-            maxwell = lambda xs,v0: gen_max(xs,v0,1.)
-            res, _ = scipy.optimize.curve_fit(maxwell, xs, ys)
-            v0 = res[0]
-            ys_fit = maxwell(xs,v0)
-            ys_fit_plt = maxwell(xs_fit_plt,v0)
-    elif dim in ['x','y','z']:
-        p=Parameters()
-        p.add('mu',value=0.,vary=False,min=-1.,max=1.,brute_step=0.01)
-        p.add('x0',value=1.,vary=True,min=1e-6,max=6.,brute_step=0.01)
-        p.add('a',value=1.,vary=True,min=-20.,max=20.)
-        
-        def errs_gen_gauss(p,xs,ys_data):
-            mu=p['mu'].value
-            x0=p['x0'].value
-            a=p['a'].value
-            ys_fit=gen_gauss(xs,mu,x0,a)
-            errs=ys_data-ys_fit
-            return errs
-        
-        res_min = minimize(errs_gen_gauss, p, args=(xs,ys),
-                           method='lm')
-        res_gen = [res_min.params[key].value for key in res_min.params]
-        mu_gen, v0_gen, a_gen = res_gen
-        ys_fit_gen = gen_gauss(xs,*res_gen)
-        ys_fit_gen_plt = gen_gauss(xs_fit_plt,*res_gen)
-    
-        gauss = lambda xs,mu,v0: gen_gauss(xs,mu,v0,1.)
-        res, _ = scipy.optimize.curve_fit(gauss, xs, ys)
-        mu, v0 = res
-        ys_fit = gauss(xs,*res)
-        ys_fit_plt = gauss(xs_fit_plt,*res)
+def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
+    import dm_den
+    df = dm_den.load_data('dm_stats_20221208.h5')
+    if gals == 'discs':
+        df = df.drop(['m12w', 'm12z'])
+    elif isinstance(gals, (list, np.ndarray)):
+        df = df.loc[gals]
     else:
-        raise ValueError('dim must be \'x\' \'y\' \'z\' \'mag\' or \'magtrunc\'')
+        raise ValueError('Unexpected value provided for gals arg')
     
-    sse_gen = np.sum((ys-ys_fit_gen)**2.) #SSE for generalized distribution
-    sser_gen=sse_gen/(xs.size-len(res_gen))    
-    sse_1=np.sum((ys-ys_fit)**2.)
-    sser_1=sse_1/(xs.size-len(res))
+    if gals == 'discs':
+        figsize = (19., 12.)
+        Nrows = 3
+        Ncols = 4
+    else:
+        Ncols = min(len(gals), 4)
+        Nrows = math.ceil(len(gals) / Ncols)
+    xfigsize = 4.5 * Ncols + 1.
+    yfigsize = 3.7 * Nrows + 1. 
+    fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
+                         sharey='row',
+                         sharex=True, dpi=140)
+    axs=axs.ravel()
+    fig.subplots_adjust(wspace=0.,hspace=0.)
     
-    ax.step(xs,ys,'k',where='mid',color='grey')
-    ax.plot(xs_fit_plt,ys_fit_gen_plt,'-',color='b',lw=2.)
-    ax.plot(xs_fit_plt,ys_fit_plt,'-',color='red')
+    pbar = ProgressBar()
     
-    loc=[1.,.983]
+    def sse_max_v0_vesc(params, vs_truth, ps_truth):
+        v0 = params['v0'].value
+        #print(v0)
+        vesc = params['vesc'].value
+        k = params['k'].value
+        with np.errstate(divide='ignore'):
+            ps_predicted = smooth_step_max(
+                                        vs_truth,
+                                        v0, 
+                                        vesc,
+                                        k)
+        resids = ps_predicted - ps_truth
+        return resids
     
-    kwargs_txt = dict(fontsize=12., xycoords='axes fraction',
-                  va='top', ha='right', 
-                  bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+    def resids_exp_max(params, vs_truth, ps_truth):
+        v0 = params['v0'].value
+        vesc = params['vesc'].value
+        with np.errstate(divide='ignore'):
+            ps_predicted = exp_max(vs_truth,
+                                   v0,
+                                   vesc)
+        resids = ps_predicted - ps_truth
+        return resids
+        
+    vesc_fits = {}
+    
+    for i, gal in enumerate(pbar(df.index)):
+        pdf = pdfs_v[gal]
+        bins = pdf['bins']
+        vs_truth = (bins[1:] + bins[:-1]) / 2.
+        vs_postfit = np.linspace(0., 750., 500)
+        ps_truth = pdf['ps']
+        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        vesc = vesc_dict[gal]['ve_avg']
+    
+        p = lmfit.Parameters()
+        p.add('v0', value=300., vary=True, min=100., max=400.)
+        p.add('vesc', value=470., vary=True, min=250., max=600.)
+        p.add('k', value=0.0309, vary=False, min=0.0001, max=1.)
+    
+        res_v0_vesc = lmfit.minimize(sse_max_v0_vesc, p, 
+                                      method='nelder', 
+                                      args=(vs_truth, ps_truth),
+                                      nan_policy='omit', 
+                                      #niter=300
+                                     )
+        vesc_fits[gal] = res_v0_vesc.params['vesc'].value
+        
+        axs[i].stairs(ps_truth, bins, color='grey')
+        axs[i].plot(
+            vs_postfit, 
+            smooth_step_max(
+                vs_postfit, 
+                res_v0_vesc.params['v0'], 
+                res_v0_vesc.params['vesc'],
+                res_v0_vesc.params['k']))
+        
+        if show_exp:
+            del(p['k'])
+            res_exp = lmfit.minimize(resids_exp_max, p, method='nelder',
+                                     args=(vs_truth, ps_truth), nan_policy='omit')
+            axs[i].plot(vs_postfit,
+                        exp_max(vs_postfit, 
+                                res_exp.params['v0'],
+                                res_exp.params['vesc']))
+        axs[i].grid()
+        
+        loc=[0.97,0.96]
+        kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
+                      va='top', ha='right', 
+                      bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+        axs[i].annotate(gal, loc,
+                        **kwargs_txt)
+        loc[1] -= 0.1
+        kwargs_txt['fontsize'] = 11.
+        axs[i].annotate(#'$v_\mathrm{{esc}}'
+                        #'={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
+                        '$v_\mathrm{{damp}}'
+                        '={1:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
+                        '$v_0={3:0.0f}$\n'
+                        #'$k={6:0.4f}$\n'
+                        '$\chi^2={2:0.2e}$\n'
+                        #'N$_\mathrm{{eval}}={5:0.0f}$'
+                        .format(vesc, 
+                                res_v0_vesc.params['vesc'].value,
+                                res_v0_vesc.chisqr, 
+                                res_v0_vesc.params['v0'].value,
+                                None,
+                                res_v0_vesc.nfev,
+                                res_v0_vesc.params['k'].value,
+                               ),
+                        loc, **kwargs_txt)
+    if gals == 'discs':
+        for i in [4]:
+            axs[i].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+        for ax in axs[-4:]:
+            ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+    elif len(gals) < 4:
+        axs[0].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+        for ax in axs:
+            ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
 
-    if dim=='mag':
-        if trunc:
-            ax.annotate(galname,loc,
-                        **kwargs_txt)
-            txt_gen = '$\\xi_0={0:0.2f};$\n$\\alpha={1:0.2f};$\n'\
-                      '$\\xi_\mathrm{{esc}}={3:0.1f}$\n'\
-                      '$\mathrm{{SSE}}_\mathrm{{r}}={2:0.1e}$'.format(v0_gen,a_gen,sser_gen,vesc_gen)
-            inv = ax.transAxes.inverted()
-            loc=ax.transAxes.transform(loc)
-            loc[1]-=17.
-            loc=inv.transform(loc)
-            ax.annotate(txt_gen, loc, color='b',
-                        **kwargs_txt)
-            txt_1 = '$\\xi_0={0:0.3f};$\n$\\alpha=1;$\n$\mathrm{{SSE}}_\mathrm{{r}}={1:0.1e}$'.format(v0,sser_1)
-            loc=ax.transAxes.transform(loc)
-            loc[1]-=75.
-            loc=inv.transform(loc)
-            ax.annotate(txt_1, loc,
-                        color='r',
-                        **kwargs_txt)          
-        else:
-            ax.annotate(galname,loc,
-                        **kwargs_txt)
-            txt_gen = '$\\xi_0={0:0.2f};$\n$\\alpha={1:0.2f};$\n'\
-                      '$\mathrm{{SSE}}_\mathrm{{r}}={2:0.1e}$'.format(v0_gen,a_gen,sser_gen)
-            inv = ax.transAxes.inverted()
-            loc=ax.transAxes.transform(loc)
-            loc[1]-=17.
-            loc=inv.transform(loc)
-            ax.annotate(txt_gen, loc, color='b',
-                        **kwargs_txt)
-            txt_1 = '$\\xi_0={0:0.3f};$\n$\\alpha=1;$\n$\mathrm{{SSE}}_\mathrm{{r}}={1:0.1e}$'.format(v0,sser_1)
-            loc=ax.transAxes.transform(loc)
-            loc[1]-=55.
-            loc=inv.transform(loc)
-            ax.annotate(txt_1, loc,
-                        color='r',
-                        **kwargs_txt)        
-    elif dim in ['x','y','z']:
-        ax.annotate(galname,loc,
-                    **kwargs_txt)
-        inv = ax.transAxes.inverted()
-        loc=ax.transAxes.transform(loc)
-        loc[1]-=20.
-        loc=inv.transform(loc)
-        txt_gen = '$\mu={3:0.3f};$\n'\
-                  '$\\xi_0={0:0.2f};$\n$\\alpha={1:0.2f};$\n'\
-                  '$\mathrm{{SSE}}_\mathrm{{r}}={2:0.2e}$\n'\
-                  .format(v0_gen,a_gen,sser_gen,mu_gen)
-        ax.annotate(txt_gen, loc, color='b',
-                    **kwargs_txt)
-        txt_1 = '$\mu={2:0.3f};$\n'\
-                '$\\xi_0={0:0.2f};$\n$\\alpha=1;$\n$\mathrm{{SSE}}_\mathrm{{r}}={1:0.2e}$'\
-                .format(v0,sser_1,mu)
-        loc=ax.transAxes.transform(loc)
-        loc[1]-=75.
-        loc=inv.transform(loc)
-        ax.annotate(txt_1, loc,
-                    color='r',
-                    **kwargs_txt)
-    return sser_gen, a_gen
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=140)
+
+    plt.show()
+
+    return vesc_fits
