@@ -1463,8 +1463,6 @@ def get_v_escs(fname=None):
     return v_escs
 
 def save_var_latex(key, value):
-    import os
-
     dict_var = {}
 
     file_path = paths.paper +  "data.txt"
@@ -1482,6 +1480,20 @@ def save_var_latex(key, value):
     with open(file_path, "w") as f:
         for key in dict_var.keys():
             f.write(f"{key},{dict_var[key]}\n")
+
+    return None
+
+def save_var_raw(dict_add):
+    file_path = paths.data + 'data_raw.pkl'
+    try:
+        with open(file_path, 'rb') as f:
+            d = pickle.load(f)
+    except FileNotFoundError:
+        d = {}
+    d = {**d, **dict_add}
+
+    with open(file_path, 'wb') as f:
+        pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
 
     return None
 

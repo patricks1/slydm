@@ -3,6 +3,7 @@ import warnings
 import lmfit
 import pickle
 import math
+import paths
 import numpy as np
 from progressbar import ProgressBar
 from matplotlib import pyplot as plt
@@ -11,9 +12,8 @@ with open('./data/v_pdfs.pkl','rb') as f:
     pdfs_v=pickle.load(f)
 vs_pdfs=np.array([pdfs_v[galname]['bins'] 
                   for galname in pdfs_v]).flatten()
-vs_shm=np.linspace(vs_pdfs.min(), vs_pdfs.max(), 70)
 with open('./data/vescs_20221222.pkl', 'rb') as f:
-        vesc_dict = pickle.load(f)
+    vesc_dict = pickle.load(f)
 with open('./data/v_pdfs_incl_ve_20220205.pkl','rb') as f:
     pdfs_v_incl_vearth=pickle.load(f)
 
@@ -61,6 +61,18 @@ def exp_max(v, v0, vesc):
             return 0.
         
     return p
+
+def label_axes(axs, gals):
+    if gals == 'discs':
+        for i in [4]:
+            axs[i].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+        for ax in axs[-4:]:
+            ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+    elif len(gals) < 4:
+        axs[0].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+        for ax in axs:
+            ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+    return None
 
 def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
     import dm_den
@@ -148,6 +160,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
         
         if show_exp:
             del(p['k'])
+            #p['vesc'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
             res_exp = lmfit.minimize(resids_exp_max, p, method='nelder',
                                      args=(vs_truth, ps_truth), nan_policy='omit')
             axs[i].plot(vs_postfit,
@@ -181,15 +194,13 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                                 res_v0_vesc.params['k'].value,
                                ),
                         loc, **kwargs_txt)
-    if gals == 'discs':
-        for i in [4]:
-            axs[i].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
-        for ax in axs[-4:]:
-            ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
-    elif len(gals) < 4:
-        axs[0].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
-        for ax in axs:
-            ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+        if show_exp:
+            loc[1] -= 0.2
+            axs[i].annotate('$\chi^2_\mathrm{{exp}}={0:0.2e}$\n'
+                            .format(res_exp.chisqr),
+            loc, **kwargs_txt)
+
+    label_axes(axs, gals)
 
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
@@ -199,3 +210,80 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
     plt.show()
 
     return vesc_fits
+
+def plt_naive(gals='discs'):
+    import dm_den
+    df = dm_den.load_data('dm_stats_20221208.h5')
+    if gals == 'discs':
+        df.drop(['m12w', 'm12z'], inplace=True)
+    elif isinstance(gals, (list, np.ndarray)):
+        df = df.loc[gals]
+    else:
+        raise ValueError('Unexpected value provided for gals arg')
+
+    if gals == 'discs':
+        figsize = (19., 12.)
+        Nrows = 3
+        Ncols = 4
+    else:
+        Ncols = min(len(gals), 4)
+        Nrows = math.ceil(len(gals) / Ncols)
+    xfigsize = 4.5 * Ncols + 1.
+    yfigsize = 3.7 * Nrows + 1. 
+    fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
+                         sharey='row',
+                         sharex=True, dpi=140)
+    axs=axs.ravel()
+    fig.subplots_adjust(wspace=0.,hspace=0.)
+    
+    pbar = ProgressBar()
+
+    # velocities to use when plotting the functional form attempts
+    vs_maxwell = np.linspace(0., 800., 700) 
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        # strength at with to truncate the distribution
+        k = pickle.load(f)['k'] 
+
+    def k_resids(p, sigma, vesc, vs_truth, ps_truth):
+        k = p['k'].value
+        ps_predicted = smooth_step_max(vs_truth, 
+                                   np.sqrt(2./3.)*sigma,
+                                   vesc,
+                                   k)
+        resids = ps_predicted - ps_truth
+        return resids
+
+    for i, gal in enumerate(df.index):
+        sigma = df.loc[gal, 'disp_dm_disc_cyl'] 
+        vesc = vesc_dict[gal]['ve_avg']
+        bins = pdfs_v[gal]['bins']
+        vs_truth = (bins[1:] + bins[:-1]) / 2.
+        ps_truth = pdfs_v[gal]['ps']
+        ps_sigma = smooth_step_max(vs_maxwell, 
+                                   np.sqrt(2./3.)*sigma,
+                                   np.inf,
+                                   k)
+        axs[i].stairs(ps_truth, bins,
+                      color='grey')
+        axs[i].plot(vs_maxwell, ps_sigma)
+        axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
+        axs[i].grid()
+
+        loc=[0.97,0.96]
+        kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
+                      va='top', ha='right', 
+                      bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+        axs[i].annotate(gal, loc,
+                        **kwargs_txt)
+        loc[1] -= 0.1
+        kwargs_txt['fontsize'] = 11.
+        #axs[i].annotate('$k={0:0.3f}$'
+        #                .format(
+        #                        result_k.params['k'].value,
+        #                       ),
+        #                loc, **kwargs_txt)
+
+    label_axes(axs, gals)
+
+    plt.show()
+

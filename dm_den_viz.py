@@ -771,15 +771,23 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                           **mw_text_kwargs)
     if update_val:
         y_flat = np.array(yhat_vc).flatten()
-        slope, dslope = staudt_utils.sig_figs(reg_disc[0][0], delta_beta[1][0])
-        amp, damp = staudt_utils.sig_figs(reg_disc[1], avg_error)
+        slope_raw = reg_disc[0][0]
+        amp_raw = reg_disc[1]
+        slope, dslope = staudt_utils.sig_figs(slope_raw, delta_beta[1][0])
+        amp, damp = staudt_utils.sig_figs(amp_raw, avg_error)
         if ycol=='disp_dm_disc_cyl':
+            data2save = {'disp_slope': slope, 'disp_amp': amp}
+            save_var_raw(data2save) 
+
             #y_save, dy_save = staudt_utils.log2linear(*y_flat)
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
             dm_den.save_prediction('disp', y_save, dy_save)
             dm_den.save_prediction('disp_slope', slope, dslope)
             dm_den.save_prediction('disp_amp', amp, damp)
         elif ycol=='den_disc':
+            data2save = {'den_slope': slope, 'den_amp': amp}
+            save_var_raw(data2save) 
+
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
             dm_den.save_prediction('logrho', y_save, dy_save)
 
