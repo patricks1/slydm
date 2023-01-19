@@ -777,7 +777,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
         amp, damp = staudt_utils.sig_figs(amp_raw, avg_error)
         if ycol=='disp_dm_disc_cyl':
             data2save = {'disp_slope': slope, 'disp_amp': amp}
-            save_var_raw(data2save) 
+            dm_den.save_var_raw(data2save) 
 
             #y_save, dy_save = staudt_utils.log2linear(*y_flat)
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
@@ -786,7 +786,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
             dm_den.save_prediction('disp_amp', amp, damp)
         elif ycol=='den_disc':
             data2save = {'den_slope': slope, 'den_amp': amp}
-            save_var_raw(data2save) 
+            dm_den.save_var_raw(data2save) 
 
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
             dm_den.save_prediction('logrho', y_save, dy_save)
