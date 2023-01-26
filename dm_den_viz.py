@@ -157,14 +157,13 @@ def ax_slr(ax, fname, xcol, ycol,
            **kwargs):
     'Plot a simple linear regression on ax'
 
-    def plt_forecast(ax, x_forecast, yhat):
-        delta_f = yhat[1] #uncertainty in the forecast
+    def plt_forecast(ax, X_forecast, Yhat, dYhat):
         if xadjustment=='log':
-            x_forecast = np.log10(x_forecast)
+            X_forecast = np.log10(X_forecast)
         else:
-            x_forecast = np.array(x_forecast)
+            X_forecast = np.array(X_forecast)
         # Returns a list of errorbar objects 
-        N = len(x_forecast)
+        N = len(X_forecast)
         eb = []
         colors = [plt.cm.cool(i) 
                   for i in np.linspace(0, 
@@ -173,18 +172,40 @@ def ax_slr(ax, fname, xcol, ycol,
         colors = itertools.cycle(['r']+colors)
         for i in range(N):
             color = next(colors)
-            eb_add = ax.errorbar(x_forecast.flatten()[i], 
-                         yhat[0].flatten()[i],
-                         yerr=delta_f.flatten()[i],
+            if len(dYhat[i]) == 2:
+                # asymmetric error
+                yerr = np.array([[dYhat[i][1]], [dYhat[i][0]]])
+            elif len(dYhat[i]) == 1:
+                # symmetric error
+                yerr = dYhat[i][0]
+            else:
+                raise ValueError('dYhat[{0:0.0f}] has an unexpected shape.'
+                                 .format(i))
+            eb_add = ax.errorbar(X_forecast.flatten()[i], 
+                         Yhat[i,0],
+                         yerr=yerr,
                          c=color, capsize=3,
                          marker='o', ms=8, 
                          mec=color, mfc=color
                          )
             eb += [eb_add[0]]
 
-        for x, y, error in zip(x_forecast, yhat[0], yhat[1]):
-            display(Latex('$y(x={0:0.4f})={1:0.4f}\pm {2:0.4f}$'\
-                          .format(x[0], y[0], error[0])))
+        for x, y, error in zip(X_forecast, Yhat, dYhat):
+            if not isinstance(error, (list, np.ndarray)):
+                display(Latex('$y(x={0:0.4f})={1:0.4f}\pm {2:0.4f}$'\
+                              .format(x[0], y[0], error[0])))
+            else:
+                if len(error) == 1:
+                    display(Latex('$y(x={0:0.4f})={1:0.4f}\pm {2:0.4f}$'\
+                                  .format(x[0], y[0], error[0])))
+                elif len(error) == 2:
+                    display(Latex('$y(x={0:0.4f})={1:0.4f}'
+                                  '^{{+{2:0.4f}}}'
+                                  '_{{-{3:0.4f}}}$'\
+                                  .format(x[0], y[0], error[0], error[1])))
+                else:
+                    raise ValueError('Error array has the wrong number of '
+                                     'elements.')
 
         return eb 
 
@@ -244,25 +265,28 @@ def ax_slr(ax, fname, xcol, ycol,
         # ebc is an ErrorbarContainer. I think by telling adjust_texts to avoid
         # ebc[0], it will avoid the prediction point.
         if yadjustment == 'logreg_linaxunits':
-            prediction_y = np.array(prediction_y)
-            if prediction_y.shape[1:] != (1,1):
-                raise ValueError('I haven\'t written this to work with '
-                                 'more than one prediction nor multiple '
-                                 'regression.')
-            conversion = staudt_utils.log2linear(prediction_y[0][0,0],
-                                                   prediction_y[1][0,0])
-            if conversion.shape != (2,):
-                raise ValueError('I haven\'t written this to work with '
-                                 'asymmetrical errors.')
-            prediction_y[0][0,0] = conversion[0]
-            prediction_y[1][0,0] = conversion[1]
-        eb = plt_forecast(ax, x_forecast, prediction_y)
+            prediction_y = np.array(prediction_y, dtype=object)
+            #if prediction_y.shape[1:] != (1,1):
+            Ys = np.zeros(prediction_y.shape[1:])
+            dYs = []
+            for i, (Y, dY) in enumerate(zip(prediction_y[0], 
+                                          prediction_y[1])):
+                conversion = staudt_utils.log2linear(Y[0], dY[0])
+                Ys[i,0] = conversion[0]
+                dYs.append(conversion[1:])
+        else:
+            Ys = prediction_y[0]
+            dYs = prediction_y[1]
+        eb = plt_forecast(ax, x_forecast, Ys, dYs)
         adjust_text_kwargs['add_objects'] = eb
 
     df = dm_den.load_data(fname)
     if dropgals:
         df = df.drop(dropgals)
 
+    ###########################################################################
+    # Fill plot with galaxy points
+    ###########################################################################
     if xadjustment=='log':
         xlabel=loglabel(xlabel)
     if display_yadj=='log':
@@ -278,6 +302,8 @@ def ax_slr(ax, fname, xcol, ycol,
                 arrowprops=arrowprops, showlabels=showlabels, 
                 minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
                 labelsize=labelsize, **kwargs)
+    ###########################################################################
+    
     if yadjustment == 'logreg_linaxunits':
         ys_pred = 10.**ys_pred
     if xadjustment == 'logreg_linaxunits':
@@ -289,7 +315,9 @@ def ax_slr(ax, fname, xcol, ycol,
                            'v_cool_gas':'v_\\phi',
                            'disp_dm_solar':'\sigma_\mathrm{{DM}}', 
                            'den_solar':'\\rho_\mathrm{{DM}}',
-                           'v_dot_phihat_disc(T<=1e4)': '$v_\mathrm{c}$',
+                           'v_dot_phihat_disc(T<=1e4)': 'v_\mathrm{c}',
+                           'disp_dm_disc_cyl': '\sigma',
+                           'den_disc': '\\rho'
                            }
         
         def get_strs():
@@ -373,7 +401,7 @@ def ax_slr(ax, fname, xcol, ycol,
         pos_neg = np.concatenate((pos,neg)).flatten()
         result += [delta_beta, pos_neg.mean()]
     if x_forecast is not None:
-        result += [prediction_y]
+        result += [[Ys, dYs]]
     return tuple(result)
 
 def showGeV_x(ax, xadjustment):
@@ -405,7 +433,7 @@ def showGeV_y(ax, yadjustment):
     if yadjustment=='log':
         lim_msun_kpc = 10.**lim * u.M_sun/u.kpc**3.
     elif yadjustment is None:
-        lim_msun_kpc = lim * u.M_sun/u.kpc*3.
+        lim_msun_kpc = lim * u.M_sun/u.kpc**3.
     else:
         raise ValueError('Adjustment should be \'log\' or None')
     lim_GeV = lim_msun_kpc.to(u.GeV/cds.c**2./u.cm**3.)
@@ -550,6 +578,9 @@ def fill_ax_new(ax, df, xcol, ycol,
     if yscale == 'log':
         ax.yaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
         ax.yaxis.set_minor_formatter(mpl.ticker.ScalarFormatter())
+    if xscale == 'log':
+        ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
+        ax.xaxis.set_minor_formatter(mpl.ticker.ScalarFormatter())
     if xtickspace is not None:
         ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(base=xtickspace))
         ax.xaxis.set_minor_locator(plt.NullLocator())
@@ -753,11 +784,6 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     delta_beta = reg_disc[-3] #errors on the regression coefficients
     avg_error = reg_disc[-2]
     yhat_vc = reg_disc[-1]
-    # I don't know why, but the following line only works if the user specifies
-    # the `xtickspace` kwarg
-    # (Adding set_minor_formatter might have fixed it. Check back.)
-    ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
-    ax.xaxis.set_minor_formatter(mpl.ticker.ScalarFormatter())
 
     if ycol == 'disp_dm_disc_cyl':
         mw_text_kwargs = {'xytext':(0.2,0.65)}
@@ -770,13 +796,13 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                           textcoords='axes fraction',
                           **mw_text_kwargs)
     if update_val:
-        y_flat = np.array(yhat_vc).flatten()
+        y_flat = np.array(yhat_vc, dtype=object).flatten()
         slope_raw = reg_disc[0][0]
         amp_raw = reg_disc[1]
         slope, dslope = staudt_utils.sig_figs(slope_raw, delta_beta[1][0])
         amp, damp = staudt_utils.sig_figs(amp_raw, avg_error)
         if ycol=='disp_dm_disc_cyl':
-            data2save = {'disp_slope': slope, 'disp_amp': amp}
+            data2save = {'disp_slope': slope_raw, 'disp_amp': amp_raw}
             dm_den.save_var_raw(data2save) 
 
             #y_save, dy_save = staudt_utils.log2linear(*y_flat)
@@ -785,7 +811,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
             dm_den.save_prediction('disp_slope', slope, dslope)
             dm_den.save_prediction('disp_amp', amp, damp)
         elif ycol=='den_disc':
-            data2save = {'den_slope': slope, 'den_amp': amp}
+            data2save = {'den_slope': slope_raw, 'den_amp': amp_raw}
             dm_den.save_var_raw(data2save) 
 
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
