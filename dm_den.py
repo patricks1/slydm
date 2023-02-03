@@ -1365,7 +1365,8 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
                           for i in range(k)],
                         'err(yhat)']]
             table4 = np.concatenate((header4, table4), axis=0)
-            print(tabulate.tabulate(table4, headers='firstrow', tablefmt='rst'))
+            print(tabulate.tabulate(table4, headers='firstrow', 
+                                    tablefmt='rst'))
             print('(t-test type: 2 tailed, {0:0.0f}% significance)\n' \
                   .format(fore_sig*100.))
          
