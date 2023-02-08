@@ -4,6 +4,7 @@ import lmfit
 import pickle
 import math
 import paths
+import staudt_utils
 import numpy as np
 import pandas as pd
 from progressbar import ProgressBar
@@ -261,7 +262,7 @@ def plt_naive(gals='discs', tgt_fname=None):
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         with open(paths.data + 'data_raw.pkl', 'rb') as f:
             results_dict = pickle.load(f)
-        sigma_predicted = 10.**results_dict['disp_amp'] \
+        sigma_predicted = 10.**results_dict['logdisp_intercept'] \
                           * vc ** results_dict['disp_slope']
         sigma_truth = df.loc[gal, 'disp_dm_disc_cyl']
         vesc = vesc_dict[gal]['ve_avg']
@@ -508,7 +509,7 @@ def setup_universal_fig(gals):
 
     return fig, axs
 
-def plt_universal(gals='discs', update_value=False,
+def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
                   vc100=True, **kwargs):
     import dm_den
@@ -584,13 +585,37 @@ def plt_universal(gals='discs', update_value=False,
         result = model.fit(ps_truth, params, vs=vs_truth, 
                            vcircs=vcircs, method=method, **kwargs)
 
-    data2save = {key: result.params[key].value
-                 for key in result.params.keys()}
-    stderrs = {key+'_stderr': result.params[key].stderr
-               for key in result.params.keys()}
-    covar = {'covar': result.covar}
-    data2save = data2save | stderrs | covar #combine dictionaries
-    dm_den.save_var_raw(data2save)
+    if update_values:
+        # Save raw variables to data_raw.pkl
+        data2save = {key: result.params[key].value
+                     for key in result.params.keys()}
+        stderrs = {key+'_stderr': result.params[key].stderr
+                   for key in result.params.keys()}
+        covar = {'covar': result.covar}
+        data2save = data2save | stderrs | covar #combine dictionaries
+        dm_den.save_var_raw(data2save)
+
+        p = result.covar.shape[0] #Number of parameters we're estimating
+        N = 600 #There's 600 data points (50 bins for each disc) 
+        z = 1. #Number of std deviations in forecast_siga
+        #Probability of being within z std devs:
+        P = scipy.special.erf(z / np.sqrt(2)) 
+        forecast_sig = 1. - P
+
+        # critical 2-tailed t value  
+        tc = scipy.stats.t.ppf(q=1.-forecast_sig/2., df=N-p)
+
+        for key in result.params.keys():
+            if result.params[key].vary: 
+                # Save strings to be used in paper.tex
+                y = result.params[key].value
+                stderr = result.params[key].stderr
+                dy = stderr * tc
+                # y_str is a string. dy_str is an array or strings (or just an
+                # array of just one string).
+                y_str, dy_str = staudt_utils.sig_figs(y, dy)
+                dm_den.save_prediction(key, y_str,  dy_str)
+
     ###########################################################################
 
     fig, axs = setup_universal_fig(gals)
@@ -851,7 +876,7 @@ def three_d_distribs():
     vs_postfit = np.linspace(0., 700., 1000)
 
     ###########################################################################
-    # Trying to smooth the data plot
+    # Smoothing the data plot
     ###########################################################################
     vcircs_set = df['v_dot_phihat_disc(T<=1e4)'].values
     vcircs_postfit = np.linspace(vcircs_set.min(), vcircs_set.max(), 1000)
@@ -865,6 +890,7 @@ def three_d_distribs():
     filtered = scipy.ndimage.gaussian_filter(data, sigma=[0., 0.8, 0.])
     
     '''
+    # Plot the data with a gaussian filter on it
     fig = plt.figure(dpi=200, figsize=(8,6))
     ax = fig.add_subplot(111, projection='3d')
     ax.plot_surface(*filtered, cmap=mpl.cm.coolwarm)
@@ -881,6 +907,8 @@ def three_d_distribs():
     filtered_interp = scipy.ndimage.gaussian_filter(interped, 
                                                     sigma=[0., 25., 0.7])
 
+    # Plot the interpolated data with a gaussian filter applied to the
+    # interpolation
     fig = plt.figure(dpi=190, figsize=(8,6))
     ax = fig.add_subplot(111, projection='3d')
     ax.plot_surface(*filtered_interp, 
@@ -911,16 +939,17 @@ def three_d_distribs():
          for vc in vcircs]
     Z = np.array(Z)
 
-    # Plot the prediction
+    # Plot a wireframe of the prediction
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     surf = ax.plot_wireframe(X, Y, Z)
     plt.show()
 
     fig = plt.figure(dpi=190, figsize=(8,6))
     ax = fig.add_subplot(111, projection='3d')
-    ax.plot_surface(X, Y, Z,
+    ax.plot_surface(*filtered_interp, 
                     cmap=mpl.cm.coolwarm, rcount=100,
                     ccount=300, antialiased=False)
+    surf = ax.plot_wireframe(X, Y, Z)
     ax.view_init(elev=33., azim=-102.)
     ax.set_ylabel('\n$v_\mathrm{c}\ \mathrm{\left[km\,s^{-1}\\right]}$')
     ax.set_xlabel('\n$v\ \mathrm{\left[km\,s^{-1}\\right]}$', y=-100)
@@ -928,6 +957,9 @@ def three_d_distribs():
                   linespacing=3.)
     plt.show()
 
+    ###########################################################################
+    # Plot the colormapped prediction surface
+    ###########################################################################
     # Generate the prediction
     vs_postfit = np.linspace(0., 650., 100)
     vcircs_set = df['v_dot_phihat_disc(T<=1e4)'].values
@@ -938,15 +970,7 @@ def three_d_distribs():
         params = pickle.load(f)
     V0 = params['d'] * Y/100. ** params['e']
     Vdamp = params['h'] * Y/100. **params['j']
-    '''
-    Z = [[smooth_step_max(v, 
-                          params['d'] * (vc/100.) ** params['e'],
-                          params['h'] * (vc/100.) ** params['j'],
-                          params['k']) 
-          for v in vs_postfit]
-         for vc in vcircs_postfit]
-    Z = np.array(Z)
-    '''
+
     vs_postfit, vcircs_postfit = np.meshgrid(vs_postfit, vcircs_postfit)
     vs_postfit = vs_postfit.flatten()
     vcircs_postfit = vcircs_postfit.flatten()
@@ -955,7 +979,6 @@ def three_d_distribs():
     zs = [smooth_step_max(v, v0, vdamp, params['k'])
           for v, v0, vdamp in zip(vs_postfit, v0s, vdamps)]
     zs = np.array(zs)
-    print(zs)
 
     vs_smooth = np.linspace(0., 650., 1000)
     vcircs_smooth = np.linspace(vcircs_set.min(), vcircs_set.max(), 1000)
@@ -970,7 +993,7 @@ def three_d_distribs():
     X, Y = np.meshgrid(vs_smooth, vcircs_smooth)
 
     # Plot the prediction
-    fig = plt.figure(dpi=190, figsize=(8,6))
+    fig = plt.figure(dpi=190, figsize=(7,6))
     ax = fig.add_subplot(111, projection='3d')
     ax.plot_surface(X, Y, Z_smooth,
                     cmap=mpl.cm.coolwarm, rcount=100,

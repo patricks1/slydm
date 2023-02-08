@@ -248,6 +248,7 @@ def ax_slr(ax, fname, xcol, ycol,
                          prediction_x=x_forecast, fore_sig=forecast_sig, dX=dX,
                          verbose=verbose, return_band=True, 
                          return_coef_errors=True, **kwargs)
+    # delta_beta is the fit parameter errors
     coefs, intercept, r2, Xs, ys, ys_pred, r2a, resids, delta_beta, band \
             = mlr_res[:10]
 
@@ -399,6 +400,15 @@ def ax_slr(ax, fname, xcol, ycol,
         pos = band[1] - band[3]
         neg = band[3] - band[2]
         pos_neg = np.concatenate((pos,neg)).flatten()
+        # Add the fit coefficient error array (delta_beta) and the average
+        # half width 
+        # of the
+        # error band (pos_neg.mean()) to the return. The width of the error
+        # band varies at different x values, but this just returns the avg
+        # of the half widths. Presenting the simple average like this could 
+        # be problematic if the width varies significantly and if someone might
+        # want to evaluate yhat(x) at an x far from the average and quote the
+        # error we present.
         result += [delta_beta, pos_neg.mean()]
     if x_forecast is not None:
         result += [[Ys, dYs]]
@@ -782,8 +792,11 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                       labelsize=labelsize, return_error=True, 
                       show_band=True, **kwargs)
     delta_beta = reg_disc[-3] #errors on the regression coefficients
-    avg_error = reg_disc[-2]
-    yhat_vc = reg_disc[-1]
+    # The avg half width of the error band, taking the average over a range
+    # of x values. 
+    avg_error = reg_disc[-2] 
+    # The [Ys, dYs] from the y prediction made at x_forecast:
+    yhat_vc = reg_disc[-1] 
 
     if ycol == 'disp_dm_disc_cyl':
         mw_text_kwargs = {'xytext':(0.2,0.65)}
@@ -795,23 +808,40 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                           arrowprops={'arrowstyle':'-|>', 'color':'red'}, 
                           textcoords='axes fraction',
                           **mw_text_kwargs)
+
     if update_val:
         y_flat = np.array(yhat_vc, dtype=object).flatten()
+
         slope_raw = reg_disc[0][0]
-        amp_raw = reg_disc[1]
-        slope, dslope = staudt_utils.sig_figs(slope_raw, delta_beta[1][0])
-        amp, damp = staudt_utils.sig_figs(amp_raw, avg_error)
+        dslope_raw = delta_beta[1][0]
+        slope, dslope_str = staudt_utils.sig_figs(slope_raw, dslope_raw)
+
+        logy_intercept_raw = reg_disc[1]
+        dlogy_intercept_raw = delta_beta[0][0]
+        logy_intercept_str, dlogy_intercept_str = \
+                staudt_utils.sig_figs(logy_intercept_raw, dlogy_intercept_raw)
+
         if ycol=='disp_dm_disc_cyl':
-            data2save = {'disp_slope': slope_raw, 'disp_amp': amp_raw}
+            data2save = {'disp_slope': slope_raw, 
+                         'ddisp_slope': dslope_raw,
+                         'logdisp_intercept': logy_intercept_raw,
+                         'dlogdisp_intercept': dlogy_intercept_raw}
             dm_den.save_var_raw(data2save) 
 
             #y_save, dy_save = staudt_utils.log2linear(*y_flat)
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
             dm_den.save_prediction('disp', y_save, dy_save)
-            dm_den.save_prediction('disp_slope', slope, dslope)
-            dm_den.save_prediction('disp_amp', amp, damp)
+            dm_den.save_prediction('disp_slope', slope, dslope_str)
+            disp_transform = staudt_utils.log2linear(logy_intercept_raw,
+                                                     delta_beta[0][0])
+            disp_amp = disp_transform[0]
+            ddisp_amp = disp_transform[1:] 
+            disp_amp_str, ddisp_amp_str = staudt_utils.sig_figs(disp_amp, 
+                                                                ddisp_amp)
+            dm_den.save_prediction('disp_amp', disp_amp_str, ddisp_amp_str)
         elif ycol=='den_disc':
-            data2save = {'den_slope': slope_raw, 'den_amp': amp_raw}
+            data2save = {'den_slope': slope_raw, 
+                         'logden_intercept': logy_intercept_raw}
             dm_den.save_var_raw(data2save) 
 
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
@@ -831,8 +861,9 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
             dm_den.save_prediction('rho_GeV', particle_y_save, 
                                    particle_dy_save)
             
-            dm_den.save_prediction('den_slope', slope, dslope)
-            dm_den.save_prediction('den_amp', amp, damp)
+            dm_den.save_prediction('den_slope', slope, dslope_str)
+            dm_den.save_prediction('logden_intercept', logy_intercept_str, 
+                                   dlogy_intercept_str)
 
     display(Latex('$r=8.3\pm{0:0.2f}\,\mathrm{{kpc}}$'
                   .format(df.attrs['dr']/2., df.attrs['dz']/2.)))

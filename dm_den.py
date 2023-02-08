@@ -1304,6 +1304,9 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
     Fc = scipy.stats.f.ppf(q=1-F_sig, dfn=k, dfd=deg)
 
     if verbose:
+        print('Covariance:')
+        print(covmat)
+        print('')
         table1 = [['','coeff','+/-','t-stat', 'p-values']]
         rows = [['X_'+str(i)] for i in range(p)]
         rows = np.concatenate((rows,beta_hat,delta_beta,T,P), axis=1)
@@ -1388,7 +1391,8 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         X_band = X_band.reshape(N_uncert,1)
         W_band = np.concatenate((np.ones((X_band.shape[0],1),dtype=float),
                                  X_band),axis=1)
-        dX_band = np.zeros((N_uncert,1))
+        # Assume no error in X when making the uncertainty band:
+        dX_band = np.zeros((N_uncert,1)) 
         Yhat_band, delta_band = calc_forecast(X_band, dX_band, False)
         band = np.array([X_band.flatten(), 
                          (Yhat_band+delta_band).flatten(),
@@ -1499,6 +1503,24 @@ def save_var_raw(dict_add):
     return None
 
 def save_prediction(string, y, dy):
+    '''
+    Save strings to data.txt to be used by paper.tex.
+
+    Parameters
+    ----------
+    string: str 
+	The identifier for the variable
+    y: str 
+        The value of the target variable
+    dy: np.ndarray of str
+	The uncertainty in the variable. The user *must* provide it as an
+        np.ndarray, even if it's only one single symmetric uncertainty.
+
+    Returns
+    -------
+    None
+    ''' 
+
     save_var_latex(string, y)
     if len(dy)==1:
         save_var_latex('d'+string, dy[0])
