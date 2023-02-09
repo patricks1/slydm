@@ -629,22 +629,29 @@ def plt_universal(gals='discs', update_values=False,
 
         ps_postfit = result.eval(vs=vs_postfit, vcircs=vcircs_postfit)
 
+        if vc100: 
+            sigma3alpha = 0.6
+            sigma3lc = 'b'
+        else:
+            sigma3alpha = 0.4
+            sigma3lc = 'r'
         try:
             # Plot 3sigma band
             result.eval_uncertainty(sigma=3, vs=vs_postfit, vcircs=vcircs_postfit)
             axs[i].fill_between(vs_postfit,
                                 ps_postfit-result.dely,
                                 ps_postfit+result.dely,
-                                color='grey', alpha=0.4, ec=None,
+                                color='grey', alpha=sigma3alpha, ec=None,
                                 label='$3\sigma$ band')
 
-            # Plot 1sigma band
-            result.eval_uncertainty(sigma=1, vs=vs_postfit, vcircs=vcircs_postfit)
-            axs[i].fill_between(vs_postfit,
-                                ps_postfit-result.dely,
-                                ps_postfit+result.dely,
-                                color='blue', alpha=0.8, ec=None,
-                                label='$1\sigma$ band')
+            if not vc100:
+                # Plot 1sigma band
+                result.eval_uncertainty(sigma=1, vs=vs_postfit, vcircs=vcircs_postfit)
+                axs[i].fill_between(vs_postfit,
+                                    ps_postfit-result.dely,
+                                    ps_postfit+result.dely,
+                                    color='blue', alpha=0.8, ec=None,
+                                    label='$1\sigma$ band')
         except AttributeError as error:
             print(error)
 
@@ -656,7 +663,7 @@ def plt_universal(gals='discs', update_values=False,
         axs[i].plot(vs_postfit,
                     ps_postfit,
                     '-',
-                    label='prediction', color='r', lw=1.)
+                    label='prediction', color=sigma3lc, lw=1.)
 
         loc = [0.97,0.96]
         kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
@@ -665,6 +672,10 @@ def plt_universal(gals='discs', update_values=False,
                                     edgecolor='none'))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
+        loc[1] -= 0.08
+        kwargs_txt['fontsize'] = 13.
+        axs[i].annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                        .format(vc), loc, **kwargs_txt)
 
         axs[i].grid(False)
     if fig.Nrows == 3:
@@ -864,15 +875,6 @@ def three_d_distribs():
     vcircs = np.array([pdfs[galname]['vcirc']
                        for galname in pdfs])[indices,:]
     
-    '''
-    # Plot the data
-    fig, ax = plt.subplots(figsize=(6,4), subplot_kw={"projection": "3d"},
-                           dpi=180)
-    ax.plot_wireframe(vs_truth, vcircs, 
-                      ps_truth_smooth)
-    plt.show()
-    '''
-
     vs_postfit = np.linspace(0., 700., 1000)
 
     ###########################################################################
@@ -882,21 +884,13 @@ def three_d_distribs():
     vcircs_postfit = np.linspace(vcircs_set.min(), vcircs_set.max(), 1000)
     X, Y = np.meshgrid(vs_postfit, vcircs_postfit)
 
-    m = 600.
-    s = np.mean([m-np.sqrt(2.*m), 
-                 m+np.sqrt(2.*m)])
+    #m = 600.
+    #s = np.mean([m-np.sqrt(2.*m), 
+    #             m+np.sqrt(2.*m)])
     
     data = np.array([vs_truth, vcircs, ps_truth])
     filtered = scipy.ndimage.gaussian_filter(data, sigma=[0., 0.8, 0.])
     
-    '''
-    # Plot the data with a gaussian filter on it
-    fig = plt.figure(dpi=200, figsize=(8,6))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot_surface(*filtered, cmap=mpl.cm.coolwarm)
-    plt.show()
-    '''
-
     ps_truth_smooth = scipy.interpolate.griddata((vs_truth.flatten(), 
                                                   vcircs.flatten()), 
                                                  ps_truth.flatten(),
@@ -911,7 +905,7 @@ def three_d_distribs():
     # interpolation
     fig = plt.figure(dpi=190, figsize=(8,6))
     ax = fig.add_subplot(111, projection='3d')
-    ax.plot_surface(*filtered_interp, 
+    surf = ax.plot_surface(*filtered_interp, 
                     cmap=mpl.cm.coolwarm, rcount=100,
                     ccount=300, antialiased=False)
     ax.view_init(elev=33., azim=-102.)
@@ -919,16 +913,51 @@ def three_d_distribs():
     ax.set_xlabel('\n$v\ \mathrm{\left[km\,s^{-1}\\right]}$', y=-100)
     ax.set_zlabel('\n$f(v)\,4\pi v^2\ \mathrm{\left[km^{-1}\,s\\right]}$',
                   linespacing=3.)
+    zlim = ax.get_zlim()
     plt.show()
     ###########################################################################
 
-    X, Y = np.meshgrid(vs_postfit, df['v_dot_phihat_disc(T<=1e4)'].values)
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        params = pickle.load(f)
+
+    def plot_resids():
+        v0s = np.array([params['d'] * (vc/100.) ** params['e'] 
+                        for vc in vcircs.flatten()])
+        vdamps = np.array([params['h'] * (vc/100.) ** params['j']
+                           for vc in vcircs.flatten()])
+        ps_predicted = np.array([smooth_step_max(v, v0, vdamp, params['k'])
+                                 for v, v0, vdamp in zip(vs_truth.flatten(),
+                                                         v0s, vdamps)])
+        resids = ps_predicted - ps_truth.flatten()
+
+        resids_smooth = scipy.interpolate.griddata((vs_truth.flatten(),
+                                                    vcircs.flatten()),
+                                                   resids.flatten(),
+                                                   (vs_postfit[None,:],
+                                                    vcircs_postfit[:,None]),
+                                                   method='linear')
+
+        X, Y = np.meshgrid(vs_postfit, vcircs_postfit)
+
+        fig = plt.figure(dpi=190, figsize=(7,6))
+        ax = fig.add_subplot(111, projection = '3d')
+        ax.plot_surface(X, Y, resids_smooth, cmap=mpl.cm.coolwarm)
+        ax.set_zlim(-zlim[1], zlim[1]) 
+        ax.set_ylabel('\n$v_\mathrm{c}\ \mathrm{\left[km\,s^{-1}\\right]}$')
+        ax.set_xlabel('\n$v\ \mathrm{\left[km\,s^{-1}\\right]}$', y=-100)
+        ax.set_zlabel('\nresids $\mathrm{\left[km^{-1}\,s\\right]}$',
+                      linespacing=3.)
+        ax.view_init(elev=7., azim=-86.)
+        plt.show()
+
+        return None
+
+    plot_resids()
+
     # Generate the prediction
     vcircs = df['v_dot_phihat_disc(T<=1e4)'].values
     vcircs = np.sort(vcircs)
     X, Y = np.meshgrid(vs_postfit, vcircs)
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
-        params = pickle.load(f)
     V0 = params['d'] * Y/100. ** params['e']
     Vdamp = params['h'] * Y/100. **params['j']
     Z = [[smooth_step_max(v, 
@@ -940,21 +969,9 @@ def three_d_distribs():
     Z = np.array(Z)
 
     # Plot a wireframe of the prediction
-    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    fig, ax = plt.subplots(dpi=190, figsize=(6,5),
+                           subplot_kw={"projection": "3d"})
     surf = ax.plot_wireframe(X, Y, Z)
-    plt.show()
-
-    fig = plt.figure(dpi=190, figsize=(8,6))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot_surface(*filtered_interp, 
-                    cmap=mpl.cm.coolwarm, rcount=100,
-                    ccount=300, antialiased=False)
-    surf = ax.plot_wireframe(X, Y, Z)
-    ax.view_init(elev=33., azim=-102.)
-    ax.set_ylabel('\n$v_\mathrm{c}\ \mathrm{\left[km\,s^{-1}\\right]}$')
-    ax.set_xlabel('\n$v\ \mathrm{\left[km\,s^{-1}\\right]}$', y=-100)
-    ax.set_zlabel('\n$f(v)\,4\pi v^2\ \mathrm{\left[km^{-1}\,s\\right]}$',
-                  linespacing=3.)
     plt.show()
 
     ###########################################################################
@@ -1003,4 +1020,5 @@ def three_d_distribs():
     ax.set_xlabel('\n$v\ \mathrm{\left[km\,s^{-1}\\right]}$', y=-100)
     ax.set_zlabel('\n$f(v)\,4\pi v^2\ \mathrm{\left[km^{-1}\,s\\right]}$',
                   linespacing=3.)
+    ax.view_init(elev=23., azim=-97.)
     plt.show()
