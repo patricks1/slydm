@@ -25,11 +25,11 @@ from matplotlib import rcParams
 
 rcParams['mathtext.fontset'] = 'dejavuserif'
 rcParams['font.family'] = 'serif' 
-rcParams['xtick.labelsize'] = 16
-rcParams['ytick.labelsize'] = 16
-rcParams['axes.grid']=True
+#rcParams['xtick.labelsize'] = 16
+#rcParams['ytick.labelsize'] = 16
+#rcParams['axes.grid']=True
 rcParams['axes.titlesize']=24
-rcParams['axes.labelsize']=20
+#rcParams['axes.labelsize']=20
 rcParams['axes.titlepad']=15
 rcParams['legend.frameon'] = True
 rcParams['legend.facecolor']='white'
@@ -745,6 +745,9 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
               adjust_text_kwargs={}, show_formula='outside',
               figsize=(10,5), labelsize=14., v0=v0_eilers, dv0=dv0_eilers,
               **kwargs):
+    v0 /= 100.
+    dv0 /= 100.
+
 
     df = dm_den.load_data(source_fname)
     textxy = (0.04, 0.96)
@@ -768,15 +771,14 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
         yadjustment = 'logreg_linaxunits'
         yscale = 'log'
 
-    #draw_xshade(ax, v0, dv0, **kwargs)
-
     if 'ytickspace' not in kwargs:
         kwargs['ytickspace'] = 0.05
 
     x_forecast = [[v0]]
     dX = [[dv0]]
     reg_disc = ax_slr(ax,source_fname,
-                      'v_dot_phihat_disc(T<=1e4)',
+                      #'v_dot_phihat_disc(T<=1e4)',
+                      'vc100',
                       ycol,
                       xlabel=vc_label,
                       ylabel=ylabel,
@@ -870,6 +872,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     display(Latex('$|z|\in[0,{1:0.2f}]\,\mathrm{{kpc}}$' \
                   .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
 
+    ax.xaxis.set_major_formatter(lambda x, pos: '{0:0.0f}'.format(x*100.))
     plt.draw()
     
     if tgt_fname is not None:
