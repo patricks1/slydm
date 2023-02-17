@@ -5,6 +5,7 @@ import pickle
 import math
 import paths
 import staudt_utils
+import copy
 import numpy as np
 import pandas as pd
 from progressbar import ProgressBar
@@ -17,6 +18,11 @@ with open('./data/vescs_20221222.pkl', 'rb') as f:
     vesc_dict = pickle.load(f)
 with open('./data/v_pdfs_incl_ve_20220205.pkl','rb') as f:
     pdfs_v_incl_vearth=pickle.load(f)
+
+for gal in pdfs_v:
+    bins = pdfs_v[gal]['bins']
+    vs = (bins[1:] + bins[:-1]) / 2.
+    pdfs_v[gal]['vs'] = vs
 
 max_bins_est = 1.e-3
 min_bins_est = -1.e-3
@@ -455,7 +461,7 @@ def plt_naive(gals='discs', tgt_fname=None):
         if Ngals == 2:
             # Draw residual plot
 
-            vs_resids = vs_truth.copy()
+            vs_resids = copy.deepcopy(vs_truth)
             vs_extend = np.linspace(vs_resids.max(), vs_maxwell.max(), 20)
             vs_resids = np.append(vs_resids, vs_extend, axis=0)                                         
 
@@ -512,14 +518,13 @@ def fit_universal_no_uncert(gals='discs', method='leastsq', update_vals=False,
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
-    pdfs = pdfs_v.copy()
+    pdfs = copy.deepcopy(pdfs_v)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
 
     for gal in pdfs:
         dict_gal = pdfs[gal]
         bins = dict_gal['bins']
-        dict_gal['vs'] = (bins[1:] + bins[:-1]) / 2.
         dict_gal['vcirc'] = np.repeat(
             df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'],
             len(dict_gal['ps']))
@@ -533,9 +538,9 @@ def fit_universal_no_uncert(gals='discs', method='leastsq', update_vals=False,
     vs_postfit = np.linspace(0., 750., 300)
 
     vcircs = np.array([pdfs[galname]['vcirc']
-                         for galname in pdfs]).flatten()
+                       for galname in pdfs]).flatten()
     vescs = np.array([pdfs[galname]['vesc']
-                         for galname in pdfs]).flatten()
+                      for galname in pdfs]).flatten()
 
     p = lmfit.Parameters()
     p.add('d', value=1.60030613, vary=vary_dict['d'], min=0.1, max=4.)
@@ -658,19 +663,18 @@ def setup_universal_fig(gals):
 
 def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
-                  vc100=True, **kwargs):
+                  vc100=True, err_method='sampling', **kwargs):
     import dm_den
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
-    pdfs = pdfs_v.copy()
+    pdfs = copy.deepcopy(pdfs_v)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
 
     for gal in pdfs:
-        dict_gal = pdfs_v[gal]
+        dict_gal = pdfs[gal]
         bins = dict_gal['bins']
-        dict_gal['vs'] = (bins[1:] + bins[:-1]) / 2.
         dict_gal['vcirc'] = np.repeat(
             df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'],
             len(dict_gal['ps']))
@@ -766,17 +770,18 @@ def plt_universal(gals='discs', update_values=False,
 
     ###########################################################################
 
-    # Calculate the std error of the regression
-    # p = 4  degrees of freedom negated by estimating d, e, h, and j:
-    p = result.nvarys 
-    # Std err of the regression
-    s = np.sqrt(np.sum(result.residual ** 2.) / (result.ndata - p)) 
+    if err_method == 'std_err':
+        # Calculate the std error of the regression
+        # p = 4  degrees of freedom negated by estimating d, e, h, and j:
+        p = result.nvarys 
+        # Std err of the regression
+        s = np.sqrt(np.sum(result.residual ** 2.) / (result.ndata - p)) 
 
-    N_vc = len(pdfs)
-    vc_mean = df['v_dot_phihat_disc(T<=1e4)'].mean()
-    var_vc = np.sum((df['v_dot_phihat_disc(T<=1e4)'] \
-                        - vc_mean)**2.) / N_vc
-    var_vs = np.sum((vs_truth.flatten() - vs_truth.mean())**2.) / result.ndata
+        N_vc = len(pdfs)
+        vc_mean = df['v_dot_phihat_disc(T<=1e4)'].mean()
+        var_vc = np.sum((df['v_dot_phihat_disc(T<=1e4)'] \
+                            - vc_mean)**2.) / N_vc
+        var_vs = np.sum((vs_truth.flatten() - vs_truth.mean())**2.) / result.ndata
 
     fig, axs = setup_universal_fig(gals)
 
@@ -789,52 +794,26 @@ def plt_universal(gals='discs', update_values=False,
 
         ps_postfit = result.eval(vs=vs_postfit, vcircs=vcircs_postfit)
 
-        # Std err of the vcirc mean at vc_gal
-        #     (Dividing by sqrt(N_vc) and not sqrt(N) is my way of trying to impart
-        #     into the uncertainty calculation
-        #     the fact that I only have 12 galaxies.)
-        s_vc = s / np.sqrt(N_vc) \
-               * np.sqrt(1. + (vc - vc_mean)**2. / var_vc)
-        # Std err of the vs_truth mean at each dict_gal['vs']
-        s_vs = s / np.sqrt(result.ndata) \
-               * np.sqrt(1. + (vs_postfit - vs_truth.mean())**2. / var_vs)
-        # Std err of the predictions
-        s_prediction = np.sqrt(s**2. + s_vc**2. + s_vs**2.)
+        if err_method == 'std_err':
+            # Std err of the vcirc mean at vc_gal
+            #     (Dividing by sqrt(N_vc) and not sqrt(N) is my way of trying to impart
+            #     into the uncertainty calculation
+            #     the fact that I only have 12 galaxies.)
+            s_vc = s / np.sqrt(N_vc) \
+                   * np.sqrt(1. + (vc - vc_mean)**2. / var_vc)
+            # Std err of the vs_truth mean at each dict_gal['vs']
+            s_vs = s / np.sqrt(result.ndata) \
+                   * np.sqrt(1. + (vs_postfit - vs_truth.mean())**2. / var_vs)
+            # Std err of the predictions
+            s_prediction = np.sqrt(s**2. + s_vc**2. + s_vs**2.)
 
-        axs[i].fill_between(vs_postfit,
-                            ps_postfit - s_prediction,
-                            ps_postfit + s_prediction,
-                            color='grey', alpha=0.4, ec=None,
-                            label='$1\sigma$ band')
-        '''
-        if vc100: 
-            sigma3alpha = 0.6
-            sigma3lc = 'b'
-        else:
-            sigma3alpha = 0.4
-            sigma3lc = 'r'
-        try:
-            # Plot 3sigma band
-            result.eval_uncertainty(sigma=3, vs=vs_postfit, 
-                                    vcircs=vcircs_postfit)
             axs[i].fill_between(vs_postfit,
-                                ps_postfit-result.dely,
-                                ps_postfit+result.dely,
-                                color='grey', alpha=sigma3alpha, ec=None,
-                                label='$3\sigma$ band')
-
-            if not vc100:
-                # Plot 1sigma band
-                result.eval_uncertainty(sigma=1, vs=vs_postfit, 
-                                        vcircs=vcircs_postfit)
-                axs[i].fill_between(vs_postfit,
-                                    ps_postfit-result.dely,
-                                    ps_postfit+result.dely,
-                                    color='blue', alpha=0.8, ec=None,
-                                    label='$1\sigma$ band')
-        except AttributeError as error:
-            print(error)
-        '''
+                                ps_postfit - s_prediction,
+                                ps_postfit + s_prediction,
+                                color='grey', alpha=0.4, ec=None,
+                                label='$1\sigma$ band')
+        elif err_method == 'sampling':
+            gal_bands(gal, vs_postfit, axs[i], pdfs, df, result)
 
         # Plot data
         axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='grey',
@@ -910,38 +889,37 @@ def extend(pdfs, df, result):
         dict_gal = pdfs[gal]
         bins = dict_gal['bins']
 
-        if extend:
-            bin_spaces = bins[1:] - bins[:-1]
-            bin_spacing = np.mean(bin_spaces)
-            # bins_extend[0] == dict_gal['bins'][-1]. This is good for
-            # generating vs_extend, but bins_extend[0] must be excluded later
-            # when appending bins_extend to dict_gal['bins'].
-            bins_extend = np.arange(bins.max(),
-                                    700. + bin_spacing,
-                                    bin_spacing)
-            vs_extend = (bins_extend[1:] + bins_extend[:-1]) / 2.
-            ps_extend = np.zeros(len(vs_extend))
-            
-            # Check where the extension becomes counterproductive
-            ps_hat_extend = [smooth_step_max(
-                                  v, 
-                                  result['d'] * (vc/100.) ** result['e'],
-                                  result['h'] * (vc/100.) ** result['j'],
-                                  result['k'])
-                             for v in vs_extend]
-            ps_hat_extend = np.array(ps_hat_extend)
+        bin_spaces = bins[1:] - bins[:-1]
+        bin_spacing = np.mean(bin_spaces)
+        # bins_extend[0] == dict_gal['bins'][-1]. This is good for
+        # generating vs_extend, but bins_extend[0] must be excluded later
+        # when appending bins_extend to dict_gal['bins'].
+        bins_extend = np.arange(bins.max(),
+                                700. + bin_spacing,
+                                bin_spacing)
+        vs_extend = (bins_extend[1:] + bins_extend[:-1]) / 2.
+        ps_extend = np.zeros(len(vs_extend))
+        
+        # Check where the extension becomes counterproductive
+        ps_hat_extend = [smooth_step_max(
+                              v, 
+                              result['d'] * (vc/100.) ** result['e'],
+                              result['h'] * (vc/100.) ** result['j'],
+                              result['k'])
+                         for v in vs_extend]
+        ps_hat_extend = np.array(ps_hat_extend)
 
-            keep = ps_hat_extend >= 1e-5
-            # The False concatenation serves to remove bins_extend[0], the
-            # necessity of which was mentioned above.
-            bins_extend = bins_extend[np.concatenate([[False], keep], axis=0)]
-            vs_extend = vs_extend[keep]
-            ps_extend = ps_extend[keep]
-            ps_hat_extend = ps_hat_extend[keep]
+        keep = ps_hat_extend >= 1e-5
+        # The False concatenation serves to remove bins_extend[0], the
+        # necessity of which was mentioned above.
+        bins_extend = bins_extend[np.concatenate([[False], keep], axis=0)]
+        vs_extend = vs_extend[keep]
+        ps_extend = ps_extend[keep]
+        ps_hat_extend = ps_hat_extend[keep]
 
-            bins = np.append(bins, bins_extend, axis=0)
-            dict_gal['bins'] = bins
-            dict_gal['ps'] = np.append(dict_gal['ps'], ps_extend)
+        bins = np.append(bins, bins_extend, axis=0)
+        dict_gal['bins'] = bins
+        dict_gal['ps'] = np.append(dict_gal['ps'], ps_extend)
 
         dict_gal['vs'] = (bins[:-1] + bins[1:]) / 2.
         dict_gal['vcirc'] = np.repeat(
@@ -949,12 +927,16 @@ def extend(pdfs, df, result):
             len(dict_gal['ps']))
     return None
 
-def find_uncertainty():
+def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18):
     import dm_den
+
+    if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
+        raise ValueError('Unexpected value provided for gals arg')
+    
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         result = pickle.load(f)
-    pdfs = pdfs_v.copy()
+    pdfs = copy.deepcopy(pdfs_v)
     del pdfs['m12w']
     del pdfs['m12z']
 
@@ -977,72 +959,17 @@ def find_uncertainty():
     N = len(resids)
     p = 4 #4  degrees of freedom negated by estimating d, e, h, and j
     s = np.sqrt(np.sum(resids ** 2.) / (N - p)) #std err of the regression
-    print(s)
 
     N_vc = len(pdfs)
     vc_mean = df['v_dot_phihat_disc(T<=1e4)'].mean()
     var_vc = np.sum((df['v_dot_phihat_disc(T<=1e4)'] \
                         - vc_mean)**2.) / N_vc
-    #var_vc = np.sum((vcircs.flatten() - vcircs.mean())**2.) / N
     var_vs = np.sum((vs_truth.flatten() - vs_truth.mean())**2.) / N
-
-    ###########################################################################
-    # Plot universal residuals
-    ###########################################################################
-    bins_min = min(min_bins_est, resids.min())
-    bins_max = max(max_bins_est, resids.max())
-    bins = np.linspace(bins_min, bins_max, 80)
-    
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.hist(resids, bins=bins)
-    ax.axvline(resids.mean() + s, color='k')
-    ax.axvline(resids.mean(), color='r')
-    ax.axvline(resids.mean() - s, color='k')
-    plt.show()
-    ###########################################################################
-
-    ###########################################################################
-    # Plot all galaxies
-    ###########################################################################
-    fig, axs = setup_universal_fig('discs')
-    for i, gal in enumerate(pdfs):
-        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
-        dict_gal = pdfs[gal]
-        axs[i].stairs(dict_gal['ps'], dict_gal['bins'], color='grey')
-
-        ps_hat = [smooth_step_max(v, 
-                              result['d'] * (vc/100.) ** result['e'],
-                              result['h'] * (vc/100.) ** result['j'],
-                              result['k'])
-              for v, vc in zip(dict_gal['vs'], dict_gal['vcirc'])]
-        ps_hat = np.array(ps_hat)
-
-        # Std err of the vcirc mean at vc_gal
-        #     (Dividing by sqrt(N_vc) and not sqrt(N) is my way of trying to 
-        #     impart
-        #     into the uncertainty calculation
-        #     the fact that I only have 12 galaxies.)
-        s_vc = s / np.sqrt(N_vc) \
-               * np.sqrt(1. + (vc - vc_mean)**2. / var_vc)
-        # Std err of the vs_truth mean at each dict_gal['vs']
-        s_vs = s / np.sqrt(N) \
-               * np.sqrt(1. + (dict_gal['vs'] - vs_truth.mean())**2. / var_vs)
-        # Std err of the predictions
-        s_prediction = np.sqrt(s**2. + s_vc**2. + s_vs**2.)
-
-        axs[i].plot(dict_gal['vs'], ps_hat)
-        axs[i].fill_between(dict_gal['vs'], ps_hat+s_prediction,
-                            ps_hat-s_prediction, color='grey', alpha=0.5,
-                            ec=None)
-        resids = ps_hat - dict_gal['ps']
-    plt.show()
-    ###########################################################################
 
     ###########################################################################
     # Plot standardized galaxies 
     ###########################################################################
-    vchar = 1.
+    vchar = 1. #characteristic velocity to use
     def get_std_vdamp_k():
         xs = np.concatenate([pdfs[gal]['vs'] / df.loc[gal, 'v0'] * vchar
                              for gal in pdfs])
@@ -1050,7 +977,7 @@ def find_uncertainty():
                              for gal in pdfs])
         model = lmfit.model.Model(smooth_step_max)
         params = model.make_params()
-        params['v0'].set(value=vchar, vary=True)
+        params['v0'].set(value=vchar, vary=False)
         params['vesc'].set(value=vchar*2., vary=True, min=0.)
         params['k'].set(value = 0.03 * 230. / vchar, vary=True, min=0.)
         with warnings.catch_warnings():
@@ -1066,33 +993,32 @@ def find_uncertainty():
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        universal_fit = pickle.load(f)
+    d = universal_fit['d']
+    e = universal_fit['e']
     for gal in pdfs:
-        #vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         v0 = df.loc[gal, 'v0']
+        v0 = d * (df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'] / 100.) ** e
         dict_gal = pdfs[gal]
         ax.stairs(dict_gal['ps'] * v0 / vchar, 
                   dict_gal['bins'] / v0 * vchar, 
                   zorder=2000)
-        #ax.plot(dict_gal['vs'] / vc, dict_gal['ps'] * vc)
     x0, xdamp, k = get_std_vdamp_k()
     vs_v0 = np.linspace(0., vchar*2.8, 100)
-    #ax.plot(vs_v0, smooth_step_max(vs_v0, 1., np.inf, np.inf),
-    #        lw=3., color='b')
-    dd = 0.1 * x0
-    dh = 0.21 * xdamp
-    
+    ax.plot(vs_v0, smooth_step_max(vs_v0, x0, xdamp, k), 
+            lw=3., color='k', zorder=3e3)
+    dd = ddfrac * x0
+    dh = dhfrac * xdamp
+
     N_samples = 1000 
     X0 = np.random.normal(x0, dd, size=N_samples)
     XDAMP = np.random.normal(xdamp, dh, size=N_samples)
     ps_samples = np.zeros((N_samples, len(vs_v0)))
 
-    ax.plot(vs_v0, smooth_step_max(vs_v0, x0, xdamp, k), 
-            lw=3., color='k', zorder=3e3)
     for i in range(N_samples):
         ps_samples[i] = smooth_step_max(vs_v0, X0[i], XDAMP[i], k)
-        #ax.plot(vs_v0, ps_samples[i],
-        #        lw=1., color='b', alpha=0.2)
-    P_1std = scipy.special.erf(1. / np.sqrt(2)) 
+    P_1std = scipy.special.erf(1. / np.sqrt(2.)) 
     lower_q = (1. - P_1std) / 2. 
     upper_q = lower_q + P_1std
     lower_q *= 100.
@@ -1105,73 +1031,56 @@ def find_uncertainty():
     ax.axvline(vchar, color='r', ls='--')
     ax.axvline(xdamp, color='r', ls='--')
     plt.show()
-
     ###########################################################################
-
-    def gal_resids(gal, ax):
-        dict_gal = pdfs[gal]
-
-        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
-        v0 = result['d'] * (vc/100.) ** result['e']
-        vdamp = result['h'] * (vc/100.) ** result['j']
-        ps_hat = [smooth_step_max(
-                                  v, 
-                                  v0,
-                                  vdamp,
-                                  result['k'])
-                  for v in dict_gal['vs']]
-        ps_hat = np.array(ps_hat)
-
-        N_samples = 1000
-        D = np.random.normal(result['d'], result['d'] * 0.1, size=N_samples)
-        V0 = D * (vc/100.) ** result['e']
-        H = np.random.normal(result['h'], result['h'] * 0.21, size=N_samples)
-        VDAMP = H * (vc/100.) ** result['j']
-        ps_samples = np.array([smooth_step_max(dict_gal['vs'],
-                                               v0, vdamp, result['k'])
-                               for v0, vdamp in zip(V0, VDAMP)])
-
-        P_1std = scipy.special.erf(1. / np.sqrt(2)) 
-        lower_q = (1. - P_1std) / 2. 
-        upper_q = lower_q + P_1std
-        lower_q *= 100.
-        upper_q *= 100.
-        lowers = np.percentile(ps_samples, lower_q, axis=0)
-        uppers = np.percentile(ps_samples, upper_q, axis=0)
-
-        ax.fill_between(dict_gal['vs'], lowers, uppers, color='grey', 
-                        alpha=0.6, 
-                        ec=None)
-
-        ax.stairs(dict_gal['ps'], dict_gal['bins'], color='grey')
-        ax.plot(dict_gal['vs'], ps_hat)
-
-        resids = ps_hat - pdfs[gal]['ps']
-        #resids = np.repeat(resids, 10)
-        N = float(len(resids))
-        p = 4.
-        s = np.sqrt( np.sum( resids ** 2. ) / (N-p) ) 
-        print(s)
-
-        '''
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.hist(resids, bins=25)
-        ax.axvline(resids.mean() + s, color='k')
-        ax.axvline(resids.mean(), color='r')
-        ax.axvline(resids.mean() - s, color='k')
-        plt.show()
-        '''
-
-        return None
-     
-    fig, axs = setup_universal_fig('discs')
-    for i, gal in enumerate(pdfs):
-        gal_resids(gal, axs[i])
-    plt.show()
 
     return None
 
+def gal_bands(gal, vs, ax, pdfs, df, result, ddfrac=0.1, dhfrac=0.18):
+    dict_gal = pdfs[gal]
+
+    if isinstance(result, (lmfit.minimizer.MinimizerResult, 
+                           lmfit.model.ModelResult)):
+        d = result.params['d'].value
+        e = result.params['e'].value
+        h = result.params['h'].value
+        j = result.params['j'].value
+        k = result.params['k'].value
+    elif isinstance(result, dict):
+        d = result['d']
+        e = result['e']
+        h = result['h']
+        j = result['j']
+        k = result['k']
+    else:
+        raise ValueError('Unexpected result type')
+
+    vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+    v0hat = d * (vc/100.) ** e
+    vdamp = h * (vc/100.) ** j
+
+    N_samples = 1000
+    D = np.random.normal(d, d * ddfrac, size=N_samples)
+    V0HAT = D * (vc/100.) ** e
+    H = np.random.normal(h, h * dhfrac, size=N_samples)
+    VDAMP = H * (vc/100.) ** j
+    ps_samples = np.array([smooth_step_max(vs,
+                                           v0, vdamp, k)
+                           for v0, vdamp in zip(V0HAT, VDAMP)])
+
+    P_1std = scipy.special.erf(1. / np.sqrt(2)) # ~68%
+    lower_q = (1. - P_1std) / 2. 
+    upper_q = lower_q + P_1std
+    lower_q *= 100.
+    upper_q *= 100.
+    lowers = np.percentile(ps_samples, lower_q, axis=0)
+    uppers = np.percentile(ps_samples, upper_q, axis=0)
+
+    ax.fill_between(vs, lowers, uppers, color='grey', 
+                    alpha=0.4, 
+                    ec=None)
+
+    return None
+     
 def plt_universal_mc(gals='discs', m=1.):
     '''
     Plot uncertainty in distribution with a monte carlo method
@@ -1179,6 +1088,11 @@ def plt_universal_mc(gals='discs', m=1.):
     Parameters
     ----------
     gals: str or list-like of str
+        Which galaxies to plot. The fitting method uses all discs regardless of
+        how this parameter is set.
+    m: float
+        A multiplier applied to the standard error on each parameter in the
+        monte carlo
 
     Returns
     -------
@@ -1190,11 +1104,7 @@ def plt_universal_mc(gals='discs', m=1.):
     df = dm_den.load_data('dm_stats_20221208.h5')
     df.drop(['m12z', 'm12w'], inplace=True)
 
-    pdfs = pdfs_v.copy()
-    for gal in pdfs:
-        bins = pdfs[gal]['bins']
-        vs = (bins[1:] + bins[:-1]) / 2.
-        pdfs[gal]['vs'] = vs
+    pdfs = copy.deepcopy(pdfs_v)
 
     vary_dict = {'d': True,
                  'e': True,
@@ -1347,36 +1257,6 @@ def plt_universal_mc(gals='discs', m=1.):
 
     plt.show()
 
-    def show_resids(gal):
-        bins_min = min(min_bins_est, resids[gal].min())
-        bins_max = max(max_bins_est, resids[gal].max())
-        bins = np.linspace(bins_min, bins_max, 80)
-
-        # Evaluate residuals for all bins.
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.hist(resids[gal].flatten(), bins=bins)
-        plt.show()
-
-        # Only evaluate residuals for a particular bin.
-        i = np.argmax(pdfs[gal]['vs'] > 220.)
-        print('v evaluated: {0:0.0f}'.format(pdfs[gal]['vs'][i]))
-        s = np.std(resids[gal][:,i], ddof=4.)
-        mean = resids[gal][:,i].mean()
-        print('mean = {0:0.2e}'.format(mean))
-        print('s = {0:0.2e}'.format(s))
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.hist(resids[gal][:,i], bins=bins)
-        ax.axvline(resids[gal][:,i].mean()+s, color='k')
-        ax.axvline(resids[gal][:,i].mean(), color='r')
-        ax.axvline(resids[gal][:,i].mean()-s, color='k')
-        ax.set_yscale('linear')
-        plt.show()
-        return None
-    show_resids('m12c')
-
     return result
 
 def three_d_distribs():
@@ -1384,14 +1264,13 @@ def three_d_distribs():
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
     #if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
     #    raise ValueError('Unexpected value provided for gals arg')
-    pdfs = pdfs_v.copy()
+    pdfs = copy.deepcopy(pdfs_v)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
 
     for gal in pdfs:
         dict_gal = pdfs[gal]
         bins = dict_gal['bins']
-        dict_gal['vs'] = (bins[1:] + bins[:-1]) / 2.
         dict_gal['vcirc'] = np.repeat(
             df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'],
             len(dict_gal['ps']))

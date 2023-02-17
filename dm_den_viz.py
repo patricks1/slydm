@@ -964,12 +964,11 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
                    only_log=False, figsize=None, tgt_fname=None,
                    update_val=False):
     
-    direc='/export/nfs0home/pstaudt/projects/project01/data/'
+    direc = paths.data
     with open(direc+diff_source, 'rb') as handle:
         den_disp_dict = pickle.load(handle)
     df = dm_den.load_data(df_source)
     galnames = df.drop(['m12w','m12z']).index
-    #galnames = df.index
     
     def setup(log):
         if not log:
