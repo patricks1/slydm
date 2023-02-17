@@ -412,7 +412,8 @@ def plt_naive(gals='discs', tgt_fname=None):
         bins = pdfs_v[gal]['bins']
         vs_truth = (bins[1:] + bins[:-1]) / 2.
         ps_truth = pdfs_v[gal]['ps']
-        ps_sigma_vc = smooth_step_max(vs_maxwell, 
+        ps_sigma_vc = smooth_step_max(
+                                   vs_maxwell, 
                                    np.sqrt(2./3.)*sigma_predicted,
                                    np.inf,
                                    np.inf)
@@ -484,6 +485,15 @@ def plt_naive(gals='discs', tgt_fname=None):
             axs[i+2].grid(False)
             axs[i+2].plot(vs_resids, calc_resids(sigma_predicted))
             axs[i+2].plot(vs_resids, calc_resids(sigma_truth))
+
+            loc[1] -= 0.1
+            kwargs_txt['fontsize'] = 11.
+            axs[i].annotate(
+                            '$\mathrm{SSE}={2:0.3e}$'
+                            .format(
+                                     
+                                   ),
+                            loc, **kwargs_txt)
             if i == 0:
                 axs[i+2].set_ylabel('resids')
     axs[0].legend(loc='upper center', bbox_to_anchor=(0.5, -0.04),
@@ -663,7 +673,15 @@ def setup_universal_fig(gals):
 
 def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
-                  vc100=True, err_method='sampling', **kwargs):
+                  vc100=True, err_method='sampling', ddfrac=None, dhfrac=None,
+                  **kwargs):
+    if (ddfrac is not None or dhfrac is not None) and err_method != 'sampling':
+        raise ValueError('ddfrac and dhfrac are only used in sampling.')
+    elif err_method == 'sampling':
+        if ddfrac is None:
+            ddfrac = 0.1
+        if dhfrac is None:
+            dhfrac = 0.18
     import dm_den
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
@@ -813,7 +831,12 @@ def plt_universal(gals='discs', update_values=False,
                                 color='grey', alpha=0.4, ec=None,
                                 label='$1\sigma$ band')
         elif err_method == 'sampling':
-            gal_bands(gal, vs_postfit, axs[i], pdfs, df, result)
+            lowers, uppers = gal_bands(gal, vs_postfit, pdfs, df, 
+                                       result, ddfrac=ddfrac, dhfrac=dhfrac)
+
+            axs[i].fill_between(vs_postfit, lowers, uppers, color='grey', 
+                                alpha=0.4, 
+                                ec=None)
 
         # Plot data
         axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='grey',
@@ -1035,7 +1058,7 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18):
 
     return None
 
-def gal_bands(gal, vs, ax, pdfs, df, result, ddfrac=0.1, dhfrac=0.18):
+def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18):
     dict_gal = pdfs[gal]
 
     if isinstance(result, (lmfit.minimizer.MinimizerResult, 
@@ -1075,11 +1098,7 @@ def gal_bands(gal, vs, ax, pdfs, df, result, ddfrac=0.1, dhfrac=0.18):
     lowers = np.percentile(ps_samples, lower_q, axis=0)
     uppers = np.percentile(ps_samples, upper_q, axis=0)
 
-    ax.fill_between(vs, lowers, uppers, color='grey', 
-                    alpha=0.4, 
-                    ec=None)
-
-    return None
+    return lowers, uppers 
      
 def plt_universal_mc(gals='discs', m=1.):
     '''
@@ -1436,3 +1455,52 @@ def three_d_distribs():
                   linespacing=3.)
     ax.view_init(elev=23., azim=-97.)
     plt.show()
+
+def diff_fr68(params, pdfs, df):
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        data_raw = pickle.load(f)
+
+    def count_within(gal, ddfrac=0.1, dhfrac=0.18):
+        N_out = 0.
+        N_tot = 0.
+
+        pdf_gal = pdfs[gal]
+        ps = pdf_gal['ps']
+        vs = pdf_gal['vs']
+        lowers, uppers = gal_bands(gal, vs, pdfs, df, data_raw, ddfrac, 
+                                   dhfrac)
+        is_above = ps > uppers
+        is_below = ps < lowers
+        is_outlier = is_above | is_below 
+        N_out += np.sum(is_outlier)
+        N_tot += len(vs)
+        
+        percent = 1. - N_out / N_tot
+        return percent
+
+    ddfrac = params['ddfrac']
+    dhfrac = params['dhfrac']
+    percents_within = np.array([count_within(gal, ddfrac, dhfrac) \
+                                for gal in pdfs])
+    P_1std = scipy.special.erf(1. / np.sqrt(2.)) # ~68%
+    resids_vals = percents_within - P_1std 
+    print(ddfrac.value, dhfrac.value, np.sum(resids_vals ** 2.))
+    return resids_vals
+
+def find_68_uncertainty():
+    import dm_den
+
+    df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
+    pdfs = copy.deepcopy(pdfs_v)
+    del pdfs['m12w']
+    del pdfs['m12z']
+
+    params = lmfit.Parameters()
+    params.add('ddfrac', value=0.05, vary=True, min=0., max=0.2)
+    params.add('dhfrac', value=0.05, vary=True, min=0., max=0.3)
+
+    minimizer_result = lmfit.minimize(diff_fr68, params, method='brute',
+                                      args=(pdfs, df), workers=10)
+    display(minimizer_result)
+
+    return None
