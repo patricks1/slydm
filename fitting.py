@@ -1601,8 +1601,8 @@ def find_68_uncertainty(method, **kwargs):
     del pdfs['m12z']
 
     params = lmfit.Parameters()
-    params.add('ddfrac', value=0.05, vary=True, min=0.)
-    params.add('dhfrac', value=0.05, vary=True, min=0.)
+    params.add('ddfrac', value=0.033, vary=True, min=0.)
+    params.add('dhfrac', value=0.296, vary=True, min=0.)
 
     minimizer_result = lmfit.minimize(diff_fr68, params, method=method,
                                       args=(pdfs, df), **kwargs)
