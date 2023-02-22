@@ -674,6 +674,7 @@ def setup_universal_fig(gals):
 def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
                   vc100=True, err_method='sampling', ddfrac=None, dhfrac=None,
+                  band_alpha=0.4, data_color='grey', band_color='grey',
                   **kwargs):
     if (ddfrac is not None or dhfrac is not None) and err_method != 'sampling':
         raise ValueError('ddfrac and dhfrac are only used in sampling.')
@@ -737,9 +738,9 @@ def plt_universal(gals='discs', update_values=False,
 
     if vc100:
         params['d'].set(value=114.970072, vary=True, min=0.)
-        params['e'].set(value=0.92818194, vary=True, min=0.)
+        params['e'].set(value=0.92818194, vary=False, min=0.)
         params['h'].set(value=388.227498, vary=True, min=0.)
-        params['j'].set(value=0.27035486, vary=True, min=0.)
+        params['j'].set(value=0.27035486, vary=False, min=0.)
         params['k'].set(value=0.03089876, vary=False, min=0.0001, max=1.)
     else:
         params['d'].set(value=1.60030613, vary=True, min=0.1, max=4.)
@@ -785,7 +786,6 @@ def plt_universal(gals='discs', update_values=False,
                 # array of just one string).
                 y_str, dy_str = staudt_utils.sig_figs(y, dy)
                 dm_den.save_prediction(key, y_str,  dy_str)
-
     ###########################################################################
 
     if err_method == 'std_err':
@@ -814,7 +814,8 @@ def plt_universal(gals='discs', update_values=False,
 
         if err_method == 'std_err':
             # Std err of the vcirc mean at vc_gal
-            #     (Dividing by sqrt(N_vc) and not sqrt(N) is my way of trying to impart
+            #     (Dividing by sqrt(N_vc) and not sqrt(N) is my way of trying 
+            #     to impart
             #     into the uncertainty calculation
             #     the fact that I only have 12 galaxies.)
             s_vc = s / np.sqrt(N_vc) \
@@ -828,18 +829,19 @@ def plt_universal(gals='discs', update_values=False,
             axs[i].fill_between(vs_postfit,
                                 ps_postfit - s_prediction,
                                 ps_postfit + s_prediction,
-                                color='grey', alpha=0.4, ec=None,
+                                color=band_color, alpha=0.4, ec=None,
                                 label='$1\sigma$ band')
         elif err_method == 'sampling':
             lowers, uppers = gal_bands(gal, vs_postfit, pdfs, df, 
-                                       result, ddfrac=ddfrac, dhfrac=dhfrac)
+                                       result, ddfrac=ddfrac, dhfrac=dhfrac,
+                                       ax = axs[i])
 
-            axs[i].fill_between(vs_postfit, lowers, uppers, color='grey', 
-                                alpha=0.4, 
-                                ec=None)
+            axs[i].fill_between(vs_postfit, lowers, uppers, color=band_color, 
+                                alpha=band_alpha, 
+                                ec=None, zorder=1)
 
         # Plot data
-        axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='grey',
+        axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color=data_color,
                       label='data')
 
         # Plot prediction
@@ -950,7 +952,26 @@ def extend(pdfs, df, result):
             len(dict_gal['ps']))
     return None
 
-def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18):
+def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18, v0char=1., N_samples=1000):
+    '''
+    Parameters
+    ----------
+    gals: str or list-like of str
+        Which galaxies to plot
+    ddfrac: float
+        Fractional uncertainty on d parameter
+    dhfrac: float
+        Fractional uncertainty on h parameter
+    v0char: float
+        Characteristic peak velocity to use
+    N_samples: int
+        Number of times to sample d and h when making the uncertainty bands
+
+    Returns
+    -------
+    None
+
+    '''
     import dm_den
 
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
@@ -992,27 +1013,44 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18):
     ###########################################################################
     # Plot standardized galaxies 
     ###########################################################################
-    vchar = 1. #characteristic velocity to use
-    def get_std_vdamp_k():
-        xs = np.concatenate([pdfs[gal]['vs'] / df.loc[gal, 'v0'] * vchar
+    def get_std_vdamp_k(vc):
+        def calc_p(vs, d, h, k):
+            '''
+            Calculate probability density given velocity and circular velocity
+            '''
+            ps = np.array([smooth_step_max(v,
+                                           d * (vc/100.) ** e,
+                                           h * (vc/100.) ** j,
+                                           k)
+                           for v in vs])
+            return ps
+        # Dividing and multiplying by each galaxy's PREDICTED V0  puts the 
+        # peaks
+        # of true distributions around 1.
+        # Then multiplying and dividing by v0char puts the peaks around v0char.
+        # The default is for v0char to be 1, so this last operation doesn't
+        # actually do anything unless v0char != 1.
+        v0hats = d * (df['v_dot_phihat_disc(T<=1e4)'] / 100.) ** e
+        xs = np.concatenate([pdfs[gal]['vs'] / v0hats[gal] * v0char
                              for gal in pdfs])
-        ps = np.concatenate([pdfs[gal]['ps'] * df.loc[gal, 'v0'] / vchar
-                             for gal in pdfs])
-        model = lmfit.model.Model(smooth_step_max)
+        ps_truth = np.concatenate([pdfs[gal]['ps'] * v0hats[gal] / v0char
+                                   for gal in pdfs])
+        model = lmfit.model.Model(calc_p, 
+                                  independent_vars=['vs'])
         params = model.make_params()
-        params['v0'].set(value=vchar, vary=False)
-        params['vesc'].set(value=vchar*2., vary=True, min=0.)
-        params['k'].set(value = 0.03 * 230. / vchar, vary=True, min=0.)
+        params['d'].set(value=d, vary=True, min=0.)
+        params['h'].set(value=1., vary=True, min=0.)
+        params['k'].set(value = 0.03 * 230. / v0char, vary=True, min=0.)
+
+        print('Fitting.')
         with warnings.catch_warnings():
             warnings.filterwarnings(
                     'ignore', 
                     category=scipy.integrate.IntegrationWarning)
             warnings.filterwarnings('ignore', category=RuntimeWarning)
-            result = model.fit(ps, params, v=xs)
-        results = (result.params['v0'].value, 
-                   result.params['vesc'].value, 
-                   result.params['k'].value)
-        return results
+            result = model.fit(ps_truth, params, vs=xs)
+        display(result)
+        return result
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -1020,27 +1058,45 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18):
         universal_fit = pickle.load(f)
     d = universal_fit['d']
     e = universal_fit['e']
+    j = universal_fit['j']
     for gal in pdfs:
-        v0 = df.loc[gal, 'v0']
-        v0 = d * (df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'] / 100.) ** e
+        v0hat = d * (df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'] / 100.) ** e
+        #v0hat = df.loc[gal, 'v0']
         dict_gal = pdfs[gal]
-        ax.stairs(dict_gal['ps'] * v0 / vchar, 
-                  dict_gal['bins'] / v0 * vchar, 
+        ax.stairs(dict_gal['ps'] * v0hat / v0char, 
+                  dict_gal['bins'] / v0hat * v0char, 
                   zorder=2000)
-    x0, xdamp, k = get_std_vdamp_k()
-    vs_v0 = np.linspace(0., vchar*2.8, 100)
-    ax.plot(vs_v0, smooth_step_max(vs_v0, x0, xdamp, k), 
+    # The circular velocity that would put the peak at v0char, given d and e:
+    vc_char = 100. * (v0char / d) ** (1. / e) 
+    if v0char == 1.:
+        std_result = lmfit.minimizer.MinimizerResult()
+        std_result.params = dict(d=114.959761,
+                                 h=7.60952678,
+                                 k=6.66508641)
+        covar = np.array([[ 0.89190783, -0.04227626],
+                          [-0.04227626,  0.00693924]])
+    else:
+        std_result = get_std_vdamp_k(vc_char)
+        covar = std_result.covar[:-1,:-1]
+    # d_std can be either the original d or the best fit d' (d' ~ d  
+    # if there is damping. d' = d if there
+    # is no damping.) 
+    # depending on whether get_std_vdamp() varies the d parameter.
+    d_std = std_result.params['d']
+    # h_st and k_std are best fits.
+    h_std = std_result.params['h']
+    k_std = std_result.params['k']
+    x0 = d_std * (vc_char/100.) ** e #x0 ~ v0char
+    xdamp = h_std * (vc_char/100.) ** j
+    xs = np.linspace(0., v0char*2.8, 100)
+
+    ax.plot(xs, smooth_step_max(xs, x0, xdamp, k_std), 
             lw=3., color='k', zorder=3e3)
-    dd = ddfrac * x0
-    dh = dhfrac * xdamp
 
-    N_samples = 1000 
-    X0 = np.random.normal(x0, dd, size=N_samples)
-    XDAMP = np.random.normal(xdamp, dh, size=N_samples)
-    ps_samples = np.zeros((N_samples, len(vs_v0)))
+    ps_samples = make_samples(N_samples, xs, vc_char, d_std, e, h_std, j, 
+                              k_std, covar,
+                              ddfrac, dhfrac)
 
-    for i in range(N_samples):
-        ps_samples[i] = smooth_step_max(vs_v0, X0[i], XDAMP[i], k)
     P_1std = scipy.special.erf(1. / np.sqrt(2.)) 
     lower_q = (1. - P_1std) / 2. 
     upper_q = lower_q + P_1std
@@ -1049,16 +1105,35 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18):
     lowers = np.percentile(ps_samples, lower_q, axis=0)
     uppers = np.percentile(ps_samples, upper_q, axis=0)
 
-    ax.fill_between(vs_v0, lowers, uppers, color='grey', alpha=0.6, ec=None)
+    ax.fill_between(xs, lowers, uppers, color='grey', alpha=0.6, ec=None)
 
-    ax.axvline(vchar, color='r', ls='--')
+    ax.axvline(v0char, color='r', ls='--')
     ax.axvline(xdamp, color='r', ls='--')
     plt.show()
     ###########################################################################
 
     return None
 
-def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18):
+def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac):
+    D_DEVS = np.random.normal(0., d * ddfrac, size=N)
+    H_DEVS = np.random.normal(0., h * dhfrac, size=N)
+    DEVS_UNCORR = np.array([D_DEVS, H_DEVS])
+    MU = np.array([[d], [h]])
+    c = scipy.linalg.cholesky(covar, lower=True)
+    THETA = np.dot(c, DEVS_UNCORR) + MU
+
+    D = THETA[0]
+    V0HAT = D * (vc/100.) ** e
+
+    H = THETA[1]
+    VDAMP = H * (vc/100.) ** j
+
+    ps_samples = np.array([smooth_step_max(vs,
+                                           v0, vdamp, k)
+                           for v0, vdamp in zip(V0HAT, VDAMP)])
+    return ps_samples
+
+def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18, ax=None):
     dict_gal = pdfs[gal]
 
     if isinstance(result, (lmfit.minimizer.MinimizerResult, 
@@ -1068,12 +1143,14 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18):
         h = result.params['h'].value
         j = result.params['j'].value
         k = result.params['k'].value
+        covar = result.covar
     elif isinstance(result, dict):
         d = result['d']
         e = result['e']
         h = result['h']
         j = result['j']
         k = result['k']
+        covar = result['covar']
     else:
         raise ValueError('Unexpected result type')
 
@@ -1082,13 +1159,8 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18):
     vdamp = h * (vc/100.) ** j
 
     N_samples = 1000
-    D = np.random.normal(d, d * ddfrac, size=N_samples)
-    V0HAT = D * (vc/100.) ** e
-    H = np.random.normal(h, h * dhfrac, size=N_samples)
-    VDAMP = H * (vc/100.) ** j
-    ps_samples = np.array([smooth_step_max(vs,
-                                           v0, vdamp, k)
-                           for v0, vdamp in zip(V0HAT, VDAMP)])
+    ps_samples = make_samples(N_samples, vs, vc, 
+                              d, e, h, j, k, covar, ddfrac, dhfrac)
 
     P_1std = scipy.special.erf(1. / np.sqrt(2)) # ~68%
     lower_q = (1. - P_1std) / 2. 
@@ -1097,6 +1169,10 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18):
     upper_q *= 100.
     lowers = np.percentile(ps_samples, lower_q, axis=0)
     uppers = np.percentile(ps_samples, upper_q, axis=0)
+
+    if ax is not None:
+        for ps in ps_samples:
+            ax.plot(vs, ps, color='g', alpha=0.1, zorder=0)
 
     return lowers, uppers 
      
@@ -1176,7 +1252,7 @@ def plt_universal_mc(gals='discs', m=1.):
     mu_theta = mu_theta.reshape((p, 1))
     # Matrix of uncorrelated deviations from the best estimates:
     Devs_uncorr = np.array([d_dev_samples, e_dev_samples, h_dev_samples, 
-                         j_dev_samples, k_dev_samples])
+                            j_dev_samples, k_dev_samples])
     Devs_uncorr = Devs_uncorr[vary_mask] #Only use parameters we're varying
     # Apply correlation to parameter samples
     theta = np.dot(c, Devs_uncorr) + mu_theta 
@@ -1461,9 +1537,6 @@ def diff_fr68(params, pdfs, df):
         data_raw = pickle.load(f)
 
     def count_within(gal, ddfrac=0.1, dhfrac=0.18):
-        N_out = 0.
-        N_tot = 0.
-
         pdf_gal = pdfs[gal]
         ps = pdf_gal['ps']
         vs = pdf_gal['vs']
@@ -1472,8 +1545,8 @@ def diff_fr68(params, pdfs, df):
         is_above = ps > uppers
         is_below = ps < lowers
         is_outlier = is_above | is_below 
-        N_out += np.sum(is_outlier)
-        N_tot += len(vs)
+        N_out = np.sum(is_outlier)
+        N_tot = len(vs)
         
         percent = 1. - N_out / N_tot
         return percent
@@ -1487,7 +1560,39 @@ def diff_fr68(params, pdfs, df):
     print(ddfrac.value, dhfrac.value, np.sum(resids_vals ** 2.))
     return resids_vals
 
-def find_68_uncertainty():
+def diff_fr68_agg(params, pdfs, df):
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        data_raw = pickle.load(f)
+
+    def count_within(ddfrac=0.1, dhfrac=0.18):
+        N_out = 0.
+        N_tot = 0.
+
+        for gal in pdfs:
+            pdf_gal = pdfs[gal]
+            ps = pdf_gal['ps']
+            vs = pdf_gal['vs']
+            lowers, uppers = gal_bands(gal, vs, pdfs, df, data_raw, ddfrac, 
+                                       dhfrac)
+            is_above = ps > uppers
+            is_below = ps < lowers
+            is_outlier = is_above | is_below 
+            N_out += np.sum(is_outlier)
+            N_tot += len(vs)
+        
+        percent = 1. - N_out / N_tot
+        return percent
+
+    ddfrac = params['ddfrac']
+    dhfrac = params['dhfrac']
+    percents_within = np.array([count_within(gal, ddfrac, dhfrac) \
+                                for gal in pdfs])
+    P_1std = scipy.special.erf(1. / np.sqrt(2.)) # ~68%
+    resids_vals = percents_within - P_1std 
+    print(ddfrac.value, dhfrac.value, np.sum(resids_vals ** 2.))
+    return resids_vals
+
+def find_68_uncertainty(method, **kwargs):
     import dm_den
 
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
@@ -1496,11 +1601,11 @@ def find_68_uncertainty():
     del pdfs['m12z']
 
     params = lmfit.Parameters()
-    params.add('ddfrac', value=0.05, vary=True, min=0., max=0.2)
-    params.add('dhfrac', value=0.05, vary=True, min=0., max=0.3)
+    params.add('ddfrac', value=0.05, vary=True, min=0.)
+    params.add('dhfrac', value=0.05, vary=True, min=0.)
 
-    minimizer_result = lmfit.minimize(diff_fr68, params, method='brute',
-                                      args=(pdfs, df), workers=10)
+    minimizer_result = lmfit.minimize(diff_fr68, params, method=method,
+                                      args=(pdfs, df), **kwargs)
     display(minimizer_result)
 
     return None
