@@ -6,6 +6,7 @@ import math
 import paths
 import staudt_utils
 import copy
+import time
 import numpy as np
 import pandas as pd
 from progressbar import ProgressBar
@@ -674,10 +675,13 @@ def setup_universal_fig(gals):
 def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
                   vc100=True, err_method='sampling', ddfrac=None, dhfrac=None,
+                  assume_corr=False,
                   band_alpha=0.4, data_color='grey', band_color='grey',
                   **kwargs):
-    if (ddfrac is not None or dhfrac is not None) and err_method != 'sampling':
-        raise ValueError('ddfrac and dhfrac are only used in sampling.')
+    if (ddfrac is not None or dhfrac is not None or assume_corr) \
+            and err_method != 'sampling':
+        raise ValueError('ddfrac, dhfrac, and assume_corr are only used in '
+                         'sampling.')
     elif err_method == 'sampling':
         if ddfrac is None:
             ddfrac = 0.1
@@ -834,6 +838,7 @@ def plt_universal(gals='discs', update_values=False,
         elif err_method == 'sampling':
             lowers, uppers = gal_bands(gal, vs_postfit, pdfs, df, 
                                        result, ddfrac=ddfrac, dhfrac=dhfrac,
+                                       assume_corr=assume_corr,
                                        ax = axs[i])
 
             axs[i].fill_between(vs_postfit, lowers, uppers, color=band_color, 
@@ -1114,12 +1119,16 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18, v0char=1., N_samples=1000):
 
     return None
 
-def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac):
+def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac, 
+                 assume_corr=False):
     D_DEVS = np.random.normal(0., d * ddfrac, size=N)
     H_DEVS = np.random.normal(0., h * dhfrac, size=N)
     DEVS_UNCORR = np.array([D_DEVS, H_DEVS])
     MU = np.array([[d], [h]])
-    c = scipy.linalg.cholesky(covar, lower=True)
+    if assume_corr:
+        c = scipy.linalg.cholesky(covar, lower=True)
+    else:
+        c = np.identity(2)
     THETA = np.dot(c, DEVS_UNCORR) + MU
 
     D = THETA[0]
@@ -1133,8 +1142,45 @@ def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac):
                            for v0, vdamp in zip(V0HAT, VDAMP)])
     return ps_samples
 
-def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18, ax=None):
+def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18, 
+              assume_corr=False, ax=None):
     dict_gal = pdfs[gal]
+    '''
+    Generate the upper and lower confidence band given fractional uncertainty
+    in d and h. The method does not draw the band but returns the upper and
+    lower limits of the band. However, if a matplotlib.axes is provided, it
+    will draw the individual distribution samples used to generate the band.
+
+    Parameters
+    ----------
+    gal: str
+        Which galaxy to analyze
+    vs: np.ndarray
+        Velocities for which to generate the bands        
+    pdfs: dict
+        Dictionary split up by galaxy containing the probability density
+        functions
+    df: pd.DataFrame
+        Analysis results
+    result: lmfit.Minimizer.MinimizerResult, lmfit.model.ModelResult, or dict
+        Universal regression result
+    ddfrac: float
+        Fractional uncertainty on d parameter
+    dhfrac: float
+        Fractional uncertainty on h parameter
+    assume_corr: bool
+        Specifies whether to assume d and h are correlated
+    ax: matplotlib.axes
+        Subplot object into which individual sample distributions are drawn.
+        If not provided, individual samples are not draw
+
+    Returns
+    -------
+    lowers: np.ndarray
+        Lower limits of the confidence band at each v in vs
+    uppers: np.ndarray
+        Upper limits of the confidence band at each v in vs
+    '''
 
     if isinstance(result, (lmfit.minimizer.MinimizerResult, 
                            lmfit.model.ModelResult)):
@@ -1158,9 +1204,10 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18, ax=None):
     v0hat = d * (vc/100.) ** e
     vdamp = h * (vc/100.) ** j
 
-    N_samples = 1000
+    N_samples = 2000
     ps_samples = make_samples(N_samples, vs, vc, 
-                              d, e, h, j, k, covar, ddfrac, dhfrac)
+                              d, e, h, j, k, covar, ddfrac, dhfrac, 
+                              assume_corr=assume_corr)
 
     P_1std = scipy.special.erf(1. / np.sqrt(2)) # ~68%
     lower_q = (1. - P_1std) / 2. 
@@ -1172,7 +1219,7 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18, ax=None):
 
     if ax is not None:
         for ps in ps_samples:
-            ax.plot(vs, ps, color='g', alpha=0.1, zorder=0)
+            ax.plot(vs, ps, color='g', alpha=1.e2/N_samples, zorder=0)
 
     return lowers, uppers 
      
@@ -1532,16 +1579,16 @@ def three_d_distribs():
     ax.view_init(elev=23., azim=-97.)
     plt.show()
 
-def diff_fr68(params, pdfs, df):
+def diff_fr68(params, pdfs, df, assume_corr=False, verbose=False):
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         data_raw = pickle.load(f)
 
-    def count_within(gal, ddfrac=0.1, dhfrac=0.18):
+    def count_within(gal, ddfrac, dhfrac):
         pdf_gal = pdfs[gal]
         ps = pdf_gal['ps']
         vs = pdf_gal['vs']
         lowers, uppers = gal_bands(gal, vs, pdfs, df, data_raw, ddfrac, 
-                                   dhfrac)
+                                   dhfrac, assume_corr=assume_corr)
         is_above = ps > uppers
         is_below = ps < lowers
         is_outlier = is_above | is_below 
@@ -1549,31 +1596,55 @@ def diff_fr68(params, pdfs, df):
         N_tot = len(vs)
         
         percent = 1. - N_out / N_tot
-        return percent
+
+        area = scipy.integrate.simpson(uppers, vs)
+        area -= scipy.integrate.simpson(lowers, vs)
+
+        return percent, area
 
     ddfrac = params['ddfrac']
     dhfrac = params['dhfrac']
-    percents_within = np.array([count_within(gal, ddfrac, dhfrac) \
+    percents_areas = np.array([count_within(gal, ddfrac, dhfrac) \
                                 for gal in pdfs])
+    percents_within, areas = percents_areas.T
     P_1std = scipy.special.erf(1. / np.sqrt(2.)) # ~68%
     resids_vals = percents_within - P_1std 
-    print(ddfrac.value, dhfrac.value, np.sum(resids_vals ** 2.))
+    resids_vals = np.concatenate((resids_vals, areas))
+    if verbose:
+        print('ddfrac = {0:0.4f}, '
+              'dhfrac = {1:0.4f}, '
+              'SSE = {2:0.3f}, '
+              'frac within = {3:0.4f}, '
+              'fracs within {4}'.format(ddfrac.value, dhfrac.value, 
+                                                 np.sum(resids_vals ** 2.), 
+                                                 percents_within.mean(),
+                                                 percents_within))
     return resids_vals
 
-def diff_fr68_agg(params, pdfs, df):
+def diff_fr68_agg(params, pdfs, df, assume_corr=False, verbose=False, 
+                  states=None):
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         data_raw = pickle.load(f)
 
-    def count_within(ddfrac=0.1, dhfrac=0.18):
+    def count_within(ddfrac, dhfrac):
         N_out = 0.
         N_tot = 0.
+        area = 0.
+        area_norm = 0.
 
         for gal in pdfs:
             pdf_gal = pdfs[gal]
             ps = pdf_gal['ps']
             vs = pdf_gal['vs']
+
             lowers, uppers = gal_bands(gal, vs, pdfs, df, data_raw, ddfrac, 
-                                       dhfrac)
+                                       dhfrac, assume_corr=assume_corr)
+
+            area += scipy.integrate.simpson(uppers, vs)
+            area -= scipy.integrate.simpson(lowers, vs)
+            # Area under the truth distribution:
+            area_norm += scipy.integrate.simpson(ps, vs)
+
             is_above = ps > uppers
             is_below = ps < lowers
             is_outlier = is_above | is_below 
@@ -1581,18 +1652,32 @@ def diff_fr68_agg(params, pdfs, df):
             N_tot += len(vs)
         
         percent = 1. - N_out / N_tot
-        return percent
+        # Normalize the area cost by the total area under all the truth
+        # distributions so the area cost doesn't dominate the diff-from-68
+        # cost.
+        area /= area_norm
+        return percent, area
 
     ddfrac = params['ddfrac']
     dhfrac = params['dhfrac']
-    percents_within = np.array([count_within(gal, ddfrac, dhfrac) \
-                                for gal in pdfs])
+    percent_within, area = count_within(ddfrac, dhfrac)
     P_1std = scipy.special.erf(1. / np.sqrt(2.)) # ~68%
-    resids_vals = percents_within - P_1std 
-    print(ddfrac.value, dhfrac.value, np.sum(resids_vals ** 2.))
-    return resids_vals
+    diff = percent_within - P_1std 
+    cost = np.array([diff, area])
+    if verbose:
+        print('ddfrac = {0:0.4f}, '
+              'dhfrac = {1:0.4f}, '
+              'SSE = {2:0.4f}, '
+              'frac within = {3:0.3f}, '
+              'area = {4:0.2f}'.format(ddfrac.value, dhfrac.value, 
+                                       np.sum(cost ** 2.), 
+                                       percent_within, area))
+    return cost
 
-def find_68_uncertainty(method, **kwargs):
+def find_68_uncertainty(method, assume_corr=False, diff_fcn=diff_fr68,
+                        verbose=False, **kwargs):
+    start = time.time()
+
     import dm_den
 
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
@@ -1601,11 +1686,21 @@ def find_68_uncertainty(method, **kwargs):
     del pdfs['m12z']
 
     params = lmfit.Parameters()
-    params.add('ddfrac', value=0.033, vary=True, min=0.)
-    params.add('dhfrac', value=0.296, vary=True, min=0.)
+    params.add('ddfrac', value=0.15, vary=True, min=0., max=0.5)
+    params.add('dhfrac', value=0.15, vary=True, min=0., max=0.5)
 
-    minimizer_result = lmfit.minimize(diff_fr68, params, method=method,
-                                      args=(pdfs, df), **kwargs)
+    states = []
+    minimizer_result = lmfit.minimize(diff_fcn, params, method=method,
+                                      args=(pdfs, df), 
+                                      kws=dict(assume_corr=assume_corr,
+                                               verbose=verbose, states=states),
+                                      **kwargs)
+
+    elapsed = time.time() - start
+    minutes = elapsed // 60.
+    sec = elapsed - minutes * 60.
+    print('{0:0.0f}min, {1:0.1f}s taken to optimize.'.format(minutes, sec)) 
+
     display(minimizer_result)
 
     return None
