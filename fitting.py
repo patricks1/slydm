@@ -10,8 +10,17 @@ import time
 import numpy as np
 import pandas as pd
 from progressbar import ProgressBar
+
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+from matplotlib import rcParams
+rcParams['mathtext.fontset'] = 'dejavuserif'
+rcParams['font.family'] = 'serif' 
+rcParams['axes.titlesize']=24
+rcParams['axes.titlepad']=15
+rcParams['legend.frameon'] = True
+rcParams['legend.fontsize']=18
+rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
 with open('./data/v_pdfs.pkl','rb') as f:
     pdfs_v=pickle.load(f)
@@ -677,6 +686,7 @@ def plt_universal(gals='discs', update_values=False,
                   vc100=True, err_method='sampling', ddfrac=None, dhfrac=None,
                   assume_corr=False,
                   band_alpha=0.4, data_color='grey', band_color='grey',
+                  samples_color=plt.cm.viridis(0.5),
                   **kwargs):
     if (ddfrac is not None or dhfrac is not None or assume_corr) \
             and err_method != 'sampling':
@@ -839,11 +849,13 @@ def plt_universal(gals='discs', update_values=False,
             lowers, uppers = gal_bands(gal, vs_postfit, pdfs, df, 
                                        result, ddfrac=ddfrac, dhfrac=dhfrac,
                                        assume_corr=assume_corr,
-                                       ax = axs[i])
+                                       ax = axs[i], 
+                                       samples_color=samples_color)
 
             axs[i].fill_between(vs_postfit, lowers, uppers, color=band_color, 
                                 alpha=band_alpha, 
-                                ec=None, zorder=1)
+                                ec=samples_color, zorder=1, 
+                                label='$1\sigma$ band')
 
         # Plot data
         axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color=data_color,
@@ -853,7 +865,7 @@ def plt_universal(gals='discs', update_values=False,
         axs[i].plot(vs_postfit,
                     ps_postfit,
                     '-',
-                    label='prediction', color='b', lw=1.)
+                    label='prediction', color='C3', lw=2.)
 
         loc = [0.97,0.96]
         kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
@@ -1143,7 +1155,7 @@ def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac,
     return ps_samples
 
 def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18, 
-              assume_corr=False, ax=None):
+              assume_corr=False, ax=None, samples_color=plt.cm.viridis(0.5)):
     dict_gal = pdfs[gal]
     '''
     Generate the upper and lower confidence band given fractional uncertainty
@@ -1204,7 +1216,7 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18,
     v0hat = d * (vc/100.) ** e
     vdamp = h * (vc/100.) ** j
 
-    N_samples = 2000
+    N_samples = 1000
     ps_samples = make_samples(N_samples, vs, vc, 
                               d, e, h, j, k, covar, ddfrac, dhfrac, 
                               assume_corr=assume_corr)
@@ -1218,8 +1230,8 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18,
     uppers = np.percentile(ps_samples, upper_q, axis=0)
 
     if ax is not None:
-        for ps in ps_samples:
-            ax.plot(vs, ps, color='g', alpha=1.e2/N_samples, zorder=0)
+        ax.plot(vs, ps_samples.T, color=samples_color, alpha=1.e2/N_samples, 
+                zorder=0)
 
     return lowers, uppers 
      
@@ -1701,6 +1713,4 @@ def find_68_uncertainty(method, assume_corr=False, diff_fcn=diff_fr68,
     sec = elapsed - minutes * 60.
     print('{0:0.0f}min, {1:0.1f}s taken to optimize.'.format(minutes, sec)) 
 
-    display(minimizer_result)
-
-    return None
+    return minimizer_result
