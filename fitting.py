@@ -233,6 +233,26 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
     return vesc_fits
 
 def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
+    '''
+    Plot the best posible distributions, individually fitting vdamp and v0 for
+    each galaxy
+
+    Parameters
+    ----------
+    gals: str or list-like of str
+        Galaxies to plot
+    show_exp: bool
+        If True, include the exponentially cutoff form from Macabe 2010 and 
+        Lacrois et al. 2020.
+    tgt_fname: str
+        File name with which to save the plot. Default, None, is to not save
+        the plot.
+
+    Return
+    ------
+    vdamp_fits: dict
+        Dictionary keyed by galaxy of the best fit vdamps
+    '''
     import dm_den
     df = dm_den.load_data('dm_stats_20221208.h5')
     if gals == 'discs':
@@ -283,7 +303,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
         resids = ps_predicted - ps_truth
         return resids
         
-    vesc_fits = {}
+    vdamp_fits = {}
     
     for i, gal in enumerate(pbar(df.index)):
         pdf = pdfs_v[gal]
@@ -305,7 +325,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                                       nan_policy='omit', 
                                       #niter=300
                                      )
-        vesc_fits[gal] = res_v0_vesc.params['vesc'].value
+        vdamp_fits[gal] = res_v0_vesc.params['vesc'].value
         
         axs[i].stairs(ps_truth, bins, color='grey')
         axs[i].plot(
@@ -320,7 +340,8 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
             del(p['k'])
             #p['vesc'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
             res_exp = lmfit.minimize(resids_exp_max, p, method='nelder',
-                                     args=(vs_truth, ps_truth), nan_policy='omit')
+                                     args=(vs_truth, ps_truth), 
+                                     nan_policy='omit')
             axs[i].plot(vs_postfit,
                         exp_max(vs_postfit, 
                                 res_exp.params['v0'],
@@ -367,7 +388,13 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
 
     plt.show()
 
-    return vesc_fits
+    return vdamp_fits
+
+def calc_chi2(xs, ys, fcn, args):
+    ys_hat = fcn(xs, *args)
+    #chi2 = np.sum( (ys_hat - ys)**2. / ys_hat )
+    chi2 = np.sum( (ys_hat - ys)**2. / 1. )
+    return chi2
 
 def plt_naive(gals='discs', tgt_fname=None):
     import dm_den
@@ -422,11 +449,13 @@ def plt_naive(gals='discs', tgt_fname=None):
         bins = pdfs_v[gal]['bins']
         vs_truth = (bins[1:] + bins[:-1]) / 2.
         ps_truth = pdfs_v[gal]['ps']
+        # p(sigma(vc), vs_maxwell)
         ps_sigma_vc = smooth_step_max(
                                    vs_maxwell, 
                                    np.sqrt(2./3.)*sigma_predicted,
                                    np.inf,
                                    np.inf)
+        # p(sigma_measured, vs_maxwell)
         ps_true_sigma = smooth_step_max(vs_maxwell,
                                         np.sqrt(2./3.) * sigma_truth,
                                         np.inf,
@@ -686,7 +715,7 @@ def plt_universal(gals='discs', update_values=False,
                   vc100=True, err_method='sampling', ddfrac=None, dhfrac=None,
                   assume_corr=False,
                   band_alpha=0.4, data_color='grey', band_color='grey',
-                  samples_color=plt.cm.viridis(0.5),
+                  samples_color=plt.cm.viridis(0.5), ymax=None,
                   **kwargs):
     if (ddfrac is not None or dhfrac is not None or assume_corr) \
             and err_method != 'sampling':
@@ -815,6 +844,12 @@ def plt_universal(gals='discs', update_values=False,
                             - vc_mean)**2.) / N_vc
         var_vs = np.sum((vs_truth.flatten() - vs_truth.mean())**2.) / result.ndata
 
+    my_chi2 = calc_chi2(vs_truth, ps_truth, calc_p,  
+                        [vcircs, *[result.params[key] for key in ['d', 'e', 
+                                                                  'h', 'j', 
+                                                                  'k']]])
+    print('chi2 = {0:0.4e}'.format(my_chi2))
+
     fig, axs = setup_universal_fig(gals)
 
     if isinstance(gals, (list, np.ndarray)):
@@ -880,11 +915,16 @@ def plt_universal(gals='discs', update_values=False,
                         .format(vc), loc, **kwargs_txt)
 
         axs[i].grid(False)
+        if ymax is not None:
+            axs[i].set_ylim(top=ymax)
     if fig.Nrows == 3:
         legend_y = 0.05
     else:
         legend_y = -0.04
-    axs[0].legend(
+    handles, labels = axs[0].get_legend_handles_labels()
+    handles.append(mpl.lines.Line2D([0], [0], color=samples_color, lw=1.,
+                                    label='rand samples'))
+    axs[0].legend(handles=handles,
                   bbox_to_anchor=(0.5, legend_y), 
                   loc='upper center', ncol=4,
                   bbox_transform=fig.transFigure)
@@ -969,7 +1009,8 @@ def extend(pdfs, df, result):
             len(dict_gal['ps']))
     return None
 
-def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18, v0char=1., N_samples=1000):
+def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18, v0char=1., N_samples=1000,
+                     assume_corr=False):
     '''
     Parameters
     ----------
@@ -1112,7 +1153,7 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18, v0char=1., N_samples=1000):
 
     ps_samples = make_samples(N_samples, xs, vc_char, d_std, e, h_std, j, 
                               k_std, covar,
-                              ddfrac, dhfrac)
+                              ddfrac, dhfrac, assume_corr=assume_corr)
 
     P_1std = scipy.special.erf(1. / np.sqrt(2.)) 
     lower_q = (1. - P_1std) / 2. 
@@ -1216,7 +1257,7 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18,
     v0hat = d * (vc/100.) ** e
     vdamp = h * (vc/100.) ** j
 
-    N_samples = 1000
+    N_samples = 5000
     ps_samples = make_samples(N_samples, vs, vc, 
                               d, e, h, j, k, covar, ddfrac, dhfrac, 
                               assume_corr=assume_corr)
@@ -1232,7 +1273,6 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18,
     if ax is not None:
         ax.plot(vs, ps_samples.T, color=samples_color, alpha=1.e2/N_samples, 
                 zorder=0)
-
     return lowers, uppers 
      
 def plt_universal_mc(gals='discs', m=1.):
@@ -1591,11 +1631,18 @@ def three_d_distribs():
     ax.view_init(elev=23., azim=-97.)
     plt.show()
 
-def diff_fr68(params, pdfs, df, assume_corr=False, verbose=False):
+def diff_fr68(params, assume_corr=False, incl_area=True, 
+              verbose=False):
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         data_raw = pickle.load(f)
+    pdfs = copy.deepcopy(pdfs_v)
+    del pdfs['m12w']
+    del pdfs['m12z']
 
     def count_within(gal, ddfrac, dhfrac):
+        import dm_den
+        df = dm_den.load_data('dm_stats_20221208.h5')
+
         pdf_gal = pdfs[gal]
         ps = pdf_gal['ps']
         vs = pdf_gal['vs']
@@ -1621,7 +1668,8 @@ def diff_fr68(params, pdfs, df, assume_corr=False, verbose=False):
     percents_within, areas = percents_areas.T
     P_1std = scipy.special.erf(1. / np.sqrt(2.)) # ~68%
     resids_vals = percents_within - P_1std 
-    resids_vals = np.concatenate((resids_vals, areas))
+    if incl_area:
+        resids_vals = np.concatenate((resids_vals, areas))
     if verbose:
         print('ddfrac = {0:0.4f}, '
               'dhfrac = {1:0.4f}, '
@@ -1633,66 +1681,83 @@ def diff_fr68(params, pdfs, df, assume_corr=False, verbose=False):
                                                  percents_within))
     return resids_vals
 
-def diff_fr68_agg(params, pdfs, df, assume_corr=False, verbose=False, 
-                  states=None):
+def count_within_agg(ddfrac, dhfrac, df, assume_corr=False, 
+                     return_fracs=False):
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         data_raw = pickle.load(f)
+    pdfs = copy.deepcopy(pdfs_v)
+    del pdfs['m12w']
+    del pdfs['m12z']
 
-    def count_within(ddfrac, dhfrac):
-        N_out = 0.
-        N_tot = 0.
-        area = 0.
-        area_norm = 0.
+    N_out = 0.
+    N_tot = 0.
+    area = 0.
+    area_norm = 0.
 
-        for gal in pdfs:
-            pdf_gal = pdfs[gal]
-            ps = pdf_gal['ps']
-            vs = pdf_gal['vs']
+    for gal in pdfs:
+        pdf_gal = pdfs[gal]
+        ps = pdf_gal['ps']
+        vs = pdf_gal['vs']
 
-            lowers, uppers = gal_bands(gal, vs, pdfs, df, data_raw, ddfrac, 
-                                       dhfrac, assume_corr=assume_corr)
+        lowers, uppers = gal_bands(gal, vs, pdfs, df, data_raw, ddfrac, 
+                                   dhfrac, assume_corr=assume_corr)
 
-            area += scipy.integrate.simpson(uppers, vs)
-            area -= scipy.integrate.simpson(lowers, vs)
-            # Area under the truth distribution:
-            area_norm += scipy.integrate.simpson(ps, vs)
+        area += scipy.integrate.simpson(uppers, vs)
+        area -= scipy.integrate.simpson(lowers, vs)
+        # Area under the truth distribution:
+        area_norm += scipy.integrate.simpson(ps, vs)
 
-            is_above = ps > uppers
-            is_below = ps < lowers
-            is_outlier = is_above | is_below 
-            N_out += np.sum(is_outlier)
-            N_tot += len(vs)
-        
-        percent = 1. - N_out / N_tot
-        # Normalize the area cost by the total area under all the truth
-        # distributions so the area cost doesn't dominate the diff-from-68
-        # cost.
-        area /= area_norm
+        is_above = ps > uppers
+        is_below = ps < lowers
+        is_outlier = is_above | is_below 
+        N_out += np.sum(is_outlier)
+        N_tot += len(vs)
+    
+    percent = 1. - N_out / N_tot
+    # Normalize the area cost by the total area under all the truth
+    # distributions so the area cost doesn't dominate the diff-from-68
+    # cost.
+    area /= area_norm
+    # Also need to further reduce the weight of area because we're too far
+    # from 68% otherwise.
+    area /= 10. 
+    if return_fracs:
+        return percent, area, ddfrac, dhfrac
+    else:
         return percent, area
+
+def diff_fr68_agg(params, assume_corr=False, incl_area=True,
+                  verbose=False):
+    df = pd.read_pickle(paths.data + 'dm_stats_20221208.pkl')
 
     ddfrac = params['ddfrac']
     dhfrac = params['dhfrac']
-    percent_within, area = count_within(ddfrac, dhfrac)
+    percent_within, area = count_within_agg(ddfrac, dhfrac, df, assume_corr)
     P_1std = scipy.special.erf(1. / np.sqrt(2.)) # ~68%
     diff = percent_within - P_1std 
-    cost = np.array([diff, area])
+    if incl_area:
+        cost = np.array([diff, area])
+        cost2 = cost**2.
+    else:
+        # I'm just squaring the cost and giving cost and cost2 the same value
+        # here because I don't feel like puting the
+        # return in a conditional.
+        cost = diff**2. 
+        cost2 = cost
     if verbose:
         print('ddfrac = {0:0.4f}, '
               'dhfrac = {1:0.4f}, '
-              'SSE = {2:0.4f}, '
-              'frac within = {3:0.3f}, '
-              'area = {4:0.2f}'.format(ddfrac.value, dhfrac.value, 
-                                       np.sum(cost ** 2.), 
+              'SSE = {2:0.3e}, '
+              'frac within = {3:0.4f}, '
+              'area = {4:0.4f}'.format(ddfrac.value, dhfrac.value, 
+                                       np.sum(cost2), 
                                        percent_within, area))
     return cost
 
 def find_68_uncertainty(method, assume_corr=False, diff_fcn=diff_fr68,
-                        verbose=False, **kwargs):
+                        incl_area=True, verbose=False, **kwargs):
     start = time.time()
 
-    import dm_den
-
-    df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
     pdfs = copy.deepcopy(pdfs_v)
     del pdfs['m12w']
     del pdfs['m12z']
@@ -1701,11 +1766,10 @@ def find_68_uncertainty(method, assume_corr=False, diff_fcn=diff_fr68,
     params.add('ddfrac', value=0.15, vary=True, min=0., max=0.5)
     params.add('dhfrac', value=0.15, vary=True, min=0., max=0.5)
 
-    states = []
     minimizer_result = lmfit.minimize(diff_fcn, params, method=method,
-                                      args=(pdfs, df), 
                                       kws=dict(assume_corr=assume_corr,
-                                               verbose=verbose, states=states),
+                                               incl_area=incl_area,
+                                               verbose=verbose),
                                       **kwargs)
 
     elapsed = time.time() - start
