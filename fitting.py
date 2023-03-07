@@ -7,6 +7,7 @@ import paths
 import staudt_utils
 import copy
 import time
+import grid_eval
 import numpy as np
 import pandas as pd
 from progressbar import ProgressBar
@@ -754,10 +755,13 @@ def plt_universal(gals='discs', update_values=False,
         raise ValueError('ddfrac, dhfrac, and assume_corr are only used in '
                          'sampling.')
     elif err_method == 'sampling':
+        grid_results = grid_eval.identify()
         if ddfrac is None:
-            ddfrac = 0.1
+            ddfrac = grid_results[0]
+            print('Using ddfrac = {0:0.5f}'.format(ddfrac))
         if dhfrac is None:
-            dhfrac = 0.18
+            dhfrac = grid_results[1]
+            print('Using dhfrac = {0:0.5f}'.format(dhfrac))
     if update_values and gals != 'discs':
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
@@ -858,7 +862,12 @@ def plt_universal(gals='discs', update_values=False,
                 # Save strings to be used in paper.tex
                 y = result.params[key].value
                 stderr = result.params[key].stderr
-                dy = stderr * tc
+                if key == 'd':
+                    dy = ddfrac * y
+                elif key == 'h':
+                    dy = dhfrac * y
+                else:
+                    dy = stderr * tc
                 # y_str is a string. dy_str is an array or strings (or just an
                 # array of just one string).
                 y_str, dy_str = staudt_utils.sig_figs(y, dy)

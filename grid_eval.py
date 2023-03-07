@@ -3,6 +3,7 @@ import pickle
 import paths
 import h5py
 import time
+import scipy
 import pandas as pd
 import multiprocessing as mp
 import numpy as np
@@ -64,6 +65,18 @@ def load_data():
         dhfracs = np.array(f['dhfracs'])
         ddfracs = np.array(f['ddfracs'])
     return percents, areas, ddfracs, dhfracs
+
+def identify():
+    percents, areas, ddfracs, dhfracs = load_data()
+    percents_flat = percents.flatten()
+    indices_order = np.argsort(percents_flat)
+    P1std = scipy.special.erf(1. / np.sqrt(2.))
+    # At least 68.29% of the data contained in the band:
+    over683 = percents_flat[indices_order] >= P1std 
+    i_answer = np.min(np.arange(len(percents_flat))[over683])
+    ddfrac = ddfracs.flatten()[indices_order][i_answer]
+    dhfrac = dhfracs.flatten()[indices_order][i_answer]
+    return ddfrac, dhfrac
 
 if __name__ == '__main__':
     start = time.time()
