@@ -282,7 +282,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
     def sse_max_v0_vesc(params, vs_truth, ps_truth):
         v0 = params['v0'].value
         #print(v0)
-        vesc = params['vesc'].value
+        vesc = params['vdamp'].value
         k = params['k'].value
         with np.errstate(divide='ignore'):
             ps_predicted = smooth_step_max(
@@ -295,7 +295,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
     
     def resids_exp_max(params, vs_truth, ps_truth):
         v0 = params['v0'].value
-        vesc = params['vesc'].value
+        vesc = params['vdamp'].value
         with np.errstate(divide='ignore'):
             ps_predicted = exp_max(vs_truth,
                                    v0,
@@ -316,7 +316,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
     
         p = lmfit.Parameters()
         p.add('v0', value=300., vary=True, min=100., max=400.)
-        p.add('vesc', value=470., vary=True, min=250., max=600.)
+        p.add('vdamp', value=470., vary=True, min=250., max=600.)
         p.add('k', value=0.0309, vary=False, min=0.0001, max=1.)
     
         res_v0_vesc = lmfit.minimize(sse_max_v0_vesc, p, 
@@ -325,7 +325,14 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                                       nan_policy='omit', 
                                       #niter=300
                                      )
-        vdamp_fits[gal] = res_v0_vesc.params['vesc'].value
+        vdamp_fits[gal] = res_v0_vesc.params['vdamp'].value
+        _ = [res_v0_vesc.params[key] 
+                                       for key in ['v0', 'vdamp', 'k']]
+        rms_err = calc_rms_err(vs_truth, ps_truth, smooth_step_max,
+                               args=[res_v0_vesc.params[key] 
+                                     for key in ['v0', 'vdamp', 'k']])
+        rms_txt = staudt_utils.mprint(rms_err, d=1, 
+                                      show=False).replace('$','')
         
         axs[i].stairs(ps_truth, bins, color='grey')
         axs[i].plot(
@@ -333,19 +340,19 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
             smooth_step_max(
                 vs_postfit, 
                 res_v0_vesc.params['v0'], 
-                res_v0_vesc.params['vesc'],
+                res_v0_vesc.params['vdamp'],
                 res_v0_vesc.params['k']))
-        
+         
         if show_exp:
             del(p['k'])
-            #p['vesc'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
+            #p['vdamp'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
             res_exp = lmfit.minimize(resids_exp_max, p, method='nelder',
                                      args=(vs_truth, ps_truth), 
                                      nan_policy='omit')
             axs[i].plot(vs_postfit,
                         exp_max(vs_postfit, 
                                 res_exp.params['v0'],
-                                res_exp.params['vesc']))
+                                res_exp.params['vdamp']))
         axs[i].grid(False)
         
         loc=[0.97,0.96]
@@ -362,13 +369,13 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                         '={1:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
                         '$v_0={3:0.0f}$\n'
                         #'$k={6:0.4f}$\n'
-                        '$\chi^2={2:0.2e}$\n'
+                        '$\mathrm{{RMS_{{err}}}}={4:s}$'
                         #'N$_\mathrm{{eval}}={5:0.0f}$'
                         .format(vesc, 
-                                res_v0_vesc.params['vesc'].value,
+                                res_v0_vesc.params['vdamp'].value,
                                 res_v0_vesc.chisqr, 
                                 res_v0_vesc.params['v0'].value,
-                                None,
+                                rms_txt,
                                 res_v0_vesc.nfev,
                                 res_v0_vesc.params['k'].value,
                                ),
@@ -390,13 +397,26 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
 
     return vdamp_fits
 
-def calc_chi2(xs, ys, fcn, args):
+def calc_rms_err(xs, ys, fcn, args):
     ys_hat = fcn(xs, *args)
-    #chi2 = np.sum( (ys_hat - ys)**2. / ys_hat )
-    chi2 = np.sum( (ys_hat - ys)**2. / 1. )
-    return chi2
+    rms = np.sqrt( np.mean( (ys_hat - ys)**2. ) )
+    return rms 
 
-def plt_naive(gals='discs', tgt_fname=None):
+def save_rms_errs(rms_dict):
+    try:
+        with open(paths.data + 'rms_errs.pkl', 'rb') as f:
+            dict_last = pickle.load(f)
+    except FileNotFoundError:
+        dict_last = {}  
+    d = dict_last | rms_dict
+    with open(paths.data + 'rms_errs.pkl', 'wb') as f:
+        pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
+    return None
+
+def plt_naive(gals='discs', tgt_fname=None, update_vals=False):
+    if update_vals and gals != 'discs':
+        raise ValueError('You should only update values when you\'re plotting '
+                         'all the discs.')
     import dm_den
     df = dm_den.load_data('dm_stats_20221208.h5')
     if gals == 'discs':
@@ -438,6 +458,9 @@ def plt_naive(gals='discs', tgt_fname=None):
         # I'm probably not going to use this here, though
         k = pickle.load(f)['k'] 
 
+    rms_dict = {}
+    rms_dict['sigma_vc'] = {}
+    rms_dict['true_sigma'] = {}
     for i, gal in enumerate(df.index):
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         with open(paths.data + 'data_raw.pkl', 'rb') as f:
@@ -455,11 +478,23 @@ def plt_naive(gals='discs', tgt_fname=None):
                                    np.sqrt(2./3.)*sigma_predicted,
                                    np.inf,
                                    np.inf)
+        rms_err_sigma_vc = calc_rms_err(vs_truth, ps_truth, smooth_step_max,
+                                        args=(np.sqrt(2./3)*sigma_predicted,
+                                              np.inf, np.inf))
+        rms_sigma_vc_txt = staudt_utils.mprint(rms_err_sigma_vc, d=1, 
+                                               show=False).replace('$','')
+        rms_dict['sigma_vc'][gal] = rms_err_sigma_vc
         # p(sigma_measured, vs_maxwell)
         ps_true_sigma = smooth_step_max(vs_maxwell,
                                         np.sqrt(2./3.) * sigma_truth,
                                         np.inf,
                                         np.inf)
+        rms_err_true_sigma = calc_rms_err(vs_truth, ps_truth, smooth_step_max,
+                                          args=(np.sqrt(2./3.)*sigma_truth,
+                                                np.inf, np.inf))
+        rms_true_sigma_txt= staudt_utils.mprint(rms_err_true_sigma, d=1, 
+                                            show=False).replace('$','')
+        rms_dict['true_sigma'][gal] = rms_err_true_sigma
         axs[i].stairs(ps_truth, bins,
                       color='grey')
         axs[i].plot(vs_maxwell, ps_sigma_vc, 
@@ -485,18 +520,18 @@ def plt_naive(gals='discs', tgt_fname=None):
                       bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
-        '''
-        loc[1] -= 0.1
+        loc[1] -= 0.08
         kwargs_txt['fontsize'] = 11.
-        axs[i].annotate('$v_\mathrm{{esc}}={0:0.0f}$\n'
-                        '$v_\mathrm{{damp}}={1:0.0f}$\n'
-                        '$\chi^2={2:0.3e}$'
-                        .format(vesc,
-                                result.params['vdamp'].value,
-                                result.chisqr
-                               ),
-                        loc, **kwargs_txt)
-        '''
+        axs[i].annotate('$\mathrm{{RMS}}_{{\mathrm{{err}},\sigma_\mathrm{{3D}}'
+                            '(v_\mathrm{{c}})}}={0:s}$'
+                        .format(rms_sigma_vc_txt),
+                        loc, color='C0', **kwargs_txt)
+        loc[1] -= 0.08
+        axs[i].annotate('$\mathrm{{RMS}}_{{\mathrm{{err}},'
+                            '\sigma_\mathrm{{3D, meas}}'
+                            '}}={0:s}$'
+                        .format(rms_true_sigma_txt),
+                        loc, color='C1', **kwargs_txt)
 
         if Ngals == 2:
             # Draw residual plot
@@ -523,18 +558,15 @@ def plt_naive(gals='discs', tgt_fname=None):
 
             axs[i+2].grid(False)
             axs[i+2].plot(vs_resids, calc_resids(sigma_predicted))
+            axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5,
+                             lw=1.)
             axs[i+2].plot(vs_resids, calc_resids(sigma_truth))
+            axs[i+2].axvline(vesc, ls='--', alpha=0.5, color='grey')
 
-            loc[1] -= 0.1
-            kwargs_txt['fontsize'] = 11.
-            axs[i].annotate(
-                            '$\mathrm{SSE}={2:0.3e}$'
-                            .format(
-                                     
-                                   ),
-                            loc, **kwargs_txt)
             if i == 0:
                 axs[i+2].set_ylabel('resids')
+    if update_vals:
+        save_rms_errs(rms_dict)
     axs[0].legend(loc='upper center', bbox_to_anchor=(0.5, -0.04),
                   bbox_transform=fig.transFigure, ncol=3)
     label_axes(axs, gals)
@@ -726,6 +758,9 @@ def plt_universal(gals='discs', update_values=False,
             ddfrac = 0.1
         if dhfrac is None:
             dhfrac = 0.18
+    if update_values and gals != 'discs':
+        raise ValueError('You should only update values when you\'re plotting '
+                         'all the discs.')
     import dm_den
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
@@ -776,7 +811,6 @@ def plt_universal(gals='discs', update_values=False,
     
     model = lmfit.model.Model(calc_p,
                               independent_vars=['vs', 'vcircs'])
-
     params = model.make_params()
 
     if vc100:
@@ -844,23 +878,25 @@ def plt_universal(gals='discs', update_values=False,
                             - vc_mean)**2.) / N_vc
         var_vs = np.sum((vs_truth.flatten() - vs_truth.mean())**2.) / result.ndata
 
-    my_chi2 = calc_chi2(vs_truth, ps_truth, calc_p,  
-                        [vcircs, *[result.params[key] for key in ['d', 'e', 
-                                                                  'h', 'j', 
-                                                                  'k']]])
-    print('chi2 = {0:0.4e}'.format(my_chi2))
-
     fig, axs = setup_universal_fig(gals)
 
     if isinstance(gals, (list, np.ndarray)):
         df = df.loc[gals]
 
+    rms_dict = {}
     for i, gal in enumerate(df.index):
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         vcircs_postfit = np.repeat(vc, N_postfit)
 
         ps_postfit = result.eval(vs=vs_postfit, vcircs=vcircs_postfit)
 
+        rms_err = calc_rms_err(pdfs[gal]['vs'], pdfs[gal]['ps'], 
+                               calc_p,  
+                               [np.repeat(vc, len(pdfs[gal]['vs'])), 
+                                *[result.params[key] for key in ['d', 'e', 
+                                                                 'h', 'j', 
+                                                                 'k']]])
+        rms_dict[gal] = rms_err
         if err_method == 'std_err':
             # Std err of the vcirc mean at vc_gal
             #     (Dividing by sqrt(N_vc) and not sqrt(N) is my way of trying 
@@ -911,12 +947,17 @@ def plt_universal(gals='discs', update_values=False,
                         **kwargs_txt)
         loc[1] -= 0.08
         kwargs_txt['fontsize'] = 13.
-        axs[i].annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
-                        .format(vc), loc, **kwargs_txt)
+        rms_txt = staudt_utils.mprint(rms_err, d=1, show=False).replace('$','')
+        axs[i].annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
+                        '$\mathrm{{RMS}}_\mathrm{{err}}={1:s}$'
+                        .format(vc, rms_txt),
+                        loc, **kwargs_txt)
 
         axs[i].grid(False)
         if ymax is not None:
             axs[i].set_ylim(top=ymax)
+    if update_values:
+        save_rms_errs({'universal': rms_dict})
     if fig.Nrows == 3:
         legend_y = 0.05
     else:
@@ -1705,6 +1746,7 @@ def count_within_agg(ddfrac, dhfrac, df, assume_corr=False,
         area += scipy.integrate.simpson(uppers, vs)
         area -= scipy.integrate.simpson(lowers, vs)
         # Area under the truth distribution:
+        # (although I just realized this will equal 1 for each galaxy)
         area_norm += scipy.integrate.simpson(ps, vs)
 
         is_above = ps > uppers
@@ -1778,3 +1820,42 @@ def find_68_uncertainty(method, assume_corr=False, diff_fcn=diff_fr68,
     print('{0:0.0f}min, {1:0.1f}s taken to optimize.'.format(minutes, sec)) 
 
     return minimizer_result
+
+def compare_methods(save_fname=None, verbose=False):
+    import dm_den
+    with open(paths.data + 'rms_errs.pkl', 'rb') as f:
+        rms_dict = pickle.load(f)
+    df = dm_den.load_data('dm_stats_20221208.h5')
+    df_rms = pd.DataFrame.from_dict(rms_dict)
+    df = pd.concat([df, df_rms], axis=1).drop(['m12w', 'm12z'])
+    if verbose:
+        df['diff'] = df['sigma_vc'] - df['universal']
+        df.sort_values('diff', inplace=True)
+        display(df[['diff']].T)
+
+    fig = plt.figure(figsize=(7,3))
+    ax = fig.add_subplot(111)
+    df[['true_sigma', 'sigma_vc', 'universal']].plot.bar(ax=ax, 
+                                                         color=['orange', 
+                                                                'C0', 
+                                                                'C3'],
+                                                         width=0.7)
+    tick_labels = ax.xaxis.get_majorticklabels()
+    ax.set_xticklabels(tick_labels, rotation=30, ha='right', 
+                       rotation_mode='anchor')
+    ax.set_ylabel('RMS error $[\mathrm{km^{-1}\,s}]$')
+
+    plt.tight_layout()
+    handles, labels = ax.get_legend_handles_labels()
+    labels[0] = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D}(v_\mathrm{c})$'
+    labels[1] = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D, meas}$'
+    labels[2] = '$v_\mathrm{c}$ model'
+    ax.legend(labels=labels, bbox_transform=fig.transFigure, 
+              bbox_to_anchor=(1., -0.15), loc='lower right', 
+              ncol=3, fontsize=13)
+
+    if save_fname is not None:
+        plt.savefig(paths.figures + save_fname, bbox_inches='tight', dpi=140)
+    plt.show()
+
+    return None 
