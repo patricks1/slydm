@@ -685,7 +685,7 @@ def get_vcirc(r_axis,rs,ms):
     vcirc = np.sqrt(c.G*mwithin*u.M_sun*1.e10 / (r_axis*u.kpc)).to(u.km/u.s).value
     return vcirc
 
-def get_v_esc(ms, coords, rvec):
+def calc_vesc(ms, coords, rvec):
     '''
     Calculate escape velocity at rvec, given masses and the 
     coordinate locations of
@@ -1423,7 +1423,8 @@ def get_v_escs(fname=None):
     def fill_v_escs_dic(gal):
         dic = unpack_4pot(df, gal)
         
-        thetas = np.pi*np.array([1./4., 1./2., 3./4., 1., 5./4., 3./2., 7./4., 2.])
+        thetas = np.pi*np.array([1./4., 1./2., 3./4., 1., 5./4., 3./2., 7./4., 
+                                 2.])
         #thetas = np.pi*np.array([1./2., 1., 3./2., 2.])
         v_escs[gal] = {}
         v_escs[gal]['v_escs'] = []
@@ -1432,7 +1433,7 @@ def get_v_escs(fname=None):
         pbar = ProgressBar()
         for theta in pbar(thetas):
             rvec = r * np.array([np.cos(theta), np.sin(theta), 0.])
-            v_escs[gal]['v_escs'] += [get_v_esc(dic['mass'], dic['pos'], rvec)]
+            v_escs[gal]['v_escs'] += [calc_vesc(dic['mass'], dic['pos'], rvec)]
         prinkt('')
         v_escs[gal]['std_ve'] = np.std(v_escs[gal]['v_escs'])
         v_escs[gal]['ve_avg'] = np.mean(v_escs[gal]['v_escs'])

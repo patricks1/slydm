@@ -20,7 +20,7 @@ rcParams['font.family'] = 'serif'
 rcParams['axes.titlesize']=24
 rcParams['axes.titlepad']=15
 rcParams['legend.frameon'] = True
-rcParams['legend.fontsize']=18
+rcParams['legend.fontsize']=15
 rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
 with open('./data/v_pdfs.pkl','rb') as f:
@@ -37,6 +37,7 @@ for gal in pdfs_v:
 
 max_bins_est = 1.e-3
 min_bins_est = -1.e-3
+resids_lim = 0.7
 
 def smooth_step_max(v, v0, vesc, k):
     '''
@@ -262,7 +263,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
         df = df.loc[gals]
     else:
         raise ValueError('Unexpected value provided for gals arg')
-    
+    Ngals = len(df)    
     if gals == 'discs':
         figsize = (19., 12.)
         Nrows = 3
@@ -270,11 +271,18 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
     else:
         Ncols = min(len(gals), 4)
         Nrows = math.ceil(len(gals) / Ncols)
-    xfigsize = 4.5 * Ncols + 1.
-    yfigsize = 3.7 * Nrows + 1. 
+    xfigsize = 4.6 / 2. * Ncols + 1.
+    yfigsize = 1.5 * Nrows + 1. 
+    if Ngals == 2:
+        # Add room for residual plots
+        Nrows += 1
+        yfigsize += 1. 
+        height_ratios = [4,1]
+    else:
+        height_ratios = None
     fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
                          sharey='row',
-                         sharex=True, dpi=140)
+                         sharex=True, dpi=140, height_ratios=height_ratios)
     axs=axs.ravel()
     fig.subplots_adjust(wspace=0.,hspace=0.)
     
@@ -335,15 +343,15 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
         rms_txt = staudt_utils.mprint(rms_err, d=1, 
                                       show=False).replace('$','')
         
-        axs[i].stairs(ps_truth, bins, color='grey')
+        axs[i].stairs(ps_truth, bins, color='k', label='data')
         axs[i].plot(
             vs_postfit, 
             smooth_step_max(
                 vs_postfit, 
                 res_v0_vesc.params['v0'], 
                 res_v0_vesc.params['vdamp'],
-                res_v0_vesc.params['k']))
-         
+                res_v0_vesc.params['k']),
+            label='prediction', color='C2')
         if show_exp:
             del(p['k'])
             #p['vdamp'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
@@ -355,13 +363,21 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                                 res_exp.params['v0'],
                                 res_exp.params['vdamp']))
         axs[i].grid(False)
-        
+        # Make ticks on both sides of the x-axis:
+        axs[i].tick_params(axis='x', direction='inout', length=6)
+        order_of_mag = -3
+        axs[i].ticklabel_format(style='sci', axis='y', 
+                                scilimits=(order_of_mag,
+                                           order_of_mag),
+                                useMathText=True)
+
         loc=[0.97,0.96]
         kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
                       va='top', ha='right', 
                       bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
+        '''
         loc[1] -= 0.1
         kwargs_txt['fontsize'] = 11.
         axs[i].annotate(#'$v_\mathrm{{esc}}'
@@ -386,13 +402,47 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
             axs[i].annotate('$\chi^2_\mathrm{{exp}}={0:0.2e}$\n'
                             .format(res_exp.chisqr),
             loc, **kwargs_txt)
+        '''
+        if Ngals == 2:
+            # Remove the 0 tick label because of overlap
+            y0, y1 = axs[i].get_ylim()
+            visible_ticks = np.array([t for t in axs[i].get_yticks() \
+                                      if t>=y0 and t<=y1])
+            new_ticks = visible_ticks[visible_ticks > 0.]
+            axs[i].set_yticks(new_ticks)
 
+            # Draw residual plot
+            vs_resids = copy.deepcopy(vs_truth)
+            vs_extend = np.linspace(vs_resids.max(), vs_postfit.max(), 20)
+            vs_resids = np.append(vs_resids, vs_extend, axis=0)                                         
+            ps_hat = smooth_step_max(vs_truth, 
+                                     res_v0_vesc.params['v0'].value,
+                                     res_v0_vesc.params['vdamp'].value,
+                                     res_v0_vesc.params['k'].value)
+            resids = ps_hat - ps_truth
+            resids_extend = smooth_step_max(vs_extend, 
+                                            res_v0_vesc.params['v0'].value,
+                                            res_v0_vesc.params['vdamp'].value,
+                                            res_v0_vesc.params['k'].value)
+            resids = np.append(resids, resids_extend, axis=0)
+            axs[i+2].plot(vs_resids, resids / 10.**order_of_mag, color='C2')
+            axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5, lw=1.)
+            axs[i+2].set_ylim(-resids_lim, resids_lim)
+            if i == 0:
+                axs[i+2].set_ylabel('resids')
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.,hspace=0.)
+    axs[-4].legend(loc='upper center',
+                   bbox_to_anchor=(1., -0.5),
+                   #bbox_to_anchor=(0.5, 0.035),
+                   #bbox_transform=fig.transFigure, 
+                   ncol=2)
     label_axes(axs, gals)
-
+    
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
-                    dpi=140)
+                    dpi=250)
 
     plt.show()
 
@@ -414,7 +464,8 @@ def save_rms_errs(rms_dict):
         pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
     return None
 
-def plt_naive(gals='discs', tgt_fname=None, update_vals=False):
+def plt_naive(gals='discs', tgt_fname=None, update_vals=False, 
+              show_sigma_vc=True):
     if update_vals and gals != 'discs':
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
@@ -435,8 +486,8 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False):
     else:
         Ncols = min(Ngals, 4)
         Nrows = math.ceil(len(gals) / Ncols)
-    xfigsize = 4.5 * Ncols + 1.
-    yfigsize = 3.7 * Nrows + 1. 
+    xfigsize = 4.6 / 2. * Ncols + 1.
+    yfigsize = 1.5 * Nrows + 1. 
     if Ngals == 2:
         # Add room for residual plots
         Nrows += 1
@@ -448,7 +499,6 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False):
                          sharey='row',
                          sharex=True, dpi=140, height_ratios=height_ratios)
     axs=axs.ravel()
-    fig.subplots_adjust(wspace=0.,hspace=0.)
     
     pbar = ProgressBar()
 
@@ -497,23 +547,30 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False):
                                             show=False).replace('$','')
         rms_dict['true_sigma'][gal] = rms_err_true_sigma
         axs[i].stairs(ps_truth, bins,
-                      color='grey')
-        axs[i].plot(vs_maxwell, ps_sigma_vc, 
-                    label='$v_0=\sqrt{2/3}\sigma_\mathrm{3D}(v_\mathrm{c})$'
-                   )
+                      color='k', label='data')
+        if show_sigma_vc:
+            axs[i].plot(vs_maxwell, ps_sigma_vc, 
+                        label='$\sigma_\mathrm{3D}(v_\mathrm{c})$'
+                       )
         axs[i].plot(vs_maxwell, ps_true_sigma,
-                    label = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D,measured}$')
+                    label = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D,meas}$')
 
         # Draw vesc line
         axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
         trans = mpl.transforms.blended_transform_factory(axs[i].transData,
                                                          axs[i].transAxes)
-        axs[i].text(vesc, 0.5, '$v_\mathrm{esc}$', transform=trans,
+        axs[i].text(vesc, 0.5, '$v_\mathrm{esc}(\Phi)$', transform=trans,
                     fontsize=15., rotation=90., color='gray', 
                     horizontalalignment='right')
 
         axs[i].grid(False)
+        # Make ticks on both sides of the x-axis:
         axs[i].tick_params(axis='x', direction='inout', length=6)
+        order_of_mag = -3
+        axs[i].ticklabel_format(style='sci', axis='y', 
+                                scilimits=(order_of_mag,
+                                           order_of_mag),
+                                useMathText=True)
 
         loc=[0.97,0.96]
         kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
@@ -521,22 +578,22 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False):
                       bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
-        loc[1] -= 0.08
-        kwargs_txt['fontsize'] = 11.
-        axs[i].annotate('$\mathrm{{RMS}}_{{\mathrm{{err}},\sigma_\mathrm{{3D}}'
+        '''
+        loc[1] -= 0.12
+        kwargs_txt['fontsize'] = 10.
+        axs[i].annotate('$\mathrm{{RMS}}_{{\sigma'
                             '(v_\mathrm{{c}})}}={0:s}$'
                         .format(rms_sigma_vc_txt),
                         loc, color='C0', **kwargs_txt)
-        loc[1] -= 0.08
-        axs[i].annotate('$\mathrm{{RMS}}_{{\mathrm{{err}},'
-                            '\sigma_\mathrm{{3D, meas}}'
+        loc[1] -= 0.11
+        axs[i].annotate('$\mathrm{{RMS}}_{{'
+                            '\sigma_\mathrm{{meas}}'
                             '}}={0:s}$'
                         .format(rms_true_sigma_txt),
                         loc, color='C1', **kwargs_txt)
-
+        '''
         if Ngals == 2:
             # Draw residual plot
-
             vs_resids = copy.deepcopy(vs_truth)
             vs_extend = np.linspace(vs_resids.max(), vs_maxwell.max(), 20)
             vs_resids = np.append(vs_resids, vs_extend, axis=0)                                         
@@ -548,6 +605,7 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False):
                         np.inf,
                         np.inf)
                 resids = ps_sigma - ps_truth
+                inrange = (vs_truth > 75.) & (vs_truth < 175.)
                 resids_extend = smooth_step_max(
                     vs_extend,
                     np.sqrt(2./3.) * sigma,
@@ -556,26 +614,45 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False):
                                    resids_extend,
                                    axis=0)
                 return resids
+            # Remove the 0 tick label because of overlap
+            y0, y1 = axs[i].get_ylim()
+            visible_ticks = np.array([t for t in axs[i].get_yticks() \
+                                      if t>=y0 and t<=y1])
+            new_ticks = visible_ticks[visible_ticks > 0.]
+            axs[i].set_yticks(new_ticks)
 
             axs[i+2].grid(False)
-            axs[i+2].plot(vs_resids, calc_resids(sigma_predicted))
+            axs[i+2].set_ylim(-resids_lim, resids_lim)
+
+            if show_sigma_vc:
+                axs[i+2].plot(vs_resids, 
+                              calc_resids(sigma_predicted)/10.**order_of_mag)
             axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5,
                              lw=1.)
-            axs[i+2].plot(vs_resids, calc_resids(sigma_truth))
+            axs[i+2].plot(vs_resids, 
+                          calc_resids(sigma_truth)/10.**order_of_mag)
             axs[i+2].axvline(vesc, ls='--', alpha=0.5, color='grey')
 
             if i == 0:
                 axs[i+2].set_ylabel('resids')
     if update_vals:
         save_rms_errs(rms_dict)
-    axs[0].legend(loc='upper center', bbox_to_anchor=(0.5, -0.04),
-                  bbox_transform=fig.transFigure, ncol=3)
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.,hspace=0.)
+    if show_sigma_vc:
+        axs[1].legend(loc='upper right', bbox_to_anchor=(1., -0.04),
+                      bbox_transform=fig.transFigure, ncol=3)
+    else:
+        trans_legend = mpl.transforms.blended_transform_factory(
+                axs[1].transAxes, fig.transFigure)
+        axs[1].legend(loc='upper center', bbox_to_anchor=(0., -0.04),
+                      bbox_transform=trans_legend, ncol=2)
     label_axes(axs, gals)
 
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
-                    dpi=140)
+                    dpi=250)
 
     plt.show()
 
@@ -729,19 +806,83 @@ def setup_universal_fig(gals):
         figsize = (19., 12.)
         Nrows = 3
         Ncols = 4
+        Ngals = 12
     else:
         Ncols = min(len(gals), 4)
         Nrows = math.ceil(len(gals) / Ncols)
-    xfigsize = 4.5 * Ncols + 1.
-    yfigsize = 3.7 * Nrows + 1. 
+        Ngals = len(gals)
+    xfigsize = 4.6 / 2. * Ncols + 1.
+    yfigsize = 1.5 * Nrows + 1. 
+    if Ngals == 2:
+        # Add room for residual plots
+        Nrows += 1
+        yfigsize += 1. 
+        height_ratios = [4,1]
+    else:
+        height_ratios = None
     fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
                          sharey='row',
-                         sharex=True, dpi=140)
+                         sharex=True, dpi=140, height_ratios=height_ratios)
     axs=axs.ravel()
     fig.subplots_adjust(wspace=0.,hspace=0.)
     fig.Nrows = Nrows
 
     return fig, axs
+
+def plt_mw():
+    import dm_den_viz
+    import grid_eval
+    import dm_den
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        results = pickle.load(f)
+    ddfrac, dhfrac = grid_eval.identify()
+    vc = dm_den_viz.vc_eilers
+    df = dm_den.load_data('dm_stats_20221208.h5')
+    df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc
+    v0 = results['d'] * (vc / 100.) ** results['e']
+    vdamp = results['h'] * (vc / 100.) ** results['j']
+    vs = np.linspace(0., 750., 300)
+    ps = smooth_step_max(vs, v0, vdamp, results['k'])
+    
+
+    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=150)
+    ax = fig.add_subplot(111)
+    ax.plot(vs, ps, c='C3', label='prediction from $v_\mathrm{c}$')
+    lowers, uppers = gal_bands('mw', vs, df, results, ddfrac, dhfrac, ax=None)
+    ax.fill_between(vs, lowers, uppers, 
+                    alpha=0.9, 
+                    color='#c0c0c0',
+                    zorder=1, 
+                    label='$1\sigma$ band')
+    ax.set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+    ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+    ax.set_ylim(0., None)
+    loc = [0.97,0.96]
+    kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
+                      va='top', ha='right',
+                      bbox=dict(facecolor='white', alpha=0.8, 
+                                edgecolor='none'))
+    ax.annotate('Milky Way', loc,
+                **kwargs_txt)
+    loc[1] -= 0.15
+    kwargs_txt['fontsize'] = 11.
+    ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                .format(vc),
+                loc, **kwargs_txt)
+    # Put y-axis in scientific notation
+    order_of_mag = -3
+    ax.ticklabel_format(style='sci', axis='y', 
+                        scilimits=(order_of_mag,
+                                   order_of_mag),
+                            useMathText=True)
+    handles, labels = ax.get_legend_handles_labels()
+    handles.append(mpl.lines.Line2D([0], [0], color=plt.cm.viridis(0.5), lw=1.,
+                                    label='rand samples'))
+    ax.legend(handles=handles,
+              bbox_to_anchor=(0.5, -0.09), 
+              loc='upper center', ncol=1,
+              bbox_transform=fig.transFigure)
+    plt.show()
 
 def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
@@ -766,13 +907,17 @@ def plt_universal(gals='discs', update_values=False,
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
     import dm_den
+    import dm_den_viz
     df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
+    if gals == 'discs':
+        Ngals = 12
+    else:
+        Ngals = len(gals)
     pdfs = copy.deepcopy(pdfs_v)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
-
     for gal in pdfs:
         dict_gal = pdfs[gal]
         bins = dict_gal['bins']
@@ -868,10 +1013,24 @@ def plt_universal(gals='discs', update_values=False,
                     dy = dhfrac * y
                 else:
                     dy = stderr * tc
-                # y_str is a string. dy_str is an array or strings (or just an
-                # array of just one string).
-                y_str, dy_str = staudt_utils.sig_figs(y, dy)
-                dm_den.save_prediction(key, y_str,  dy_str)
+                # y_txt is a string. DY_TXT is an array of strings, or just an
+                # array of just one string. Either way, 
+                # type(DY_TXT) == np.ndarray, which is why we're denoting it in
+                # all caps.
+                y_txt, DY_TXT = staudt_utils.sig_figs(y, dy)
+                dm_den.save_prediction(key, y_txt,  DY_TXT)
+        vc_mw = dm_den_viz.vc_eilers 
+
+        v0_mw = result.params['d'] * (vc_mw / 100.) ** result.params['e']
+        dv0_mw = ddfrac * v0_mw
+        v0_mw_txt, DV0_MW_TXT = staudt_utils.sig_figs(v0_mw, dv0_mw)
+        dm_den.save_prediction('v0_mw', v0_mw_txt, DV0_MW_TXT)
+
+        vdamp_mw = result.params['h'] * (vc_mw / 100.) ** result.params['j']
+        dvdamp_mw = dhfrac * vdamp_mw
+        vdamp_mw_txt, DVDAMP_MW_TXT = staudt_utils.sig_figs(vdamp_mw, 
+                                                            dvdamp_mw)
+        dm_den.save_prediction('vdamp_mw', vdamp_mw_txt, DVDAMP_MW_TXT)
     ###########################################################################
 
     if err_method == 'std_err':
@@ -896,7 +1055,6 @@ def plt_universal(gals='discs', update_values=False,
     for i, gal in enumerate(df.index):
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         vcircs_postfit = np.repeat(vc, N_postfit)
-
         ps_postfit = result.eval(vs=vs_postfit, vcircs=vcircs_postfit)
 
         rms_err = calc_rms_err(pdfs[gal]['vs'], pdfs[gal]['ps'], 
@@ -926,7 +1084,7 @@ def plt_universal(gals='discs', update_values=False,
                                 color=band_color, alpha=0.4, ec=None,
                                 label='$1\sigma$ band')
         elif err_method == 'sampling':
-            lowers, uppers = gal_bands(gal, vs_postfit, pdfs, df, 
+            lowers, uppers = gal_bands(gal, vs_postfit, df, 
                                        result, ddfrac=ddfrac, dhfrac=dhfrac,
                                        assume_corr=assume_corr,
                                        ax = axs[i], 
@@ -936,17 +1094,46 @@ def plt_universal(gals='discs', update_values=False,
                                 alpha=band_alpha, 
                                 ec=samples_color, zorder=1, 
                                 label='$1\sigma$ band')
-
         # Plot data
         axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color=data_color,
                       label='data')
-
         # Plot prediction
         axs[i].plot(vs_postfit,
                     ps_postfit,
                     '-',
-                    label='prediction', color='C3', lw=2.)
+                    label='prediction from $v_\mathrm{c}$', color='C3', lw=1.5)
+        # Make ticks on both sides of the x-axis:
+        axs[i].tick_params(axis='x', direction='inout', length=6)
+        # Put y-axis in scientific notation
+        order_of_mag = -3
+        axs[i].ticklabel_format(style='sci', axis='y', 
+                                scilimits=(order_of_mag,
+                                           order_of_mag),
+                                useMathText=True)
+        if Ngals == 2:
+            # Remove the 0 tick label because of overlap
+            y0, y1 = axs[i].get_ylim()
+            visible_ticks = np.array([t for t in axs[i].get_yticks() \
+                                      if t>=y0 and t<=y1])
+            new_ticks = visible_ticks[visible_ticks > 0.]
+            axs[i].set_yticks(new_ticks)
 
+            # Draw residual plot
+            vs_resids = copy.deepcopy(pdfs[gal]['vs'])
+            vs_extend = np.linspace(vs_resids.max(), vs_postfit.max(), 20)
+            vs_resids = np.append(vs_resids, vs_extend, axis=0)                                         
+            
+            ps_hat = result.eval(vs=pdfs[gal]['vs'], 
+                                 vcircs=np.repeat(vc, len(pdfs[gal]['vs'])))
+            resids = ps_hat - pdfs[gal]['ps']
+            resids_extend = result.eval(vs=vs_extend,
+                                        vcircs=np.repeat(vc, len(vs_extend)))
+            resids = np.append(resids, resids_extend, axis=0)
+            axs[i+2].plot(vs_resids, resids / 10.**order_of_mag, color='C3')
+            axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5, lw=1.)
+            axs[i+2].set_ylim(-resids_lim, resids_lim)
+            if i == 0:
+                axs[i+2].set_ylabel('resids')
         loc = [0.97,0.96]
         kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
                           va='top', ha='right',
@@ -954,29 +1141,32 @@ def plt_universal(gals='discs', update_values=False,
                                     edgecolor='none'))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
-        loc[1] -= 0.08
-        kwargs_txt['fontsize'] = 13.
+        loc[1] -= 0.15
+        kwargs_txt['fontsize'] = 11.
         rms_txt = staudt_utils.mprint(rms_err, d=1, show=False).replace('$','')
-        axs[i].annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
-                        '$\mathrm{{RMS}}_\mathrm{{err}}={1:s}$'
-                        .format(vc, rms_txt),
+        axs[i].annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                        #'\n$\mathrm{{RMS}}_\mathrm{{err}}={1:s}$'
+                        .format(vc, 
+                                rms_txt
+                               ),
                         loc, **kwargs_txt)
-
         axs[i].grid(False)
         if ymax is not None:
             axs[i].set_ylim(top=ymax)
     if update_values:
         save_rms_errs({'universal': rms_dict})
     if fig.Nrows == 3:
-        legend_y = 0.05
+        legend_y = 0.
+        ncol = 4
     else:
         legend_y = -0.04
+        ncol = 2
     handles, labels = axs[0].get_legend_handles_labels()
     handles.append(mpl.lines.Line2D([0], [0], color=samples_color, lw=1.,
                                     label='rand samples'))
     axs[0].legend(handles=handles,
                   bbox_to_anchor=(0.5, legend_y), 
-                  loc='upper center', ncol=4,
+                  loc='upper center', ncol=ncol,
                   bbox_transform=fig.transFigure)
 
     label_axes(axs, gals)
@@ -1245,9 +1435,9 @@ def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac,
                            for v0, vdamp in zip(V0HAT, VDAMP)])
     return ps_samples
 
-def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18, 
+def gal_bands(gal, vs, df, result, ddfrac=0.1, dhfrac=0.18, 
               assume_corr=False, ax=None, samples_color=plt.cm.viridis(0.5)):
-    dict_gal = pdfs[gal]
+    #dict_gal = pdfs[gal]
     '''
     Generate the upper and lower confidence band given fractional uncertainty
     in d and h. The method does not draw the band but returns the upper and
@@ -1260,9 +1450,6 @@ def gal_bands(gal, vs, pdfs, df, result, ddfrac=0.1, dhfrac=0.18,
         Which galaxy to analyze
     vs: np.ndarray
         Velocities for which to generate the bands        
-    pdfs: dict
-        Dictionary split up by galaxy containing the probability density
-        functions
     df: pd.DataFrame
         Analysis results
     result: lmfit.Minimizer.MinimizerResult, lmfit.model.ModelResult, or dict
@@ -1696,7 +1883,7 @@ def diff_fr68(params, assume_corr=False, incl_area=True,
         pdf_gal = pdfs[gal]
         ps = pdf_gal['ps']
         vs = pdf_gal['vs']
-        lowers, uppers = gal_bands(gal, vs, pdfs, df, data_raw, ddfrac, 
+        lowers, uppers = gal_bands(gal, vs, df, data_raw, ddfrac, 
                                    dhfrac, assume_corr=assume_corr)
         is_above = ps > uppers
         is_below = ps < lowers
@@ -1749,7 +1936,7 @@ def count_within_agg(ddfrac, dhfrac, df, assume_corr=False,
         ps = pdf_gal['ps']
         vs = pdf_gal['vs']
 
-        lowers, uppers = gal_bands(gal, vs, pdfs, df, data_raw, ddfrac, 
+        lowers, uppers = gal_bands(gal, vs, df, data_raw, ddfrac, 
                                    dhfrac, assume_corr=assume_corr)
 
         area += scipy.integrate.simpson(uppers, vs)
@@ -1842,25 +2029,32 @@ def compare_methods(save_fname=None, verbose=False):
         df.sort_values('diff', inplace=True)
         display(df[['diff']].T)
 
-    fig = plt.figure(figsize=(7,3))
+    fig = plt.figure(figsize=(4.7,3))
     ax = fig.add_subplot(111)
-    df[['true_sigma', 'sigma_vc', 'universal']].plot.bar(ax=ax, 
-                                                         color=['orange', 
-                                                                'C0', 
-                                                                'C3'],
-                                                         width=0.7)
+    df[['true_sigma', 
+        #'sigma_vc', 
+        'universal']].plot.bar(ax=ax, 
+                               color=['C0', 
+                                      #'orange', 
+                                      'C3'],
+                               width=0.7)
     tick_labels = ax.xaxis.get_majorticklabels()
-    ax.set_xticklabels(tick_labels, rotation=30, ha='right', 
+    ax.set_xticklabels(tick_labels, rotation=40, ha='right', 
                        rotation_mode='anchor')
     ax.set_ylabel('RMS error $[\mathrm{km^{-1}\,s}]$')
-
+    # Put y-axis in scientific notation
+    order_of_mag = -4
+    ax.ticklabel_format(style='sci', axis='y', 
+                        scilimits=(order_of_mag,
+                                   order_of_mag),
+                        useMathText=True)
     plt.tight_layout()
     handles, labels = ax.get_legend_handles_labels()
-    labels[0] = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D}(v_\mathrm{c})$'
-    labels[1] = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D, meas}$'
-    labels[2] = '$v_\mathrm{c}$ model'
+    #labels[0] = '$\sigma(v_\mathrm{c})$'
+    labels[0] = '$v_0=\sqrt{2/3}\sigma_\mathrm{meas}$'
+    labels[1] = 'prediction from $v_\mathrm{c}$'
     ax.legend(labels=labels, bbox_transform=fig.transFigure, 
-              bbox_to_anchor=(1., -0.15), loc='lower right', 
+              bbox_to_anchor=(0.5, -0.0), loc='upper center', 
               ncol=3, fontsize=13)
 
     if save_fname is not None:

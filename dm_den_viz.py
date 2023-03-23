@@ -82,21 +82,21 @@ log_rho_solar_label='$\log(\,\\rho(R_0)\,/\,[\,\mathrm{M}_\odot'\
 log_rho_label='$\log(\,\\rho(R_\mathrm{vir})\,/\,[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]\,)$'
 rho_label='$\\rho(R_\mathrm{vir})\;[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]$'
 den_label = '$\\rho\,/\,\\left[\mathrm{M_\odot kpc^{-3}}\\right]$'
-disp_label = '$\\sigma_\mathrm{DM}\,/\,'\
+disp_label = '$\\sigma_\mathrm{3D}\,/\,'\
              '\\left[\mathrm{km\,s^{-1}}\\right]$'
 gmr_label = '$\sqrt{Gm/R_0}\,/\,'\
               '\\left[\mathrm{km\,s^{-1}}\\right]$'
 vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
 
-# v0 from Eilers et al. 2019
-v0_eilers = 229.
-dv0_eilers = 0.2
+# vc from Eilers et al. 2019
+vc_eilers = 229.
+dvc_eilers = 0.2
 
-# v0 ranges from Sofue 2020
-v0_sofue=238.
-dv0_sofue=14.
-log_dv0_neg = np.log10(v0_sofue/(v0_sofue-dv0_sofue))
-log_dv0_pos = np.log10((v0_sofue+dv0_sofue)/v0_sofue)
+# vc ranges from Sofue 2020
+vc_sofue=238.
+dvc_sofue=14.
+log_dvc_neg = np.log10(vc_sofue/(vc_sofue-dvc_sofue))
+log_dvc_pos = np.log10((vc_sofue+dvc_sofue)/vc_sofue)
 
 # Density ranges from Sofue 2020
 rho_sofue = 0.39*u.GeV/c.c**2.*u.cm**-3.
@@ -706,7 +706,7 @@ def make_err_bars_fr_resids(ax, reg):
     delta_pos = np.percentile(resids, (1.-(1.-0.682)/2.)*100.)
     delta = np.mean(np.abs((delta_neg, delta_pos)))
     
-    ax.errorbar(np.log10(v0_sofue), 
+    ax.errorbar(np.log10(vc_sofue), 
                 reg[-1][0], #The last element of reg will be the prediction.
                 yerr=delta, 
                 marker='o', ms=8, c='k', mec='r', mfc='r', capsize=3)
@@ -720,12 +720,12 @@ def draw_yshade(ax, ycol):
                     alpha=0.2, color='gray', ls='none')
     return None
 
-def draw_xshade(ax, v0, dv0, x_shade_mult=1., **kwargs):
-    xlo = np.log10(v0-dv0)
-    xhi = np.log10(v0+dv0)
+def draw_xshade(ax, vc, dvc, x_shade_mult=1., **kwargs):
+    xlo = np.log10(vc-dvc)
+    xhi = np.log10(vc+dvc)
     if x_shade_mult != 1.:
         # Increase width of shaded band.
-        x = np.log10(v0)
+        x = np.log10(vc)
         xlo = x - x_shade_mult*(x-xlo)
         xhi = x + x_shade_mult*(xhi-x)
     ax.axvspan(xlo, 
@@ -733,9 +733,9 @@ def draw_xshade(ax, v0, dv0, x_shade_mult=1., **kwargs):
                alpha=0.4, color='green', ls='none')
     return None
 
-def draw_shades(ax, ycol, v0, dv0, xmult=1.):
+def draw_shades(ax, ycol, vc, dvc, xmult=1.):
     draw_yshade(ax, ycol)
-    draw_xshade(ax, v0, dv0, xmult)
+    draw_xshade(ax, vc, dvc, xmult)
     return None
 
 def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
@@ -743,10 +743,10 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
               forecast_sig=1.-0.682, #forecast significance
               verbose=False, minarrow=0.03,
               adjust_text_kwargs={}, show_formula='outside',
-              figsize=(10,5), labelsize=14., v0=v0_eilers, dv0=dv0_eilers,
+              figsize=(10,5), labelsize=14., vc=vc_eilers, dvc=dvc_eilers,
               **kwargs):
-    v0 /= 100.
-    dv0 /= 100.
+    vc /= 100.
+    dvc /= 100.
 
 
     df = dm_den.load_data(source_fname)
@@ -774,8 +774,8 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     if 'ytickspace' not in kwargs:
         kwargs['ytickspace'] = 0.05
 
-    x_forecast = [[v0]]
-    dX = [[dv0]]
+    x_forecast = [[vc]]
+    dX = [[dvc]]
     reg_disc = ax_slr(ax,source_fname,
                       #'v_dot_phihat_disc(T<=1e4)',
                       'vc100',
@@ -804,7 +804,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
         mw_text_kwargs = {'xytext':(0.2,0.65)}
     elif ycol == 'den_disc':
         mw_text_kwargs = {'xytext':(0.3,0.5)}
-    mw_text = ax.annotate('Milky Way', (v0, yhat_vc[0][0,0]), 
+    mw_text = ax.annotate('Milky Way', (vc, yhat_vc[0][0,0]), 
                           fontsize=labelsize,
                           color='red', 
                           arrowprops={'arrowstyle':'-|>', 'color':'red'}, 
@@ -851,8 +851,14 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
 
             # I expect log2linear to return asymetric errors in the following 
             # line.
-            particle_y = staudt_utils.log2linear(*y_flat) * u.M_sun/u.kpc**3.
-            particle_y = (particle_y * c.c**2.).to(u.GeV/u.cm**3.) 
+            Y_MSUN = staudt_utils.log2linear(*y_flat) * u.M_sun/u.kpc**3.
+            Y_1E7MSUN = Y_MSUN / 1.e7 
+            y_1e7msun_txt, DY_1E7MSUN_TXT = staudt_utils.sig_figs(
+                    Y_1E7MSUN[0].value, Y_1E7MSUN[1:].value) 
+            dm_den.save_prediction('rho_1e7msun', y_1e7msun_txt, 
+                                   DY_1E7MSUN_TXT)
+
+            particle_y = (Y_MSUN * c.c**2.).to(u.GeV/u.cm**3.) 
             # The following variable assignment is written in such a way that 
             # it will work 
             # no matter whether
@@ -866,6 +872,17 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
             dm_den.save_prediction('den_slope', slope, dslope_str)
             dm_den.save_prediction('logden_intercept', logy_intercept_str, 
                                    dlogy_intercept_str)
+            RHO0_1E7MSUN = staudt_utils.log2linear(
+                    logy_intercept_raw, dlogy_intercept_raw) / 1.e7 
+            RHO0_1E7MSUN *= u.M_sun / u.kpc**3.
+            RHO0_GEV = (RHO0_1E7MSUN * 1.e7 * c.c**2.).to(u.GeV / u.cm**3.) 
+            rho0_1e7msun_txt, DRHO0_1E7MSUN_TXT = staudt_utils.sig_figs(
+                    RHO0_1E7MSUN[0].value, RHO0_1E7MSUN[1:].value)
+            rho0_GeV_txt, DRHO0_GEV_TXT = staudt_utils.sig_figs(
+                    RHO0_GEV[0].value, RHO0_GEV[1:].value)
+            dm_den.save_prediction('rho0_1e7msun', rho0_1e7msun_txt,
+                                   DRHO0_1E7MSUN_TXT)
+            dm_den.save_prediction('rho0_GeV', rho0_GeV_txt, DRHO0_GEV_TXT)
 
     display(Latex('$r=8.3\pm{0:0.2f}\,\mathrm{{kpc}}$'
                   .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
@@ -887,7 +904,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
 def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
                   forecast_sig=1.-0.682, verbose=False, minarrow=0.03,
                   adjust_text_kwargs={}, show_formula='outside',
-                  figsize=(10,5), labelsize=14., v0=v0_eilers, dv0=dv0_eilers):
+                  figsize=(10,5), labelsize=14., vc=vc_eilers, dvc=dvc_eilers):
     df = dm_den.load_data(source_fname)
 
     fig, axs = plt.subplots(1, 2, figsize=figsize, dpi=110, sharey=True,
@@ -905,8 +922,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
     elif ycol=='disp_dm_disc_cyl':
         ylabel = disp_label
     
-    draw_shades(ax0, ycol, v0, dv0)
-    draw_shades(ax1, ycol, v0, dv0)
+    draw_shades(ax0, ycol, vc, dvc)
+    draw_shades(ax1, ycol, vc, dvc)
     
     reg_gmr = ax_slr(ax0, 
                       source_fname,
@@ -916,8 +933,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
                       xadjustment='log', yadjustment='log',
                       dropgals=['m12w','m12z'],
                       arrowprops={'arrowstyle':'-'}, 
-                      show_formula=show_formula, x_forecast=[[v0]],
-                      dX=[[dv0]], showGeV=False, 
+                      show_formula=show_formula, x_forecast=[[vc]],
+                      dX=[[dvc]], showGeV=False, 
                       showlabels=True, formula_y=formula_y, verbose=verbose,
                       minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
                       labelsize=labelsize)
@@ -934,8 +951,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
                      arrowprops={'arrowstyle':'-'}, 
                      show_formula=show_formula,
                      showlabels=True, 
-                     x_forecast=[[v0]], forecast_sig=forecast_sig, 
-                     dX=[[dv0]], showGeV=True, verbose=verbose,
+                     x_forecast=[[vc]], forecast_sig=forecast_sig, 
+                     dX=[[dvc]], showGeV=True, verbose=verbose,
                      minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
                      labelsize=labelsize)
     yhat_vc = reg_disc[-1]
