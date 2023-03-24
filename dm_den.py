@@ -590,7 +590,7 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_bins=15, verbose=False):
                                        / np.log10(df.loc[galname,
                                                          'disp_dm_disc_cyl'])
     if tgt_fname:
-        direc='/export/nfs0home/pstaudt/projects/project01/data/'
+        direc = paths.data
         fname=direc+tgt_fname
         with open(fname,'wb') as f:
             pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)

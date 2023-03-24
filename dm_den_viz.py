@@ -980,7 +980,15 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
                    only_linear=False, 
                    only_log=False, figsize=None, tgt_fname=None,
                    update_val=False):
-    
+    '''
+    For density and dispersion, plot histograms of the fractional difference
+    between the average value in 
+    the solar ring and that
+    measured in various phi bins in that ring.
+
+    The density and dispersion values come from a pickled dictionary that was
+    created by dm_den.den_disp_phi_bins.
+    '''
     direc = paths.data
     with open(direc+diff_source, 'rb') as handle:
         den_disp_dict = pickle.load(handle)
@@ -990,7 +998,8 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
     def setup(log):
         if not log:
             denlabel = '$\\rho(\phi)/\,\overline{\\rho}$'
-            displabel = '$\sigma(\phi)/\,\overline{\sigma}$'
+            displabel = '$\sigma_\mathrm{3D}(\phi)' \
+                        '/\,\overline{\sigma}_\mathrm{3D}$'
 
             dens = np.array([den_disp_dict[galname]['dens/avg'] \
                              for galname in galnames]).flatten()
@@ -998,7 +1007,8 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
                               for galname in galnames]).flatten()
         else:
             denlabel = '$\log\\rho(\phi)\,/\,\log\overline{\\rho}$'
-            displabel = '$\log\sigma(\phi)\,/\,\log\overline{\sigma}$'
+            displabel = '$\log\sigma_\mathrm{3D}(\phi)' \
+                        '\,/\,\log\overline{\sigma}_\mathrm{3D}$'
 
             dens = np.array([den_disp_dict[galname]['log(dens)/log(avg)'] \
                              for galname in galnames]).flatten()
@@ -1067,7 +1077,7 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
     
     return None
 
-def plt_gmr_vs_vc(df_source='dm_stats_20220715.h5', tgt_fname='gmr_vs_vc.png',
+def plt_gmr_vs_vc(df_source='dm_stats_20220715.h5', tgt_fname=None,
                   figsize=(8,4),
                   labelsize=11., minarrow=0.01, adjust_text_kwargs={}):
     df = dm_den.load_data(df_source).drop(['m12z','m12w'])
