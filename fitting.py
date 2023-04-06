@@ -836,24 +836,37 @@ def plt_mw():
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         results = pickle.load(f)
     ddfrac, dhfrac = grid_eval.identify()
-    vc = dm_den_viz.vc_eilers
-    df = dm_den.load_data('dm_stats_20221208.h5')
-    df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc
-    v0 = results['d'] * (vc / 100.) ** results['e']
-    vdamp = results['h'] * (vc / 100.) ** results['j']
-    vs = np.linspace(0., 750., 300)
-    ps = smooth_step_max(vs, v0, vdamp, results['k'])
-    
 
-    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=150)
+    vc = dm_den_viz.vc_eilers
+    vs = np.linspace(0., 750., 300)
+
+    def predict(vc, ax, **kwargs):
+        df = dm_den.load_data('dm_stats_20221208.h5')
+        df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc
+        v0 = results['d'] * (vc / 100.) ** results['e']
+        vdamp = results['h'] * (vc / 100.) ** results['j']
+        ps = smooth_step_max(vs, v0, vdamp, results['k'])
+        ax.plot(vs, ps, label='prediction from $v_\mathrm{c}$',
+                #label = '$v_\mathrm{{c}} = {0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'\
+                #        .format(vc),
+                **kwargs)
+        lowers, uppers = gal_bands('mw', vs, df, results, ddfrac, dhfrac, 
+                                   ax=None)
+        ax.fill_between(vs, lowers, uppers, 
+                        alpha=0.9, 
+                        color='#c0c0c0',
+                        zorder=1, 
+                        label='$1\sigma$ band')
+        return None
+    
+    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=600,
+                     facecolor = (1., 1., 1., 0.))
+    #fig = plt.figure(figsize = (5., 2.5), dpi=200)
     ax = fig.add_subplot(111)
-    ax.plot(vs, ps, c='C3', label='prediction from $v_\mathrm{c}$')
-    lowers, uppers = gal_bands('mw', vs, df, results, ddfrac, dhfrac, ax=None)
-    ax.fill_between(vs, lowers, uppers, 
-                    alpha=0.9, 
-                    color='#c0c0c0',
-                    zorder=1, 
-                    label='$1\sigma$ band')
+
+    #predict(228., ax, c='C0', lw=3., dashes=[2., 0.5])
+    predict(vc, ax, c='C3')
+
     ax.set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
     ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
     ax.set_ylim(0., None)
@@ -862,25 +875,25 @@ def plt_mw():
                       va='top', ha='right',
                       bbox=dict(facecolor='white', alpha=0.8, 
                                 edgecolor='none'))
-    ax.annotate('Milky Way', loc,
-                **kwargs_txt)
-    loc[1] -= 0.15
+    #ax.annotate('Milky Way', loc,
+    #            **kwargs_txt)
+    #loc[1] -= 0.15
     kwargs_txt['fontsize'] = 11.
     ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
                 .format(vc),
                 loc, **kwargs_txt)
+
     # Put y-axis in scientific notation
     order_of_mag = -3
     ax.ticklabel_format(style='sci', axis='y', 
                         scilimits=(order_of_mag,
                                    order_of_mag),
                             useMathText=True)
-    handles, labels = ax.get_legend_handles_labels()
-    handles.append(mpl.lines.Line2D([0], [0], color=plt.cm.viridis(0.5), lw=1.,
-                                    label='rand samples'))
-    ax.legend(handles=handles,
-              bbox_to_anchor=(0.5, -0.09), 
-              loc='upper center', ncol=1,
+    #ax.legend(bbox_to_anchor=(0.5, -0.09), 
+    #          loc='upper center', ncol=2,
+    #          bbox_transform=fig.transFigure)
+    ax.legend(bbox_to_anchor=(0., -0.09), 
+              loc='upper left', ncol=2,
               bbox_transform=fig.transFigure)
     plt.show()
 
