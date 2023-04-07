@@ -65,8 +65,11 @@ def gen_gal_data(galname):
                     for key2 in f[key1].keys():
                         #Extract the data from the `h5py._hl.group.Group`s
                         new_data = f[key1][key2][:]
-                        if key2 in ['Masses']:
-                            new_data = new_data.astype(np.longdouble)
+                        # Getting rid of the following 2 lines that save masses
+                        # as float128's because it causes big problems with
+                        # MacOS.
+                        #if key2 in ['Masses']:
+                        #    new_data = new_data.astype(np.longdouble)
                         if key2 in d[key1]:
                             #If this isn't the first snapshot subfile, add the 
                             #new
