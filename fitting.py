@@ -351,7 +351,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                 res_v0_vesc.params['v0'], 
                 res_v0_vesc.params['vdamp'],
                 res_v0_vesc.params['k']),
-            label='prediction', color='C2')
+            label='fit', color='C2')
         if show_exp:
             del(p['k'])
             #p['vdamp'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
@@ -829,31 +829,44 @@ def setup_universal_fig(gals):
 
     return fig, axs
 
-def plt_mw():
+def plt_mw(tgt_fname=None):
     import dm_den_viz
     import grid_eval
     import dm_den
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         results = pickle.load(f)
     ddfrac, dhfrac = grid_eval.identify()
-    vc = dm_den_viz.vc_eilers
-    df = dm_den.load_data('dm_stats_20221208.h5')
-    df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc
-    v0 = results['d'] * (vc / 100.) ** results['e']
-    vdamp = results['h'] * (vc / 100.) ** results['j']
-    vs = np.linspace(0., 750., 300)
-    ps = smooth_step_max(vs, v0, vdamp, results['k'])
-    
 
-    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=150)
+    vc = dm_den_viz.vc_eilers
+    vs = np.linspace(0., 750., 300)
+
+    def predict(vc, ax, **kwargs):
+        df = dm_den.load_data('dm_stats_20221208.h5')
+        df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc
+        v0 = results['d'] * (vc / 100.) ** results['e']
+        vdamp = results['h'] * (vc / 100.) ** results['j']
+        ps = smooth_step_max(vs, v0, vdamp, results['k'])
+        ax.plot(vs, ps, label='prediction from $v_\mathrm{c}$',
+                #label = '$v_\mathrm{{c}} = {0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'\
+                #        .format(vc),
+                **kwargs)
+        lowers, uppers = gal_bands('mw', vs, df, results, ddfrac, dhfrac, 
+                                   ax=None)
+        ax.fill_between(vs, lowers, uppers, 
+                        alpha=0.9, 
+                        color='#c0c0c0',
+                        zorder=1, 
+                        label='$1\sigma$ band')
+        return None
+    
+    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=600,
+                     facecolor = (1., 1., 1., 0.))
+    #fig = plt.figure(figsize = (5., 2.5), dpi=200)
     ax = fig.add_subplot(111)
-    ax.plot(vs, ps, c='C3', label='prediction from $v_\mathrm{c}$')
-    lowers, uppers = gal_bands('mw', vs, df, results, ddfrac, dhfrac, ax=None)
-    ax.fill_between(vs, lowers, uppers, 
-                    alpha=0.9, 
-                    color='#c0c0c0',
-                    zorder=1, 
-                    label='$1\sigma$ band')
+
+    #predict(228., ax, c='C0', lw=3., dashes=[2., 0.5])
+    predict(vc, ax, c='C3')
+
     ax.set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
     ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
     ax.set_ylim(0., None)
@@ -869,19 +882,25 @@ def plt_mw():
     ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
                 .format(vc),
                 loc, **kwargs_txt)
+
     # Put y-axis in scientific notation
     order_of_mag = -3
     ax.ticklabel_format(style='sci', axis='y', 
                         scilimits=(order_of_mag,
                                    order_of_mag),
                             useMathText=True)
-    handles, labels = ax.get_legend_handles_labels()
-    handles.append(mpl.lines.Line2D([0], [0], color=plt.cm.viridis(0.5), lw=1.,
-                                    label='rand samples'))
-    ax.legend(handles=handles,
-              bbox_to_anchor=(0.5, -0.09), 
+    ax.legend(bbox_to_anchor=(0.5, -0.1), 
               loc='upper center', ncol=1,
               bbox_transform=fig.transFigure)
+    #ax.legend(bbox_to_anchor=(0., -0.09), 
+    #          loc='upper left', ncol=2,
+    #          bbox_transform=fig.transFigure)
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=250)
+
     plt.show()
 
 def plt_universal(gals='discs', update_values=False,
