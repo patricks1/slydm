@@ -1005,6 +1005,8 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
                              for galname in galnames]).flatten()
             disps = np.array([den_disp_dict[galname]['disps/avg'] \
                               for galname in galnames]).flatten()
+            if update_val:
+                raise ValueError('We only save our result in log.')
         else:
             denlabel = '$\log\\rho(\phi)\,/\,\log\overline{\\rho}$'
             displabel = '$\log\sigma_\mathrm{3D}(\phi)' \
@@ -1019,6 +1021,7 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
                 3)
             if update_val:
                 #update the value in data.dat for the paper
+                print('{0:0.2f}\%'.format(percent_diff))
                 dm_den.save_var_latex('maxdiff',
                                       '{0:0.2f}\%'.format(percent_diff))
             staudt_utils.print_eq('\min\Delta\log\\rho/\log\overline{\\rho}',

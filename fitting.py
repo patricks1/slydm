@@ -351,7 +351,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                 res_v0_vesc.params['v0'], 
                 res_v0_vesc.params['vdamp'],
                 res_v0_vesc.params['k']),
-            label='prediction', color='C2')
+            label='fit', color='C2')
         if show_exp:
             del(p['k'])
             #p['vdamp'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
@@ -829,7 +829,7 @@ def setup_universal_fig(gals):
 
     return fig, axs
 
-def plt_mw():
+def plt_mw(tgt_fname=None):
     import dm_den_viz
     import grid_eval
     import dm_den
@@ -875,9 +875,9 @@ def plt_mw():
                       va='top', ha='right',
                       bbox=dict(facecolor='white', alpha=0.8, 
                                 edgecolor='none'))
-    #ax.annotate('Milky Way', loc,
-    #            **kwargs_txt)
-    #loc[1] -= 0.15
+    ax.annotate('Milky Way', loc,
+                **kwargs_txt)
+    loc[1] -= 0.15
     kwargs_txt['fontsize'] = 11.
     ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
                 .format(vc),
@@ -889,12 +889,18 @@ def plt_mw():
                         scilimits=(order_of_mag,
                                    order_of_mag),
                             useMathText=True)
-    #ax.legend(bbox_to_anchor=(0.5, -0.09), 
-    #          loc='upper center', ncol=2,
-    #          bbox_transform=fig.transFigure)
-    ax.legend(bbox_to_anchor=(0., -0.09), 
-              loc='upper left', ncol=2,
+    ax.legend(bbox_to_anchor=(0.5, -0.1), 
+              loc='upper center', ncol=1,
               bbox_transform=fig.transFigure)
+    #ax.legend(bbox_to_anchor=(0., -0.09), 
+    #          loc='upper left', ncol=2,
+    #          bbox_transform=fig.transFigure)
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=250)
+
     plt.show()
 
 def plt_universal(gals='discs', update_values=False,
