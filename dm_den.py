@@ -23,7 +23,13 @@ def build_direcs(suffix, res, mass_class, typ='fire', source='original',
                  min_radius=None, max_radius=None):
     assert typ in ['fire','dmo']
     if typ=='fire':
-        typ_char='B'
+        if source == 'cropped':
+            # Using this folder while I make sure I'm not breaking anying by
+            # discontinuing the use of float128's
+            typ_char='B_202304'
+            #print('type_char: {0:s}'.format(typ_char))
+        else:
+            typ_char='B'
     elif typ=='dmo':
         typ_char='D'
 
@@ -195,7 +201,9 @@ def unpack_new(df, galname, dr=1.5, drsolar=None, typ='fire',
             with h5py.File(fname,'r') as f:
                 ms_add=f[parttype]['Masses'][:] #in units of 1e10 M_sun / h
                 ms_add/=h #now in units of 1e10 M_sun
-                ms_add=ms_add.astype(np.longdouble)
+                # Commenting the following because of the problems longdoubles cause on
+                # MacOS
+                #ms_add=ms_add.astype(np.longdouble)
                 coords_add=f[parttype]['Coordinates'][:]
                 coords_add/=h
                 rs_add=np.linalg.norm(coords_add-p,axis=1)
@@ -254,7 +262,9 @@ def unpack_gas(df, galname, typ='fire'):
             with h5py.File(fname,'r') as f:
                 ms_add=f[parttype]['Masses'][:] #in units of 1e10 M_sun / h
                 ms_add/=h #now in units of 1e10 M_sun
-                ms_add=ms_add.astype(np.longdouble)
+                # Commenting the following because of the problems longdoubles cause on
+                # MacOS
+                #ms_add=ms_add.astype(np.longdouble)
                 coords_add=f[parttype]['Coordinates'][:]
                 coords_add/=h
                 rs_add=np.linalg.norm(coords_add-p,axis=1)
@@ -328,7 +338,9 @@ def unpack(df, galname, dr=1.5, drsolar=None, typ='fire',
         coords.extend(coords_add)
         ms_add=get_data(sdir,N,t,'Masses') #in units of 1e10 M_sun / h
         ms_add/=h #now in units of 1e10 M_sun
-        ms_add=ms_add.astype(np.longdouble)
+        # Commenting the following because of the problems longdoubles cause on
+        # MacOS
+        #ms_add=ms_add.astype(np.longdouble)
         ms.extend(ms_add)
         v_vecs_add=get_data(sdir,N,t,'Velocities')
         v_vecs.extend(v_vecs_add)
@@ -352,6 +364,20 @@ def unpack(df, galname, dr=1.5, drsolar=None, typ='fire',
     return ms, mvir, rs, r, v_mags, v_vecs, parttypes
 
 def unpack_4pot(df, galname, typ='fire'):
+    '''
+    Returns
+    -------
+    data: dict 
+        data['pos']: np.ndarray, shape = (number of particles, 3)
+                Cartesian coordinates centered on the halo, in physical kpc
+        data['parttype']: np.ndarray of str
+            Particle type.  'PartType0' is gas. 'PartType1' is dark matter.
+            'PartType2' is dummy collisionless. 'PartType3' is grains/PIC
+            particles. 'PartType4' is stars. 'PartType5' is black holes / 
+            sinks.
+        data['mass']: np.ndarray 
+            Mass of each particle in physical units of 1e10 Msun
+    '''
     getparts=['PartType0','PartType1','PartType4']
     #getparts=['PartType1']
     suffix=df.loc[galname,'fsuffix']
@@ -386,7 +412,9 @@ def unpack_4pot(df, galname, typ='fire'):
             with h5py.File(fname,'r') as f:
                 ms_add=f[parttype]['Masses'][:] #in units of 1e10 M_sun / h
                 ms_add/=h #now in units of 1e10 M_sun
-                ms_add=ms_add.astype(np.longdouble)
+                # Commenting the following line that turns masses into
+                # longdoubles, because of the problems it causes on MacOS.
+                #ms_add=ms_add.astype(np.longdouble)
                 coords_add=f[parttype]['Coordinates'][:]
                 coords_add/=h
                 coords_add-=p #puts coords in kpc centered on the halo
@@ -399,8 +427,8 @@ def unpack_4pot(df, galname, typ='fire'):
                     coords=np.concatenate((coords,coords_add),axis=0)
                     ms=np.concatenate((ms,ms_add))
                     parttypes=np.concatenate((parttypes,parttypes_add))
-    f = {'pos':coords,'parttype':parttypes,'mass':ms}
-    return f
+    data = {'pos':coords,'parttype':parttypes,'mass':ms}
+    return data
 
 def get_halo_info(halodirec, suffix, typ, host_key, mass_class):
     if mass_class>10: 
@@ -854,16 +882,20 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         df.loc[galname,'f_shell'] = 10.**7./den_shell
     df.loc[galname,'vcirc'] = get_vcirc(rsolar,rs_all,ms_all)
      
-    for col in ['mwithin10']: # Set the necessary columns to longdouble
-        if col not in df:
-            df[col]=np.empty(len(df),dtype=np.longdouble)
+    # Commenting the following because of the problems longdoubles cause on
+    # MacOS
+    #for col in ['mwithin10']: # Set the necessary columns to longdouble
+    #    if col not in df:
+    #        df[col]=np.empty(len(df),dtype=np.longdouble)
     df.loc[galname,'mwithin10'] = get_mwithin(10.,rs_dm,ms_dm)
     
     if source=='original':
-        for col in ['mvir_fromhcat','mvir_calc','m10tovir',
-                    'mvir_check']:
-            if col not in df:
-                df[col]=np.empty(len(df),dtype=np.longdouble)
+        # Commenting the following because of the problems longdoubles cause on
+        # MacOS
+        #for col in ['mvir_fromhcat','mvir_calc','m10tovir',
+        #            'mvir_check']:
+        #    if col not in df:
+        #        df[col]=np.empty(len(df),dtype=np.longdouble)
 
         if 'PartType0' in vcircparts:
             df.loc[galname,'disp_gas'] = get_den_disp(rsolar, rs_gas, dr,
@@ -891,7 +923,9 @@ def init_df(mass_class=12):
     if not isinstance(mass_class,(int,str)):
         raise ValueError('mass_class should be an integer or \'all\'.')
     suffixes_m9 = ['']
-    suffixes_m9cropped = suffixes_m9.copy()
+    # It's necessary to have different suffix lists for cropped and not cropped
+    # because for cropped, I separate the RJ, RR, RL pair folders.
+    suffixes_m9cropped = suffixes_m9.copy() 
     ress_m9 = [250]
     gal_names_m9 = ['m9']
     host_keys_m9 = ['host.index']
@@ -1534,50 +1568,6 @@ def save_prediction(string, y, dy):
     else:
         raise ValueError('Margin of error has a maximum of two elements.')
     return None
-
-'''
-def get_gas_speeds(Tcool=1.e4, fname=None):
-    # This doesn't really do what we want. Consider deleting
-    if fname:
-        direc='/export/nfs0home/pstaudt/projects/project01/data/'
-        fname=direc+fname
-        #df.to_hdf(fname,index=True,key='df')
-        store = pd.HDFStore(fname)
-    try:
-        df = load_data('dm_den_202202140946.h5')
-        dr = df.attrs['dr']
-        drsolar = df.attrs['drsolar']
-        for gal in df.index:
-            print('\nCalculating cool gas speeds for {0}'.format(gal))
-            res = unpack_gas(df,gal)
-            r_mags = res[2]
-            v_mags = res[4]
-            energies, e_abundances, he_fracs = res[8:11]
-            Ts = calc_temps(he_fracs, e_abundances, energies)
-
-            r = 8.3 #kpc
-            dr = 1.5 #kpc
-            rmax = r+dr/2.
-            rmin = r-dr/2.
-            iswithin = (r_mags<rmax)&(r_mags>rmin)
-            iscool = Ts<=Tcool
-            df.loc[gal,'v_cool_gas'] = np.mean(v_mags[iswithin&iscool])
-        if fname:
-            store.put('data',df)
-            store.get_storer('data').attrs.metadata={'dr':dr,'drsolar':drsolar}
-            store.close()
-    except KeyboardInterrupt as e:
-        if fname:
-            store.close()
-            #print('File closed: {0:s}'.format(str(store.closed)))
-        raise e
-    except Exception as e:
-        if fname:
-            store.close()
-            #print('File closed: {0:s}'.format(str(store.closed)))
-        raise e 
-    return df
-'''
 
 def save_mvir(fname, freq_save=False):
     df = init_df()
