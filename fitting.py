@@ -991,11 +991,12 @@ def fit_g(update_values=False):
                        for galname in pdfs]).flatten()
 
     pool = mp.Pool(mp.cpu_count())
-    gs_hat = [pool.apply(calc_g, 
-                         args = (vmin, vcircs[0], 115., 0.928, 390., 0.27, 
-                                 0.03))
+    gs_hat = [pool.apply_async(calc_g, 
+                               args = (vmin, vcircs[0], 115., 0.928, 390., 0.27, 
+                                       0.03))
               for vmin in vs_postfit]
     pool.close()
+    gs_hat = [g.get() for g in gs_hat]
     return gs_hat
 
 def plt_universal(gals='discs', update_values=False,
