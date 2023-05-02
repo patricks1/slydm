@@ -1028,9 +1028,11 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
                      np.min(dens-1))
             staudt_utils.print_eq('\max\Delta\log\\rho/\log\overline{\\rho}',
                      np.max(dens-1))
-            staudt_utils.print_eq('\min\Delta\log\\sigma/\log\overline{\\sigma}',
+            staudt_utils.print_eq(
+                     '\min\Delta\log\\sigma/\log\overline{\\sigma}',
                      np.min(disps-1))
-            staudt_utils.print_eq('\max\Delta\log\\sigma/\log\overline{\\sigma}',
+            staudt_utils.print_eq(
+                     '\max\Delta\log\\sigma/\log\overline{\\sigma}',
                      np.max(disps-1))
         return denlabel, displabel, dens, disps
     

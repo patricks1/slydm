@@ -10,6 +10,7 @@ import time
 import grid_eval
 import numpy as np
 import pandas as pd
+import multiprocessing as mp
 from progressbar import ProgressBar
 
 import matplotlib as mpl
@@ -39,6 +40,16 @@ max_bins_est = 1.e-3
 min_bins_est = -1.e-3
 resids_lim = 0.7
 
+def pN_smooth_step_max(v, v0, vesc, k):
+    '''
+    Probability density before normalizing by N
+    '''
+    fN = np.exp( - v**2. / v0**2. )
+    pN = fN * 4. * np.pi * v**2.
+    trunc = 1. / (1. + np.exp(-k * (vesc-v)))
+    pN *= trunc
+    return pN
+
 def smooth_step_max(v, v0, vesc, k):
     '''
     Smooth-step-truncated Maxwellian, as opposed to the immediate cutoff
@@ -47,19 +58,11 @@ def smooth_step_max(v, v0, vesc, k):
     k is the strength of the exponential cutoff
     '''
     
-    def calc_pN(v, v0, vesc):
-        '''
-        Probability density before normalizing by N
-        '''
-        fN = np.exp( - v**2. / v0**2. )
-        pN = fN * 4. * np.pi * v**2.
-        trunc = 1. / (1. + np.exp(-k * (vesc-v)))
-        pN *= trunc
-        return pN
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        N = scipy.integrate.quad(calc_pN, 0., np.inf, (v0, vesc), epsabs=0)[0]
-        p = calc_pN(v, v0, vesc) / N
+        N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf, 
+                                 (v0, vesc, k), epsabs=0)[0]
+        p = pN_smooth_step_max(v, v0, vesc, k) / N
     return p
 
 def exp_max(v, v0, vesc):
@@ -83,6 +86,19 @@ def exp_max(v, v0, vesc):
             return 0.
         
     return p
+
+def g_smooth_step_max(vmins, v0, vesc, k):
+    def integrand(v):
+        pN = pN_smooth_step_max(v, v0, vesc, k) 
+        return pN / v
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf,
+                                 (v0, vesc, k), epsabs=0)[0]
+        gN = [scipy.integrate.quad(integrand, vmin, np.inf)[0]
+              for vmin in vmins]
+        gN = np.array(gN)
+    return gN / N
 
 def label_axes(axs, gals):
     if not isinstance(gals, (list, np.ndarray, pd.core.indexes.base.Index)) \
@@ -902,6 +918,85 @@ def plt_mw(tgt_fname=None):
                     dpi=250)
 
     plt.show()
+
+def calc_g(vmin, vc, d, e, h, j, k):
+    '''
+    Calculate the value of the halo integral given vmin and circular
+    velocity
+    '''
+    def integrand(v, vc, N):
+        v0 = d * (vc / 100.) ** e
+        vdamp = h * (vc / 100.) ** j
+        pN = pN_smooth_step_max(v, v0, vdamp, k)
+        return pN / v / N
+    #vcircs_set = np.array(list(set(vcircs)))
+    def normalize(vc):
+        v0 = d * (vc / 100.) ** e
+        vdamp = h * (vc / 100.) ** j
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
+            N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf,
+                                     (v0, vdamp, k), epsabs=0)[0]
+        return N
+    #N_table = {vc: normalize(vc) for vc in vcircs_set}
+    #Ns = np.array([normalize(vc) for vc in vcircs_set])
+    N = normalize(vc)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        '''
+        gs = concatenate([np.array([scipy.integrate.quad(integrand, 
+                                                            vmin, np.inf,
+                                                            (vc, N), 
+                                                            epsabs=0)[0]
+                                       for vmin in vmins])
+                             for vc, N in zip(vcircs_set, Ns)])
+        '''
+        g = scipy.integrate.quad(integrand, 
+                                 vmin, np.inf,
+                                 (vc, N), 
+                                 epsabs=0)[0]
+    return g 
+
+def fit_g(update_values=False):
+    import dm_den
+    df = dm_den.load_data('dm_stats_20221208.h5')
+    pdfs = copy.deepcopy(pdfs_v)
+    pdfs.pop('m12z')
+    pdfs.pop('m12w')
+
+    for gal in pdfs:
+        dict_gal = pdfs[gal]
+        bins = dict_gal['bins']
+        vc_gal = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        dict_gal['vcirc'] = np.repeat(vc_gal, len(dict_gal['ps']))
+        dict_gal['vesc'] = np.repeat(vesc_dict[gal]['ve_avg'],
+                                     len(dict_gal['ps']))
+        integrand = dict_gal['ps'] / dict_gal['vs']
+        gs_gal = [scipy.integrate.simps(integrand[i:], 
+                                        dict_gal['vs'][i:])
+                  for i in range(len(integrand))]
+        dict_gal['gs'] = np.array(gs_gal)
+
+    ps_truth = np.array([pdfs[galname]['ps']
+                         for galname in pdfs]).flatten()
+    vs_truth = np.array([pdfs[galname]['vs']
+                         for galname in pdfs]).flatten()
+    gs_truth = np.concatenate([pdfs[gal]['gs'] for gal in pdfs]) 
+
+    N_postfit = 300
+    vs_postfit = np.linspace(0., 700., N_postfit)
+
+    vcircs = np.array([pdfs[galname]['vcirc']
+                       for galname in pdfs]).flatten()
+
+    pool = mp.Pool(mp.cpu_count())
+    gs_hat = [pool.apply(calc_g, 
+                         args = (vmin, vcircs[0], 115., 0.928, 390., 0.27, 
+                                 0.03))
+              for vmin in vs_postfit]
+    pool.close()
+    return gs_hat
 
 def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
