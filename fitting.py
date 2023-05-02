@@ -46,7 +46,9 @@ def pN_smooth_step_max(v, v0, vesc, k):
     '''
     fN = np.exp( - v**2. / v0**2. )
     pN = fN * 4. * np.pi * v**2.
-    trunc = 1. / (1. + np.exp(-k * (vesc-v)))
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        trunc = 1. / (1. + np.exp(-k * (vesc-v)))
     pN *= trunc
     return pN
 
@@ -919,46 +921,44 @@ def plt_mw(tgt_fname=None):
 
     plt.show()
 
-def calc_g(vmin, vc, d, e, h, j, k):
+def g_integrand(v, vc, N_dict, d, e, h, j, k):
+    v0 = d * (vc / 100.) ** e
+    vdamp = h * (vc / 100.) ** j
+    pN = pN_smooth_step_max(v, v0, vdamp, k)
+    N = N_dict[vc]
+    return pN / v / N
+
+def calc_gs(vmins, vcircs, d, e, h, j, k, parallel=False):
     '''
     Calculate the value of the halo integral given vmin and circular
     velocity
     '''
-    def integrand(v, vc, N):
-        v0 = d * (vc / 100.) ** e
-        vdamp = h * (vc / 100.) ** j
-        pN = pN_smooth_step_max(v, v0, vdamp, k)
-        return pN / v / N
-    #vcircs_set = np.array(list(set(vcircs)))
     def normalize(vc):
         v0 = d * (vc / 100.) ** e
         vdamp = h * (vc / 100.) ** j
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', category=RuntimeWarning)
-            N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf,
-                                     (v0, vdamp, k), epsabs=0)[0]
+        N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf,
+                                 (v0, vdamp, k), epsabs=0)[0]
         return N
-    #N_table = {vc: normalize(vc) for vc in vcircs_set}
-    #Ns = np.array([normalize(vc) for vc in vcircs_set])
-    N = normalize(vc)
+    vcircs_set = np.array(list(set(vcircs)))
+    N_dict = {vc: normalize(vc) for vc in vcircs_set}
+    if parallel:
+        pool = mp.Pool(mp.cpu_count())
+        gs = [pool.apply_async(scipy.integrate.quad, 
+                         args = (g_integrand, vmin, np.inf),
+                         kwds = {'args':(vc, N_dict, d, e, h, j, k), 
+                                 'epsabs':0})
+              for vmin, vc in zip(vmins, vcircs)]
+        pool.close()
+        gs = [g.get()[0] for g in gs]
+    else:
+        gs = [scipy.integrate.quad(g_integrand, vmin, np.inf,
+                                   args = (vc, N_dict, d, e, h, j, k),
+                                   epsabs = 0)[0]
+              for vmin, vc in zip(vmins, vcircs)]
+        gs = np.array(gs)
+    return gs
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=RuntimeWarning)
-        '''
-        gs = concatenate([np.array([scipy.integrate.quad(integrand, 
-                                                            vmin, np.inf,
-                                                            (vc, N), 
-                                                            epsabs=0)[0]
-                                       for vmin in vmins])
-                             for vc, N in zip(vcircs_set, Ns)])
-        '''
-        g = scipy.integrate.quad(integrand, 
-                                 vmin, np.inf,
-                                 (vc, N), 
-                                 epsabs=0)[0]
-    return g 
-
-def fit_g(update_values=False):
+def fit_g(update_values=False, parallel=False):
     import dm_den
     df = dm_den.load_data('dm_stats_20221208.h5')
     pdfs = copy.deepcopy(pdfs_v)
@@ -990,13 +990,11 @@ def fit_g(update_values=False):
     vcircs = np.array([pdfs[galname]['vcirc']
                        for galname in pdfs]).flatten()
 
-    pool = mp.Pool(mp.cpu_count())
-    gs_hat = [pool.apply_async(calc_g, 
-                               args = (vmin, vcircs[0], 115., 0.928, 390., 0.27, 
-                                       0.03))
-              for vmin in vs_postfit]
-    pool.close()
-    gs_hat = [g.get() for g in gs_hat]
+    #model = lmfit.model.Model(calc_gs, independent_vars=['vmins', 'vcircs'])
+    #params = model.make_params()
+
+    gs_hat = calc_gs(vs_truth, vcircs, 115., 0.928, 390., 
+                     0.27, 0.03, parallel=parallel)
     return gs_hat
 
 def plt_universal(gals='discs', update_values=False,
