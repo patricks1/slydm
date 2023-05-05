@@ -47,6 +47,8 @@ def pN_smooth_step_max(v, v0, vesc, k):
     fN = np.exp( - v**2. / v0**2. )
     pN = fN * 4. * np.pi * v**2.
     with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 
+                                category=scipy.integrate.IntegrationWarning)
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         trunc = 1. / (1. + np.exp(-k * (vesc-v)))
     pN *= trunc
@@ -94,6 +96,8 @@ def g_smooth_step_max(vmins, v0, vesc, k):
         pN = pN_smooth_step_max(v, v0, vesc, k) 
         return pN / v
     with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 
+                                category=scipy.integrate.IntegrationWarning)
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf,
                                  (v0, vesc, k), epsabs=0)[0]
@@ -921,6 +925,9 @@ def plt_mw(tgt_fname=None):
 
     plt.show()
 
+###############################################################################
+# Functions for fitting the halo integral
+###############################################################################
 def g_integrand(v, vc, N_dict, d, e, h, j, k):
     v0 = d * (vc / 100.) ** e
     vdamp = h * (vc / 100.) ** j
@@ -928,11 +935,35 @@ def g_integrand(v, vc, N_dict, d, e, h, j, k):
     N = N_dict[vc]
     return pN / v / N
 
+def calc_g_i(i, vmins, vcircs, N_dict, d, e, h, j, k):
+    '''
+    Calculate a single g given the array of vmins and vcircs and the index i
+    of those at which we want to evaluate g.
+
+    The function returns both g and the index so we can make sure that the 
+    results are in order when parallel processing.
+
+    Returns
+    -------
+    gi: np.ndarray, shape = (2,)
+        gi[0]: the value of g
+        gi[1]: the index evaluated
+    '''
+    assert len(vmins) == len(vcircs)
+    vmin = vmins[i]
+    vc = vcircs[i]
+    g = scipy.integrate.quad(g_integrand, vmin, np.inf,
+                             args = (vc, N_dict, d, e, h, j, k),
+                             epsabs=0)[0]
+    gi = np.array([g, i])
+    return gi 
+
 def calc_gs(vmins, vcircs, d, e, h, j, k, parallel=False):
     '''
     Calculate the value of the halo integral given vmin and circular
     velocity
     '''
+    assert len(vmins) == len(vcircs)
     def normalize(vc):
         v0 = d * (vc / 100.) ** e
         vdamp = h * (vc / 100.) ** j
@@ -942,28 +973,41 @@ def calc_gs(vmins, vcircs, d, e, h, j, k, parallel=False):
     vcircs_set = np.array(list(set(vcircs)))
     N_dict = {vc: normalize(vc) for vc in vcircs_set}
     if parallel:
+        print('in parallel')
         pool = mp.Pool(mp.cpu_count())
-        gs = [pool.apply_async(scipy.integrate.quad, 
-                         args = (g_integrand, vmin, np.inf),
-                         kwds = {'args':(vc, N_dict, d, e, h, j, k), 
-                                 'epsabs':0})
-              for vmin, vc in zip(vmins, vcircs)]
+        gi_s = [pool.apply_async(calc_g_i, 
+                                 args=(i, vmins, vcircs, N_dict,
+                                       d, e, h, j, k))
+                for i in range(len(vmins))]
         pool.close()
-        gs = [g.get()[0] for g in gs]
+        gs, indices = np.array([gi.get() for gi in gi_s]).T
+        inorder = np.all(np.diff(indices) >= 0.)
+        if not inorder:
+            raise ValueError('That thing you were hoping wouldn\'t happen '
+                             'happened.')
     else:
-        gs = [scipy.integrate.quad(g_integrand, vmin, np.inf,
-                                   args = (vc, N_dict, d, e, h, j, k),
-                                   epsabs = 0)[0]
-              for vmin, vc in zip(vmins, vcircs)]
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                    'ignore', 
+                    category=scipy.integrate.IntegrationWarning)
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
+            gs = [scipy.integrate.quad(g_integrand, vmin, np.inf,
+                                       args = (vc, N_dict, d, e, h, j, k),
+                                       epsabs = 0)[0]
+                  for vmin, vc in zip(vmins, vcircs)]
         gs = np.array(gs)
+    gs = np.log10(gs)
     return gs
 
-def fit_g(update_values=False, parallel=False):
+def fit_g(galaxy='discs', limit=None, update_values=False, parallel=False):
     import dm_den
     df = dm_den.load_data('dm_stats_20221208.h5')
     pdfs = copy.deepcopy(pdfs_v)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
+
+    if galaxy != 'discs':
+        pdfs = {galaxy: pdfs[galaxy]}
 
     for gal in pdfs:
         dict_gal = pdfs[gal]
@@ -983,19 +1027,40 @@ def fit_g(update_values=False, parallel=False):
     vs_truth = np.array([pdfs[galname]['vs']
                          for galname in pdfs]).flatten()
     gs_truth = np.concatenate([pdfs[gal]['gs'] for gal in pdfs]) 
-
-    N_postfit = 300
-    vs_postfit = np.linspace(0., 700., N_postfit)
-
     vcircs = np.array([pdfs[galname]['vcirc']
                        for galname in pdfs]).flatten()
+    is_zero = gs_truth == 0.
+    ps_truth = ps_truth[~is_zero]
+    vs_truth = vs_truth[~is_zero]
+    gs_truth = gs_truth[~is_zero]
+    vcircs = vcircs[~is_zero]
 
-    #model = lmfit.model.Model(calc_gs, independent_vars=['vmins', 'vcircs'])
-    #params = model.make_params()
+    if limit is not None:
+        too_small = ps_truth < limit
+        ps_truth = ps_truth[~too_small]
+        vs_truth = vs_truth[~too_small]
+        gs_truth = gs_truth[~too_small]
+        vcircs = vcircs[~too_small]
 
-    gs_hat = calc_gs(vs_truth, vcircs, 115., 0.928, 390., 
-                     0.27, 0.03, parallel=parallel)
-    return gs_hat
+    #gs_hat = calc_gs(vs_truth, vcircs, 115., 0.928, 390., 
+    #                 0.27, 0.03, parallel=parallel)
+
+    model = lmfit.model.Model(calc_gs, independent_vars=['vmins', 'vcircs'],
+                              opts = {'parallel': parallel},
+                              #nan_policy = 'omit')
+                              nan_policy = 'propagate'
+                              )
+    params = model.make_params()
+    params['d'].set(value=138.767313, vary=True, min=20., max=600.)
+    params['e'].set(value=0.78734935, vary=True, min=0.01)
+    params['h'].set(value=246.750219, vary=True, min=20., max=750.)
+    params['j'].set(value=0.68338094, vary=True, min=0.01)
+    params['k'].set(value=0.03089876, vary=True, min=0.001, max=1.)
+    result = model.fit(np.log10(gs_truth), params, vmins=vs_truth, 
+                       vcircs=vcircs)
+
+    return result 
+###############################################################################
 
 def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
