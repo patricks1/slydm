@@ -851,80 +851,6 @@ def setup_universal_fig(gals):
 
     return fig, axs
 
-def plt_mw(tgt_fname=None):
-    import dm_den_viz
-    import grid_eval
-    import dm_den
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
-        results = pickle.load(f)
-    ddfrac, dhfrac = grid_eval.identify()
-
-    vc = dm_den_viz.vc_eilers
-    vs = np.linspace(0., 750., 300)
-
-    def predict(vc, ax, **kwargs):
-        df = dm_den.load_data('dm_stats_20221208.h5')
-        df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc
-        v0 = results['d'] * (vc / 100.) ** results['e']
-        vdamp = results['h'] * (vc / 100.) ** results['j']
-        ps = smooth_step_max(vs, v0, vdamp, results['k'])
-        ax.plot(vs, ps, label='prediction from $v_\mathrm{c}$',
-                #label = '$v_\mathrm{{c}} = {0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'\
-                #        .format(vc),
-                **kwargs)
-        lowers, uppers = gal_bands('mw', vs, df, results, ddfrac, dhfrac, 
-                                   ax=None)
-        ax.fill_between(vs, lowers, uppers, 
-                        alpha=0.9, 
-                        color='#c0c0c0',
-                        zorder=1, 
-                        label='$1\sigma$ band')
-        return None
-    
-    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=600,
-                     facecolor = (1., 1., 1., 0.))
-    #fig = plt.figure(figsize = (5., 2.5), dpi=200)
-    ax = fig.add_subplot(111)
-
-    #predict(228., ax, c='C0', lw=3., dashes=[2., 0.5])
-    predict(vc, ax, c='C3')
-
-    ax.set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
-    ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
-    ax.set_ylim(0., None)
-    loc = [0.97,0.96]
-    kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
-                      va='top', ha='right',
-                      bbox=dict(facecolor='white', alpha=0.8, 
-                                edgecolor='none'))
-    ax.annotate('Milky Way', loc,
-                **kwargs_txt)
-    loc[1] -= 0.15
-    kwargs_txt['fontsize'] = 11.
-    ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
-                .format(vc),
-                loc, **kwargs_txt)
-
-    # Put y-axis in scientific notation
-    order_of_mag = -3
-    ax.ticklabel_format(style='sci', axis='y', 
-                        scilimits=(order_of_mag,
-                                   order_of_mag),
-                            useMathText=True)
-    ax.legend(bbox_to_anchor=(0.5, -0.1), 
-              loc='upper center', ncol=1,
-              bbox_transform=fig.transFigure)
-    #ax.legend(bbox_to_anchor=(0., -0.09), 
-    #          loc='upper left', ncol=2,
-    #          bbox_transform=fig.transFigure)
-
-    if tgt_fname is not None:
-        plt.savefig(paths.figures+tgt_fname,
-                    bbox_inches='tight',
-                    dpi=250)
-
-    plt.show()
-
 ###############################################################################
 # Functions for fitting the halo integral
 ###############################################################################
@@ -1601,7 +1527,7 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18, v0char=1., N_samples=1000,
     return None
 
 def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac, 
-                 assume_corr=False):
+                 assume_corr=False, dvc=0.):
     D_DEVS = np.random.normal(0., d * ddfrac, size=N)
     H_DEVS = np.random.normal(0., h * dhfrac, size=N)
     DEVS_UNCORR = np.array([D_DEVS, H_DEVS])
@@ -1611,6 +1537,11 @@ def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac,
     else:
         c = np.identity(2)
     THETA = np.dot(c, DEVS_UNCORR) + MU
+
+    if dvc != 0.:
+        # Turning `vc` into a random samples of circular velocities with
+        # a std deviation of dvc.
+        vc = np.random.normal(vc, dvc, size=N)
 
     D = THETA[0]
     V0HAT = D * (vc/100.) ** e
@@ -1623,8 +1554,9 @@ def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac,
                            for v0, vdamp in zip(V0HAT, VDAMP)])
     return ps_samples
 
-def gal_bands(gal, vs, df, result, ddfrac=0.1, dhfrac=0.18, 
-              assume_corr=False, ax=None, samples_color=plt.cm.viridis(0.5)):
+def gal_bands(gal, vs, df, result, ddfrac=0.1, dhfrac=0.18,
+              assume_corr=False, ax=None, samples_color=plt.cm.viridis(0.5),
+              dvc=0.):
     #dict_gal = pdfs[gal]
     '''
     Generate the upper and lower confidence band given fractional uncertainty
@@ -1685,7 +1617,7 @@ def gal_bands(gal, vs, df, result, ddfrac=0.1, dhfrac=0.18,
     N_samples = 5000
     ps_samples = make_samples(N_samples, vs, vc, 
                               d, e, h, j, k, covar, ddfrac, dhfrac, 
-                              assume_corr=assume_corr)
+                              assume_corr=assume_corr, dvc=dvc)
 
     P_1std = scipy.special.erf(1. / np.sqrt(2)) # ~68%
     lower_q = (1. - P_1std) / 2. 

@@ -1311,7 +1311,7 @@ def plt_mw(tgt_fname=None):
                 **kwargs)
         lowers, uppers = fitting.gal_bands('mw', vs, df, results, ddfrac, 
                                            dhfrac, 
-                                           ax=None)
+                                           ax=None, dvc=6.)
         ax.fill_between(vs, lowers, uppers, 
                         alpha=0.9, 
                         color='#c0c0c0',
