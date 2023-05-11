@@ -4,6 +4,7 @@ import paths
 import h5py
 import time
 import scipy
+import sys
 import pandas as pd
 import multiprocessing as mp
 import numpy as np
@@ -14,7 +15,17 @@ maximum = 0.15
 dhfracs = np.linspace(0.0, maximum, N)
 Nh = len(dhfracs)
 
-fname = 'grid.h5'
+
+# Specify whether to override fit results with results from fitting on the 
+# halo integral
+override = False 
+if override:
+    fname = 'grid_gfit.h5' # Location to store / from which to pull grid data
+    with open(paths.data + 'data_raw_gfit.pkl', 'rb') as f: 
+        data_override = pickle.load(f)
+else:
+    fname = 'grid.h5' # Location to store / from which to pull grid data
+    data_override = None
 
 def get_df():
     df = pd.read_pickle(paths.data + 'dm_stats_20221208.pkl')
@@ -31,10 +42,11 @@ def base_op(ddfrac):
     for i, dhfrac in enumerate(dhfracs):
         thingy[i] = fitting.count_within_agg(ddfrac, dhfrac, df, 
                                              assume_corr=False, 
-                                             return_fracs=True)
+                                             return_fracs=True, 
+                                             data_override=data_override)
     return thingy
     
-def grid_eval(ddfracs, dhfracs):
+def grid_eval(ddfracs, dhfracs, fname=fname):
     assert len(ddfracs.shape) == 1 and len(dhfracs.shape) == 1
     Nd = len(ddfracs)
     PERCENT_WITHIN = np.zeros((Nd, Nh))
@@ -50,7 +62,7 @@ def grid_eval(ddfracs, dhfracs):
     DDFRAC = info[:,:,2]
     DHFRAC = info[:,:,3]
     
-    with h5py.File(paths.data + 'grid.h5', 'w') as f:
+    with h5py.File(paths.data + fname, 'w') as f:
         f.create_dataset('ddfracs', data=DDFRAC)
         f.create_dataset('dhfracs', data=DHFRAC)
         f.create_dataset('percents', data=PERCENT_WITHIN)
@@ -58,7 +70,7 @@ def grid_eval(ddfracs, dhfracs):
     return PERCENT_WITHIN
 
 def load_data():
-    with h5py.File(paths.data + 'grid.h5', 'r') as f:
+    with h5py.File(paths.data + fname, 'r') as f:
         #grid = np.array(f['grid'])
         percents = np.array(f['percents'])
         areas = np.array(f['areas'])
@@ -80,10 +92,17 @@ def identify():
 
 if __name__ == '__main__':
     start = time.time()
-    
+   
+    args = sys.argv
+    if len(args) < 2:
+        # User did not specify a file name.
+        fname = fname
+    else:
+        fname = args[1]
+
     ddfracs = np.linspace(0.0, maximum, N)
 
-    print(grid_eval(ddfracs, dhfracs))
+    print(grid_eval(ddfracs, dhfracs, fname))
 
     elapsed = time.time() - start
     minutes = elapsed // 60.

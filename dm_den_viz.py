@@ -11,6 +11,8 @@ import staudt_utils
 import pickle
 import itertools
 import math
+import grid_eval
+import lmfit
 import staudt_fire_utils as utils
 from progressbar import ProgressBar
 
@@ -1155,6 +1157,211 @@ def plt_particle_counts(df_source='dm_stats_20220715.h5'):
         plt.show()
 
     return None
+
+def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None, 
+                         ymax=None):
+    import dm_den
+    import fitting
+    if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
+        raise ValueError('Unexpected value provided for gals arg')
+    if ddfrac is None or dhfrac is None:
+        grid_results = grid_eval.identify()
+        if ddfrac is None:
+            ddfrac = grid_results[0]
+            print('Using ddfrac = {0:0.5f}'.format(ddfrac))
+        if dhfrac is None:
+            dhfrac = grid_results[1]
+            print('Using dhfrac = {0:0.5f}'.format(dhfrac))
+    df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
+    with open('./data/v_pdfs.pkl','rb') as f:
+        pdfs=pickle.load(f)
+    pdfs.pop('m12z')
+    pdfs.pop('m12w')
+    if gals == 'discs':
+        gals = pdfs.keys() #Change `gals` from a str to a list-like of galnames
+    Ngals = len(gals) 
+    N_postfit = 300
+    vs_postfit = np.linspace(0., 700., N_postfit)
+    
+    fig, axs = fitting.setup_universal_fig(gals)
+    if type(result) == lmfit.model.ModelResult:
+        d, e, h, j, k = [result.params[key] 
+                         for key in ['d', 'e', 'h', 'j', 'k']]
+    elif type(result) == dict:
+        d, e, h, j, k = [result[key]
+                         for key in ['d', 'e', 'h', 'j', 'k']]
+    else:
+        raise ValueError('Unexpected data type provided for `params`')
+    for i, gal in enumerate(df.index):
+        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        v0 = d * (vc / 100.) ** e
+        vdamp = h * (vc / 100.) ** j
+        ps_postfit = fitting.smooth_step_max(vs_postfit,
+                                             v0, vdamp,
+                                             k)
+
+	# Error bands
+        samples_color = plt.cm.viridis(0.5)
+        lowers, uppers = fitting.gal_bands(gal, vs_postfit, df, 
+				           result, ddfrac=ddfrac, 
+                                           dhfrac=dhfrac,
+                                           assume_corr=False,
+                                           ax = axs[i], 
+                                           samples_color=samples_color)
+        axs[i].fill_between(vs_postfit, lowers, uppers, 
+                            color=plt.cm.viridis(1.), 
+			    alpha=0.9, 
+			    ec=samples_color, zorder=1, 
+			    label='$1\sigma$ band')
+
+        # Plot data
+        axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='k',
+                      label='data')
+        # Plot prediction
+        axs[i].plot(vs_postfit,
+                    ps_postfit,
+                    '-',
+                    label='prediction from $v_\mathrm{c}$', color='C3', lw=1.5)
+        # Make ticks on both sides of the x-axis:
+        axs[i].tick_params(axis='x', direction='inout', length=6)
+        # Put y-axis in scientific notation
+        order_of_mag = -3
+        axs[i].ticklabel_format(style='sci', axis='y', 
+                                scilimits=(order_of_mag,
+                                           order_of_mag),
+                                useMathText=True)
+        if Ngals == 2:
+            # Remove the 0 tick label because of overlap
+            y0, y1 = axs[i].get_ylim()
+            visible_ticks = np.array([t for t in axs[i].get_yticks() \
+                                      if t>=y0 and t<=y1])
+            new_ticks = visible_ticks[visible_ticks > 0.]
+            axs[i].set_yticks(new_ticks)
+
+            # Draw residual plot
+            vs_resids = copy.deepcopy(pdfs[gal]['vs'])
+            vs_extend = np.linspace(vs_resids.max(), vs_postfit.max(), 20)
+            vs_resids = np.append(vs_resids, vs_extend, axis=0)
+            ps_hat = fitting.smooth_step_max(pdfs[gal]['vs'], v0, vdamp, k)
+            resids = ps_hat - pdfs[gal]['ps']
+            resids_extend = fitting.smooth_step_max(vs_extend, v0, vdamp, k)
+            resids = np.append(resids, resids_extend, axis=0)
+            axs[i+2].plot(vs_resids, resids / 10.**order_of_mag, color='C3')
+            axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5, lw=1.)
+            axs[i+2].set_ylim(-resids_lim, resids_lim)
+            if i == 0:
+                axs[i+2].set_ylabel('resids')
+        loc = [0.97,0.96]
+        if Ngals == 12:
+            namefs = 13. #Font size for galaxy name
+            vcfs = 9. #Font size for circular velocity
+        else:
+            namefs = 16. #Font size for galaxy name
+            vcfs = 11. #Font size for circular velocity
+        kwargs_txt = dict(fontsize=namefs, xycoords='axes fraction',
+                          va='top', ha='right',
+                          bbox=dict(facecolor='white', alpha=0.8, 
+                                    edgecolor='none'))
+        axs[i].annotate(gal, loc,
+                        **kwargs_txt)
+        loc[1] -= 0.15
+        kwargs_txt['fontsize'] = vcfs 
+        #rms_err = fitting.calc_rms_err(pdfs[gal]['vs'], pdfs[gal]['ps'],
+        #                               fitting.smooth_step_max,
+        #                               (v0, vdamp, k))
+        #rms_txt = staudt_utils.mprint(rms_err, d=1, show=False).replace('$','')
+        axs[i].annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                        #'\n$\mathrm{{RMS}}_\mathrm{{err}}={1:s}$'
+                        .format(vc, 
+                                #rms_txt
+                               ),
+                        loc, **kwargs_txt)
+        axs[i].grid(False)
+        if ymax is not None:
+            axs[i].set_ylim(top=ymax)
+    if fig.Nrows == 3:
+        legend_y = 0.
+        ncol = 4
+    else:
+        legend_y = -0.04
+        ncol = 2
+    fig.suptitle('Fit based on velocity distrib', fontsize=18.)
+    return None
+
+def plt_mw(tgt_fname=None):
+    import grid_eval
+    import dm_den
+    import fitting
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        results = pickle.load(f)
+    ddfrac, dhfrac = grid_eval.identify()
+
+    vc = vc_eilers
+    vs = np.linspace(0., 750., 300)
+
+    def predict(vc, ax, **kwargs):
+        df = dm_den.load_data('dm_stats_20221208.h5')
+        df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc
+        v0 = results['d'] * (vc / 100.) ** results['e']
+        vdamp = results['h'] * (vc / 100.) ** results['j']
+        ps = fitting.smooth_step_max(vs, v0, vdamp, results['k'])
+        ax.plot(vs, ps, label='prediction from $v_\mathrm{c}$',
+                #label = '$v_\mathrm{{c}} = {0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'\
+                #        .format(vc),
+                **kwargs)
+        lowers, uppers = fitting.gal_bands('mw', vs, df, results, ddfrac, 
+                                           dhfrac, 
+                                           ax=None)
+        ax.fill_between(vs, lowers, uppers, 
+                        alpha=0.9, 
+                        color='#c0c0c0',
+                        zorder=1, 
+                        label='$1\sigma$ band')
+        return None
+    
+    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=600,
+                     facecolor = (1., 1., 1., 0.))
+    #fig = plt.figure(figsize = (5., 2.5), dpi=200)
+    ax = fig.add_subplot(111)
+
+    #predict(228., ax, c='C0', lw=3., dashes=[2., 0.5])
+    predict(vc, ax, c='C3')
+
+    ax.set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+    ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+    ax.set_ylim(0., None)
+    loc = [0.97,0.96]
+    kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
+                      va='top', ha='right',
+                      bbox=dict(facecolor='white', alpha=0.8, 
+                                edgecolor='none'))
+    ax.annotate('Milky Way', loc,
+                **kwargs_txt)
+    loc[1] -= 0.15
+    kwargs_txt['fontsize'] = 11.
+    ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                .format(vc),
+                loc, **kwargs_txt)
+
+    # Put y-axis in scientific notation
+    order_of_mag = -3
+    ax.ticklabel_format(style='sci', axis='y', 
+                        scilimits=(order_of_mag,
+                                   order_of_mag),
+                            useMathText=True)
+    ax.legend(bbox_to_anchor=(0.5, -0.1), 
+              loc='upper center', ncol=1,
+              bbox_transform=fig.transFigure)
+    #ax.legend(bbox_to_anchor=(0., -0.09), 
+    #          loc='upper left', ncol=2,
+    #          bbox_transform=fig.transFigure)
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=250)
+
+    plt.show()
 
 if __name__=='__main__':
     fname=sys.argv[1]

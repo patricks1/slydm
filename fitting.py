@@ -967,13 +967,16 @@ def calc_gs(vmins, vcircs, d, e, h, j, k, parallel=False):
     def normalize(vc):
         v0 = d * (vc / 100.) ** e
         vdamp = h * (vc / 100.) ** j
-        N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf,
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 
+                                    category=scipy.integrate.IntegrationWarning)
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
+            N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf,
                                  (v0, vdamp, k), epsabs=0)[0]
         return N
     vcircs_set = np.array(list(set(vcircs)))
     N_dict = {vc: normalize(vc) for vc in vcircs_set}
     if parallel:
-        print('in parallel')
         pool = mp.Pool(mp.cpu_count())
         gi_s = [pool.apply_async(calc_g_i, 
                                  args=(i, vmins, vcircs, N_dict,
@@ -1046,10 +1049,9 @@ def fit_g(galaxy='discs', limit=None, update_values=False, parallel=False):
     #                 0.27, 0.03, parallel=parallel)
 
     model = lmfit.model.Model(calc_gs, independent_vars=['vmins', 'vcircs'],
-                              opts = {'parallel': parallel},
                               #nan_policy = 'omit')
-                              nan_policy = 'propagate'
-                              )
+                              nan_policy = 'propagate',
+                              parallel = parallel)
     params = model.make_params()
     params['d'].set(value=138.767313, vary=True, min=20., max=600.)
     params['e'].set(value=0.78734935, vary=True, min=0.01)
@@ -1058,6 +1060,14 @@ def fit_g(galaxy='discs', limit=None, update_values=False, parallel=False):
     params['k'].set(value=0.03089876, vary=True, min=0.001, max=1.)
     result = model.fit(np.log10(gs_truth), params, vmins=vs_truth, 
                        vcircs=vcircs)
+
+    if update_values:
+        covar = {'covar': result.covar}
+        dict_gfit = {p: result.params[p].value for p in result.params.keys()}
+        dict_gfit = dict_gfit | covar
+        with open(paths.data + 'data_raw_gfit.pkl', 'wb') as f:
+            pickle.dump(dict_gfit,
+                        f, pickle.HIGHEST_PROTOCOL)
 
     return result 
 ###############################################################################
@@ -1070,7 +1080,7 @@ def plt_universal(gals='discs', update_values=False,
                   samples_color=plt.cm.viridis(0.5), ymax=None,
                   **kwargs):
     if (ddfrac is not None or dhfrac is not None or assume_corr) \
-            and err_method != 'sampling':
+        and err_method != 'sampling':
         raise ValueError('ddfrac, dhfrac, and assume_corr are only used in '
                          'sampling.')
     elif err_method == 'sampling':
@@ -2097,9 +2107,12 @@ def diff_fr68(params, assume_corr=False, incl_area=True,
     return resids_vals
 
 def count_within_agg(ddfrac, dhfrac, df, assume_corr=False, 
-                     return_fracs=False):
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
-        data_raw = pickle.load(f)
+                     return_fracs=False, data_override=None):
+    if data_override is not None:
+        data_raw = data_override
+    else:
+        with open(paths.data + 'data_raw.pkl', 'rb') as f:
+            data_raw = pickle.load(f)
     pdfs = copy.deepcopy(pdfs_v)
     del pdfs['m12w']
     del pdfs['m12z']
