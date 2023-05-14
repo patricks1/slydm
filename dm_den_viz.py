@@ -92,7 +92,7 @@ vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
 
 # vc from Eilers et al. 2019
 vc_eilers = 229.
-dvc_eilers = 0.2
+dvc_eilers = 6.
 
 # vc ranges from Sofue 2020
 vc_sofue=238.
@@ -1288,7 +1288,7 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
     fig.suptitle('Fit based on velocity distrib', fontsize=18.)
     return None
 
-def plt_mw(tgt_fname=None):
+def plt_mw(tgt_fname=None, dvc=0.):
     import grid_eval
     import dm_den
     import fitting
@@ -1311,7 +1311,7 @@ def plt_mw(tgt_fname=None):
                 **kwargs)
         lowers, uppers = fitting.gal_bands('mw', vs, df, results, ddfrac, 
                                            dhfrac, 
-                                           ax=None, dvc=6.)
+                                           ax=None, dvc=dvc)
         ax.fill_between(vs, lowers, uppers, 
                         alpha=0.9, 
                         color='#c0c0c0',
@@ -1338,10 +1338,17 @@ def plt_mw(tgt_fname=None):
     ax.annotate('Milky Way', loc,
                 **kwargs_txt)
     loc[1] -= 0.15
-    kwargs_txt['fontsize'] = 11.
-    ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
-                .format(vc),
-                loc, **kwargs_txt)
+    if dvc == 0.:
+        kwargs_txt['fontsize'] = 11.
+        ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                    .format(vc),
+                    loc, **kwargs_txt)
+    else:
+        kwargs_txt['fontsize'] = 9.
+        ax.annotate('$v_\mathrm{{c}}={0:0.0f}\pm{1:0.0f}'
+                    '\,\mathrm{{km\,s^{{-1}}}}$'
+                    .format(vc, dvc),
+                    loc, **kwargs_txt)
 
     # Put y-axis in scientific notation
     order_of_mag = -3

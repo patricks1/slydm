@@ -574,8 +574,12 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
             axs[i].plot(vs_maxwell, ps_sigma_vc, 
                         label='$\sigma_\mathrm{3D}(v_\mathrm{c})$'
                        )
-        axs[i].plot(vs_maxwell, ps_true_sigma,
-                    label = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D,meas}$')
+        #axs[i].plot(vs_maxwell, ps_true_sigma,
+        #            label = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D,meas}$')
+        axs[i].plot(vs_maxwell, 
+                    smooth_step_max(vs_maxwell, vc, np.inf, np.inf),
+                    label = '$v_0=v_\mathrm{c}$')
+                    
 
         # Draw vesc line
         axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
@@ -618,8 +622,24 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
             # Draw residual plot
             vs_resids = copy.deepcopy(vs_truth)
             vs_extend = np.linspace(vs_resids.max(), vs_maxwell.max(), 20)
-            vs_resids = np.append(vs_resids, vs_extend, axis=0)                                         
+            vs_resids = np.append(vs_resids, vs_extend, axis=0) 
 
+            def calc_resids_vc():
+                ps_sigma = smooth_step_max(
+                        vs_truth,
+                        vc,
+                        np.inf,
+                        np.inf)
+                resids = ps_sigma - ps_truth
+                inrange = (vs_truth > 75.) & (vs_truth < 175.)
+                resids_extend = smooth_step_max(
+                    vs_extend,
+                    vc,
+                    np.inf, np.inf)
+                resids = np.append(resids, 
+                                   resids_extend,
+                                   axis=0)
+                return resids
             def calc_resids(sigma):
                 ps_sigma = smooth_step_max(
                         vs_truth,
@@ -652,7 +672,7 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
             axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5,
                              lw=1.)
             axs[i+2].plot(vs_resids, 
-                          calc_resids(sigma_truth)/10.**order_of_mag)
+                          calc_resids_vc()/10.**order_of_mag)
             axs[i+2].axvline(vesc, ls='--', alpha=0.5, color='grey')
 
             if i == 0:

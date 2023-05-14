@@ -9,7 +9,9 @@ from astropy import units as u, constants as c
 path = '/data17/grenache/staudt/dm_den/'
 
 def get_rotated_gal(df, galname):
-    ''' Returns a dictionary of the given galaxy including rotated vectors '''
+    ''' 
+    Returns a dictionary of the given galaxy including rotated vectors 
+    '''
 
     #dark matter and stars
     dm_stars = dm_den.unpack_new(df, galname,
@@ -70,7 +72,11 @@ def get_rotated_gal(df, galname):
     d['v_vec_disc'] = d['v_vec_rot'][:,:2] #xy component of velocity
     d['coord_disc'] = d['coord_rot'][:,:2] #xy component of coordinates
 
-    #Find the projection of velocity onto the xy vector (i.e. v_r)
+    # Find the projection of velocity onto the xy vector (i.e. v_r)
+    # dot(V, R) / R^2 * R = V_{||R} 
+    # Note, the projection of V along R is not the same as the x,y
+    #     components of V. In fact, the magnitude of V along R <= the
+    #     magnitude of V.
     d['v_r_vec'] = (np.sum(d['v_vec_disc'] * d['coord_disc'], axis=1) \
                    / np.linalg.norm(d['coord_disc'], axis=1) **2.) \
                    .reshape(len(d['coord_disc']), -1) \

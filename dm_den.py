@@ -379,7 +379,6 @@ def unpack_4pot(df, galname, typ='fire'):
             Mass of each particle in physical units of 1e10 Msun
     '''
     getparts=['PartType0','PartType1','PartType4']
-    #getparts=['PartType1']
     suffix=df.loc[galname,'fsuffix']
     res=df.loc[galname,'res']
     host_key=df.loc[galname,'host_key']
@@ -1449,17 +1448,20 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
 
     return tuple(results) 
 
-def get_v_escs(fname=None):
+def get_v_escs(fname=None, rotate=False):
     '''
     Get escape velocities for all M12's, without any pre-existing analysis
     '''
 
     def fill_v_escs_dic(gal):
-        dic = unpack_4pot(df, gal)
+        if rotate:
+            import rotation_wrapper
+            dic = rotation_wrapper.get_rotated_gal(df, gal)
+        else:
+            dic = unpack_4pot(df, gal)
         
         thetas = np.pi*np.array([1./4., 1./2., 3./4., 1., 5./4., 3./2., 7./4., 
                                  2.])
-        #thetas = np.pi*np.array([1./2., 1., 3./2., 2.])
         v_escs[gal] = {}
         v_escs[gal]['v_escs'] = []
         
@@ -1467,8 +1469,12 @@ def get_v_escs(fname=None):
         pbar = ProgressBar()
         for theta in pbar(thetas):
             rvec = r * np.array([np.cos(theta), np.sin(theta), 0.])
-            v_escs[gal]['v_escs'] += [calc_vesc(dic['mass'], dic['pos'], rvec)]
-        prinkt('')
+            if rotate:
+                coords = dic['coord_rot']
+            else:
+                coords = dic['pos']
+            v_escs[gal]['v_escs'] += [calc_vesc(dic['mass'], coords, rvec)]
+        print('')
         v_escs[gal]['std_ve'] = np.std(v_escs[gal]['v_escs'])
         v_escs[gal]['ve_avg'] = np.mean(v_escs[gal]['v_escs'])
 
