@@ -1473,7 +1473,8 @@ def get_v_escs(fname=None, rotate=False):
                 coords = dic['coord_rot']
             else:
                 coords = dic['pos']
-            v_escs[gal]['v_escs'] += [calc_vesc(dic['mass'], coords, rvec)]
+            v_escs[gal]['v_escs'] += [calc_vesc(dic['mass'], 
+                                                coords, rvec).value]
         print('')
         v_escs[gal]['std_ve'] = np.std(v_escs[gal]['v_escs'])
         v_escs[gal]['ve_avg'] = np.mean(v_escs[gal]['v_escs'])
