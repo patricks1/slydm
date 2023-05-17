@@ -26,7 +26,7 @@ rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
 with open('./data/v_pdfs.pkl','rb') as f:
     pdfs_v=pickle.load(f)
-with open('./data/vescs_20221222.pkl', 'rb') as f:
+with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
     vesc_dict = pickle.load(f)
 with open('./data/v_pdfs_incl_ve_20220205.pkl','rb') as f:
     pdfs_v_incl_vearth=pickle.load(f)
@@ -90,6 +90,21 @@ def exp_max(v, v0, vesc):
             return 0.
         
     return p
+
+def g_exp(vmin, v0, vesc):
+    numerator = 6. * ((-1.+np.exp((vesc-vmin)*(vesc+vmin)/v0**2.)) * v0**2. \
+                      - vesc**2. + vmin**2.)
+    denominator = -6.*v0**2. * vesc - 4.*vesc**3. \
+                  + 3.*np.exp(vesc**2. / v0**2.) \
+                    * np.sqrt(np.pi) * v0**3. * scipy.special.erf(vesc/v0)
+    g = numerator / denominator
+    if isinstance(vmin, (list,np.ndarray)):
+        isesc = vmin>=vesc
+        g[isesc] = 0.
+    else:
+        if vmin>=vesc:
+            return 0.
+    return g
 
 def g_smooth_step_max(vmins, v0, vesc, k):
     def integrand(v):
@@ -187,10 +202,10 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
         p.add('k', value=0.0309, vary=False, min=0.0001, max=1.)
     
         res_v0_vesc = lmfit.minimize(sse_max_v0_vesc, p, 
-                                      method='nelder', 
-                                      args=(vs_truth, ps_truth),
-                                      nan_policy='omit', 
-                                      #niter=300
+                                     method='nelder', 
+                                     args=(vs_truth, ps_truth),
+                                     nan_policy='omit', 
+                                     #niter=300
                                      )
         vesc_fits[gal] = res_v0_vesc.params['vesc'].value
         
@@ -267,7 +282,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
         Galaxies to plot
     show_exp: bool
         If True, include the exponentially cutoff form from Macabe 2010 and 
-        Lacrois et al. 2020.
+        Lacroix et al. 2020.
     tgt_fname: str
         File name with which to save the plot. Default, None, is to not save
         the plot.
@@ -373,17 +388,33 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                 res_v0_vesc.params['v0'], 
                 res_v0_vesc.params['vdamp'],
                 res_v0_vesc.params['k']),
-            label='fit', color='C2')
+            label='fit, sigmoid trunc', color='C2')
         if show_exp:
             del(p['k'])
-            #p['vdamp'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
             res_exp = lmfit.minimize(resids_exp_max, p, method='nelder',
                                      args=(vs_truth, ps_truth), 
                                      nan_policy='omit')
             axs[i].plot(vs_postfit,
                         exp_max(vs_postfit, 
                                 res_exp.params['v0'],
-                                res_exp.params['vdamp']))
+                                res_exp.params['vdamp']),
+                        label='fit, exp trunc')
+
+            p['vdamp'].set(value = vesc_dict[gal]['ve_avg'], vary=False, 
+                           max=np.inf)
+            res_exp_fixed_vesc = lmfit.minimize(
+                                     resids_exp_max, p, method='nelder',
+                                     args=(vs_truth, ps_truth), 
+                                     nan_policy='omit')
+            print('{0:s}: v0 = {1:0.0f}'.format(gal, res_exp_fixed_vesc.params['v0'].value))
+            axs[i].plot(vs_postfit,
+                        exp_max(vs_postfit, 
+                                res_exp_fixed_vesc.params['v0'],
+                                res_exp_fixed_vesc.params['vdamp']),
+                        label='fit, exp trunc @ $v_\mathrm{esc}(\Phi)$')
+            # Draw vesc line
+            #axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
+
         axs[i].grid(False)
         # Make ticks on both sides of the x-axis:
         axs[i].tick_params(axis='x', direction='inout', length=6)
@@ -487,7 +518,7 @@ def save_rms_errs(rms_dict):
     return None
 
 def plt_naive(gals='discs', tgt_fname=None, update_vals=False, 
-              show_sigma_vc=True):
+              show_sigma_vc=True, show_exp=True, show_sigma_meas=True):
     if update_vals and gals != 'discs':
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
@@ -527,7 +558,7 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
     # velocities to use when plotting the functional form attempts
     vs_maxwell = np.linspace(0., 800., 700) 
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
-        # Strength at with to truncate the distribution
+        # Strength at which to truncate the distribution
         # I'm probably not going to use this here, though
         k = pickle.load(f)['k'] 
 
@@ -542,10 +573,19 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
                           * (vc/100.) ** results_dict['disp_slope']
         sigma_truth = df.loc[gal, 'disp_dm_disc_cyl']
         vesc = vesc_dict[gal]['ve_avg']
+
+        #######################################################################
+        # Data
+        #######################################################################
         bins = pdfs_v[gal]['bins']
         vs_truth = (bins[1:] + bins[:-1]) / 2.
         ps_truth = pdfs_v[gal]['ps']
+        axs[i].stairs(ps_truth, bins,
+                      color='k', label='data')
+
+        #######################################################################
         # p(sigma(vc), vs_maxwell)
+        #######################################################################
         ps_sigma_vc = smooth_step_max(
                                    vs_maxwell, 
                                    np.sqrt(2./3.)*sigma_predicted,
@@ -557,7 +597,13 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
         rms_sigma_vc_txt = staudt_utils.mprint(rms_err_sigma_vc, d=1, 
                                                show=False).replace('$','')
         rms_dict['sigma_vc'][gal] = rms_err_sigma_vc
+        if show_sigma_vc:
+            axs[i].plot(vs_maxwell, ps_sigma_vc, 
+                        label='$v_0=\sigma_\mathrm{3D}(v_\mathrm{c})$')
+
+        #######################################################################
         # p(sigma_measured, vs_maxwell)
+        #######################################################################
         ps_true_sigma = smooth_step_max(vs_maxwell,
                                         np.sqrt(2./3.) * sigma_truth,
                                         np.inf,
@@ -568,19 +614,27 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
         rms_true_sigma_txt= staudt_utils.mprint(rms_err_true_sigma, d=1, 
                                             show=False).replace('$','')
         rms_dict['true_sigma'][gal] = rms_err_true_sigma
-        axs[i].stairs(ps_truth, bins,
-                      color='k', label='data')
-        if show_sigma_vc:
-            axs[i].plot(vs_maxwell, ps_sigma_vc, 
-                        label='$\sigma_\mathrm{3D}(v_\mathrm{c})$'
-                       )
-        #axs[i].plot(vs_maxwell, ps_true_sigma,
-        #            label = '$v_0=\sqrt{2/3}\sigma_\mathrm{3D,meas}$')
+        if show_sigma_meas:
+            axs[i].plot(vs_maxwell,
+                        ps_true_sigma,
+                        label = '$v_0=\sqrt{2/3}\sigma_\mathrm{meas}$')
+        
+        #######################################################################
+        # p(vc, vs_maxwell)
+        #######################################################################
         axs[i].plot(vs_maxwell, 
                     smooth_step_max(vs_maxwell, vc, np.inf, np.inf),
                     label = '$v_0=v_\mathrm{c}$')
-                    
 
+        #######################################################################
+        # p(vc, vs_maxwell) * [exponentially truncated @ vesc_measured]
+        #######################################################################
+        if show_exp:
+            axs[i].plot(vs_maxwell,
+                        exp_max(vs_maxwell, vc, vesc),
+                        label = '$v_0=v_\mathrm{c}$'
+                                '\nexp trunc @ $v_\mathrm{esc}(\Phi)$')
+                    
         # Draw vesc line
         axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
         trans = mpl.transforms.blended_transform_factory(axs[i].transData,
@@ -681,8 +735,8 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
         save_rms_errs(rms_dict)
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.,hspace=0.)
-    if show_sigma_vc:
-        axs[1].legend(loc='upper right', bbox_to_anchor=(1., -0.04),
+    if Nrows == 3:
+        axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, -0.04),
                       bbox_transform=fig.transFigure, ncol=3)
     else:
         trans_legend = mpl.transforms.blended_transform_factory(
