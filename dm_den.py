@@ -1132,7 +1132,8 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False):
     # test/correct this.
     ms, mvir, rs, rvir, v_mags, v_vecs, parttypes = unpack_new(df, galname)[:7]
     if incl_ve:
-        if 'disp_dm_solar' in df and not np.isnan(df.loc[galname,'disp_dm_solar']):
+        if 'disp_dm_solar' in df and not np.isnan(df.loc[galname,
+                                                         'disp_dm_solar']):
             sigma3d = df.loc[galname,'disp_dm_solar'] 
         else:
             den_solar, sigma3d = get_den_disp(r, rs, dr=dr, 

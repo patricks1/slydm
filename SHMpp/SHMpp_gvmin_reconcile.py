@@ -73,7 +73,7 @@ x1 = np.random.normal(mu, sigma, N)
 y1 = np.random.normal(mu, sigma, N)
 z1 = np.random.normal(mu, sigma, N)
 
-Lvx = range(0,851,5)
+Lvx = range(0,int(1e3),5)
 
 def vE(Day,v0):
     ##########################################

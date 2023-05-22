@@ -121,6 +121,56 @@ def g_smooth_step_max(vmins, v0, vesc, k):
         gN = np.array(gN)
     return gN / N
 
+def calc_g_general(vmins, pN_func, args):
+    def integrand(v):
+        pN = pN_func(v, *args) 
+        return pN / v
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 
+                                category=scipy.integrate.IntegrationWarning)
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        N = scipy.integrate.quad(pN_func, 0., np.inf,
+                                 args, epsabs=0)[0]
+        gN = [scipy.integrate.quad(integrand, vmin, np.inf)[0]
+              for vmin in vmins]
+        gN = np.array(gN)
+    return gN / N
+
+def pN_max_double(v, v0, vdamp, k, vesc):
+    '''
+    Probability density before normalizing by N
+    '''
+    fN = np.exp( - v**2. / v0**2. )
+    pN = fN * 4. * np.pi * v**2.
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 
+                                category=scipy.integrate.IntegrationWarning)
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        trunc = 1. / (1. + np.exp(-k * (vdamp-v)))
+    pN *= trunc
+    if isinstance(v, np.ndarray):
+        isesc = v >= vesc
+        pN[isesc] = 0.
+    else:
+        if v >= vesc:
+            return 0
+    return pN
+
+def max_double(v, v0, vdamp, k, vesc):
+    '''
+    Smooth-step-truncated Maxwellian, as opposed to the immediate cutoff
+    of a Heaviside function used in trunc_max
+    
+    k is the strength of the exponential cutoff
+    '''
+    
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        N = scipy.integrate.quad(pN_max_double, 0., np.inf, 
+                                 (v0, vdamp, k, vesc), epsabs=0)[0]
+        p = pN_max_double(v, v0, vdamp, k, vesc) / N
+    return p
+
 def label_axes(axs, gals):
     if not isinstance(gals, (list, np.ndarray, pd.core.indexes.base.Index)) \
            and gals == 'discs':
