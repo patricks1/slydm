@@ -1127,9 +1127,7 @@ def comp_disp_vc(galname='m12i',dr=1.5,fname=None):
 
     return rs_axis, disps_fire, vcircs_fire, disps_dmo, vcircs_dmo 
 
-def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False):
-    # I think this function will fail if incl_ve=False. Make sure to 
-    # test/correct this.
+def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, rotate=True):
     ms, mvir, rs, rvir, v_mags, v_vecs, parttypes = unpack_new(df, galname)[:7]
     if incl_ve:
         if 'disp_dm_solar' in df and not np.isnan(df.loc[galname,
@@ -1140,17 +1138,15 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False):
                                               ms=ms, v_mags=v_mags, 
                                               v_vecs=v_vecs)
             df.loc[galname,['den_solar','disp_dm_solar']] = den_solar, sigma3d 
-    v0 = sigma3d*np.sqrt(2./3.)
-    print(v0)
-    day = 60.8 #Gives avg val of v_earth
-    v_earth = np.array(vE_f(day, v0))
-    print(v_earth)
-    v_vecs = v_vecs - v_earth
+        # I think we might want to use vc instead of v0 (peak speed estimate).
+        # Maybe consider changing the code.
+        v0 = sigma3d*np.sqrt(2./3.)
+        day = 60.8 #Gives avg val of v_earth
+        v_earth = np.array(vE_f(day, v0))
+        v_vecs = v_vecs - v_earth
     v_mags = np.linalg.norm(v_vecs,axis=1)
 
     inshell=(rs<r+dr/2.)&(rs>r-dr/2.)
-    print(v_mags[:100])
-    print(v_mags[inshell].min(),v_mags[inshell].max())
     ps, bins, _ = plt.hist(v_mags[inshell], bins=bins, density=True)
     mu = np.average(v_mags[inshell])
     plt.close()
