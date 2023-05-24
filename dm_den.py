@@ -1127,8 +1127,22 @@ def comp_disp_vc(galname='m12i',dr=1.5,fname=None):
 
     return rs_axis, disps_fire, vcircs_fire, disps_dmo, vcircs_dmo 
 
-def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, rotate=True):
-    ms, mvir, rs, rvir, v_mags, v_vecs, parttypes = unpack_new(df, galname)[:7]
+def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, dz=0.5, 
+          density=True):
+    import cropper
+    d = cropper.load_data(galname, getparts=['PartType1'], verbose=False)
+    dm = d['PartType1']
+    ms = dm['mass_phys']
+    rs = dm['r']
+    # Cartesian coordinates rotated so zhat is aligned with the disc's angular
+    # mementum
+    coords = dm['coord_rot'] 
+    zs = coords[:,2]
+    # Velocity vectors in cylindrical coordinates
+    v_vecs = np.array([dm['v_dot_rhat'], dm['v_dot_phihat'],
+                           dm['v_dot_zhat']]).T
+    v_mags = np.linalg.norm(v_vecs, axis=1)
+    #ms, mvir, rs, rvir, v_mags, v_vecs, parttypes = unpack_new(df, galname)[:7]
     if incl_ve:
         if 'disp_dm_solar' in df and not np.isnan(df.loc[galname,
                                                          'disp_dm_solar']):
@@ -1147,12 +1161,16 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, rotate=True):
     v_mags = np.linalg.norm(v_vecs,axis=1)
 
     inshell=(rs<r+dr/2.)&(rs>r-dr/2.)
-    ps, bins, _ = plt.hist(v_mags[inshell], bins=bins, density=True)
+    if dz is not None:
+        inshell = inshell & ( np.abs(zs) <= dz / 2. )
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ps, bins, _ = ax.hist(v_mags[inshell], bins=bins, density=density)
     mu = np.average(v_mags[inshell])
     plt.close()
     return ps, bins, mu
 
-def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False):
+def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False, dz=0.5):
     df=init_df() 
     pdfs={}
 
@@ -1160,7 +1178,7 @@ def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False):
         print('Generating {0:s}'.format(galname))
 
         pdfs[galname]={}
-        res=v_pdf(df, galname, incl_ve=incl_ve)
+        res = v_pdf(df, galname, incl_ve=incl_ve, dz=dz)
         pdfs[galname]['ps'],pdfs[galname]['bins'],pdfs[galname]['v_avg'] = res
     if fname:
         direc='/export/nfs0home/pstaudt/projects/project01/data/'
