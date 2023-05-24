@@ -1170,7 +1170,8 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, dz=0.5,
     plt.close()
     return ps, bins, mu
 
-def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False, dz=0.5):
+def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False, dz=0.5,
+                density=True):
     df=init_df() 
     pdfs={}
 
@@ -1178,10 +1179,20 @@ def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False, dz=0.5):
         print('Generating {0:s}'.format(galname))
 
         pdfs[galname]={}
-        res = v_pdf(df, galname, incl_ve=incl_ve, dz=dz)
-        pdfs[galname]['ps'],pdfs[galname]['bins'],pdfs[galname]['v_avg'] = res
+        res = v_pdf(df, galname, incl_ve=incl_ve, dz=dz, density=density)
+        bins = res[1]
+        vs = (bins[1:] + bins[:-1]) / 2.
+        pdfs[galname]['vs'] = vs
+        if density:
+            pdfs[galname]['ps'] ,\
+                    pdfs[galname]['bins'] ,\
+                    pdfs[galname]['v_avg'] = res
+        else:
+            pdfs[galname]['counts'] ,\
+                pdfs[galname]['bins'] ,\
+                pdfs[galname]['v_avg'] = res
     if fname:
-        direc='/export/nfs0home/pstaudt/projects/project01/data/'
+        direc = paths.data
         fname=direc+fname
         with open(fname,'wb') as f:
             pickle.dump(pdfs, f, pickle.HIGHEST_PROTOCOL)
