@@ -24,7 +24,7 @@ rcParams['legend.frameon'] = True
 rcParams['legend.fontsize']=15
 rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
-with open('./data/v_pdfs.pkl','rb') as f:
+with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
     pdfs_v=pickle.load(f)
 with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
     vesc_dict = pickle.load(f)
@@ -39,6 +39,28 @@ for gal in pdfs_v:
 max_bins_est = 1.e-3
 min_bins_est = -1.e-3
 resids_lim = 0.7
+
+def pN_mao(v, v0, vesc, p):
+    '''
+    Probability density before normalizing by N
+    '''
+    fN = np.exp(-np.abs(v) / v0) * (vesc**2. - v**2.) ** p
+    pN = fN * 4. * np.pi * v**2.
+    if isinstance(v, np.ndarray):
+        isesc = v >= vesc
+        pN[isesc] = 0.
+    else:
+        if v >= vesc:
+            return 0
+    return pN
+
+def mao(v, v0, vesc, p):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        N = scipy.integrate.quad(pN_mao, 0., np.inf, 
+                                 (v0, vesc, p), epsabs=0)[0]
+        p = pN_mao(v, v0, vesc, p) / N
+    return p
 
 def pN_smooth_step_max(v, v0, vesc, k):
     '''
@@ -424,10 +446,11 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
         vdamp_fits[gal] = res_v0_vesc.params['vdamp'].value
         _ = [res_v0_vesc.params[key] 
                                        for key in ['v0', 'vdamp', 'k']]
+
         rms_err = calc_rms_err(vs_truth, ps_truth, smooth_step_max,
                                args=[res_v0_vesc.params[key] 
                                      for key in ['v0', 'vdamp', 'k']])
-        rms_txt = staudt_utils.mprint(rms_err, d=1, 
+        rms_txt_sigmoid = staudt_utils.mprint(rms_err, d=1, 
                                       show=False).replace('$','')
         
         axs[i].stairs(ps_truth, bins, color='k', label='data')
@@ -456,7 +479,9 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                                      resids_exp_max, p, method='nelder',
                                      args=(vs_truth, ps_truth), 
                                      nan_policy='omit')
-            print('{0:s}: v0 = {1:0.0f}'.format(gal, res_exp_fixed_vesc.params['v0'].value))
+            #print('{0:s}: v0 = {1:0.0f}'.format(
+            #    gal, 
+            #    res_exp_fixed_vesc.params['v0'].value))
             axs[i].plot(vs_postfit,
                         exp_max(vs_postfit, 
                                 res_exp_fixed_vesc.params['v0'],
@@ -464,6 +489,45 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                         label='fit, exp trunc @ $v_\mathrm{esc}(\Phi)$')
             # Draw vesc line
             #axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
+
+        # Testing Mao parameterization
+        model_mao = lmfit.Model(mao)
+        params_mao = model_mao.make_params()
+        params_mao['v0'].set(value=vc, vary=True, min=100., max=400.)
+        params_mao['vesc'].set(value=vesc, vary=False, min=vc, max=900.)
+        params_mao['p'].set(value=1., vary=True, min=0.)
+        result_mao = model_mao.fit(ps_truth, params_mao,
+                                   v=vs_truth,
+                                   method='nelder')
+        axs[i].plot(vs_postfit,
+                    mao(vs_postfit,
+                        result_mao.params['v0'].value,
+                        result_mao.params['vesc'].value,
+                        result_mao.params['p'].value),
+                    label='Mao, fixed $v_\mathrm{esc}(\Phi)$',
+                    color='C3')
+        rms_err_mao_fixed = calc_rms_err(vs_truth, ps_truth, mao,
+                                         args=[result_mao.params[key] 
+                                               for key in result_mao.params])
+        rms_txt_mao_fixed = staudt_utils.mprint(rms_err_mao_fixed, d=1, 
+                                                show=False).replace('$','')
+
+        params_mao['vesc'].set(vary=True)
+        result_mao = model_mao.fit(ps_truth, params_mao,
+                                   v=vs_truth,
+                                   method='nelder')
+        axs[i].plot(vs_postfit,
+                    mao(vs_postfit,
+                        result_mao.params['v0'].value,
+                        result_mao.params['vesc'].value,
+                        result_mao.params['p'].value),
+                    label='Mao, free $v_\mathrm{esc}$',
+                    color='C4')
+        rms_err_mao_free = calc_rms_err(vs_truth, ps_truth, mao,
+                                        args=[result_mao.params[key] 
+                                               for key in result_mao.params])
+        rms_txt_mao_free = staudt_utils.mprint(rms_err_mao_free, d=1, 
+                                               show=False).replace('$','')
 
         axs[i].grid(False)
         # Make ticks on both sides of the x-axis:
@@ -477,29 +541,33 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
         loc=[0.97,0.96]
         kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
                       va='top', ha='right', 
-                      bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+                      bbox=dict(facecolor='white', alpha=0.2, edgecolor='none'))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
-        '''
-        loc[1] -= 0.1
-        kwargs_txt['fontsize'] = 11.
+        loc[1] -= 0.15
+        kwargs_txt['fontsize'] = 9.
         axs[i].annotate(#'$v_\mathrm{{esc}}'
                         #'={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
-                        '$v_\mathrm{{damp}}'
-                        '={1:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
-                        '$v_0={3:0.0f}$\n'
+                        #'$v_\mathrm{{damp}}'
+                        #'={1:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
+                        #'$v_0={3:0.0f}$\n'
                         #'$k={6:0.4f}$\n'
-                        '$\mathrm{{RMS_{{err}}}}={4:s}$'
+                        '$\mathrm{{RMS_{{sig}}}}={4:s}$\n'
+                        '$\mathrm{{RMS_{{Mao\,fixed}}}}={7:s}$\n'
+                        '$\mathrm{{RMS_{{Mao\,free}}}}={8:s}$'
                         #'N$_\mathrm{{eval}}={5:0.0f}$'
                         .format(vesc, 
                                 res_v0_vesc.params['vdamp'].value,
                                 res_v0_vesc.chisqr, 
                                 res_v0_vesc.params['v0'].value,
-                                rms_txt,
+                                rms_txt_sigmoid,
                                 res_v0_vesc.nfev,
                                 res_v0_vesc.params['k'].value,
+                                rms_txt_mao_fixed,
+                                rms_txt_mao_free
                                ),
                         loc, **kwargs_txt)
+        '''
         if show_exp:
             loc[1] -= 0.2
             axs[i].annotate('$\chi^2_\mathrm{{exp}}={0:0.2e}$\n'

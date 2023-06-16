@@ -24,7 +24,7 @@ def build_direcs(suffix, res, mass_class, typ='fire', source='original',
     assert typ in ['fire','dmo']
     if typ=='fire':
         if source == 'cropped':
-            # Using this folder while I make sure I'm not breaking anying by
+            # Using this folder while I make sure I'm not breaking anything by
             # discontinuing the use of float128's
             typ_char='B_202304'
             #print('type_char: {0:s}'.format(typ_char))
@@ -52,7 +52,8 @@ def build_direcs(suffix, res, mass_class, typ='fire', source='original',
     else:
         raise ValueError('source should be \'original\' or \'cropped\'')
     if int(mass_class)>10:
-        hdirec='/data17/grenache/aalazar/FIRE/GV'+typ_char+'/m'+mass_class+suffix+\
+        hdirec='/data17/grenache/aalazar/FIRE/GV'+typ_char+\
+               '/m'+mass_class+suffix+\
                '_res'+res+\
                '/halo/rockstar_dm/hdf5/halo_600.hdf5'
         direc = topdirec+'FIRE/GV'+typ_char+'/m'+mass_class+suffix+'_res'+res+\
@@ -1051,6 +1052,11 @@ def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
         save_data(df, fname)
     return df
                     
+def test_gen_data():
+    df_old = load_data('dm_stats_20221208.h5')
+    df_new = gen_data(source='cropped')
+    return df_old, df_new
+
 def save_data(df, fname):
     abspath = os.path.abspath(__file__) #path to this script
     direc = os.path.dirname(abspath) #path to this script's directory
