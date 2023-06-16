@@ -9,6 +9,7 @@ import scipy
 import math
 import tabulate
 import paths
+import copy
 import numpy as np
 import pandas as pd
 from staudt_fire_utils import get_data, show
@@ -590,10 +591,15 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_bins=15, verbose=False):
 
         zs = gal['PartType1']['coord_rot'][:,2]
         for i, phi_bin in enumerate([phi_bins[j:j+2] for j in range(N_bins)]):
+            # phi_bin is a 2-element list. The 0 element is the beginning edge
+            # of the bin. The 1 element is the ending edge of the bin.
             #using a copy just to make sure phi_bin doesn't get modified
             bin_ = phi_bin.copy() 
             if i == N_bins-1:
-                bin_[1] = bin_[1]+1.e-5
+                # Add a small value to the ending edge of the bin, which is 
+                # 2pi. We do this in case any particles are *exactly* at 2pi;
+                # otherwise we would miss them.
+                bin_[1] = bin_[1]+1.e-5 
             den_add, disp_add = get_den_disp(8.3,
                                              gal['PartType1']['r'],
                                              df.attrs['drsolar'],
@@ -1055,7 +1061,54 @@ def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
 def test_gen_data():
     df_old = load_data('dm_stats_20221208.h5')
     df_new = gen_data(source='cropped')
-    return df_old, df_new
+
+    def convert_den(dens):
+        dens = copy.deepcopy(dens)
+        dens = dens.values
+        dens = dens * u.Msun / u.kpc**3. * c.c**2.
+        dens = dens.to(u.GeV / u.cm**3.)
+        return dens
+
+    for col in df_old.columns:
+        if col in df_new.columns:
+            old = df_old[col]
+            new = df_new[col]
+            unchanged = True # initializing the variable
+            if 'den' in col:
+                gev_old = convert_den(old).value
+                gev_new = convert_den(new).value
+                unchanged = np.allclose(gev_old, gev_new)
+                old = np.log10(old)
+                new = np.log10(new)
+            if old.dtype == 'object':
+                unchaged = unchanged and np.array_equal(old, new)
+            else:
+                unchanged = unchaged and np.allclose(old, new)
+            try:
+                assert unchanged
+            except Exception as e:
+                print('\n{0:s} failed'.format(col))
+                print( np.array( [old, new] ).T )
+                raise e
+    print('gen_data test passed.')
+    return None
+
+def compare_dfs(fname1, fname2):
+    df1 = load_data(fname1)
+    df2 = load_data(fname2)
+
+    for col in df1.columns:
+        if col in df2.columns:
+            one = df1[col]
+            two = df2[col]
+            if one.dtype == 'object':
+                unchanged = np.array_equal(one, two)
+            else:
+                unchanged = np.allclose(one, two)
+            if not unchaged:
+                print('\n{0:s} has changed.'.format(col))
+                print( np.array( [one, two] ).T )
+    return None
 
 def save_data(df, fname):
     abspath = os.path.abspath(__file__) #path to this script
