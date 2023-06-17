@@ -1058,16 +1058,19 @@ def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
         save_data(df, fname)
     return df
                     
+def convert_den(dens):
+    '''
+    Convert a pd.Series of densities in Msun / kpc^3 to GeV / cm^3
+    '''
+    dens = copy.deepcopy(dens)
+    dens = dens.values
+    dens = dens * u.Msun / u.kpc**3. * c.c**2.
+    dens = dens.to(u.GeV / u.cm**3.)
+    return dens
+
 def test_gen_data():
     df_old = load_data('dm_stats_20221208.h5')
     df_new = gen_data(source='cropped')
-
-    def convert_den(dens):
-        dens = copy.deepcopy(dens)
-        dens = dens.values
-        dens = dens * u.Msun / u.kpc**3. * c.c**2.
-        dens = dens.to(u.GeV / u.cm**3.)
-        return dens
 
     for col in df_old.columns:
         if col in df_new.columns:
@@ -1101,11 +1104,20 @@ def compare_dfs(fname1, fname2):
         if col in df2.columns:
             one = df1[col]
             two = df2[col]
+            if 'den' in col:
+                gev_one = convert_den(one).value
+                gev_two = convert_den(two).value
+                unchanged = np.allclose(gev_one, gev_two)
+                if not unchanged:
+                    print('\n{0:s} has changed.'.format(col))
+                    print( np.array( [gev_one, gev_two] ).T )
+                one = np.log10(one)
+                two = np.log10(two)
             if one.dtype == 'object':
                 unchanged = np.array_equal(one, two)
             else:
                 unchanged = np.allclose(one, two)
-            if not unchaged:
+            if not unchanged:
                 print('\n{0:s} has changed.'.format(col))
                 print( np.array( [one, two] ).T )
     return None
