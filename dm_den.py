@@ -834,6 +834,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
                                                        [cooler1e4
                                                         & inshell
                                                         & indisc])
+        df.loc[galname, 'vc100'] = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
         df.loc[galname,
                'v_dot_phihat_shell(T<=1e4)'] = np.mean(d['PartType0']\
                                                         ['v_dot_phihat']\
