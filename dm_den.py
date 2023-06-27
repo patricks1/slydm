@@ -550,8 +550,14 @@ def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
         disp=np.sqrt(np.sum(coord_var))
         return disp
     disp3d_francisco=disp3d_francisco_f()
-    print(disp3d, disp3d_francisco)
-    assert np.allclose(disp3d,disp3d_francisco)
+    try:
+        assert np.allclose(disp3d,disp3d_francisco)
+    except AssertionError as e:
+        print('my dispersion method: {0:0.2f}'.format(disp3d))
+        print('francisco\'s dispersion method: {0:0.2f}'
+              .format(disp3d_francisco))
+        print('The dispersion methods don\'t match.')
+        raise e
     return den*10.**10., disp3d
 
 def atan(y,x):
@@ -798,8 +804,9 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         v_vecs_gas = d['PartType0']['v_vec_centered']
         v_mags_gas = np.linalg.norm(v_vecs_gas, axis=1)
         v_vecs_cyl_gas = np.array([d['PartType0']['v_dot_rhat'],
-                               d['PartType0']['v_dot_phihat'],
-                               d['PartType0']['v_dot_zhat']]).transpose(1,0)
+                                   d['PartType0']['v_dot_phihat'],
+                                   d['PartType0']['v_dot_zhat']]).transpose(1,
+                                                                            0)
         zs_gas = d['PartType0']['coord_rot'][:,2]
 
         rs_all = flatten_particle_data(d, 'r')
@@ -809,7 +816,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         den_disc, disp_dm_disc = get_den_disp(rsolar, rs_dm, dr,
                                               ms=ms_dm, v_mags=None,
                                               v_vecs=v_vecs_dm_cyl,
-                                              zs=zs, dz=dz)
+                                              zs=zs, dz=dz, verbose=False)
 
         df.loc[galname,'den_disc'] = den_disc
         df.loc[galname,'f_disc'] = 10.**7./den_disc
@@ -818,7 +825,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         # cylindrical coords, in a shell not limited to the disc
         _, disp_dm_cyl = get_den_disp(rsolar, rs_dm, dr=drsolar, ms=ms_dm, 
                                             v_mags=None, v_vecs=v_vecs_dm_cyl,
-                                            zs=None, dz=None)
+                                            zs=None, dz=None, verbose=False)
         df.loc[galname,'disp_dm_shell_cyl'] = disp_dm_cyl
 
         #######################################################################
@@ -834,7 +841,9 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
                                                        [cooler1e4
                                                         & inshell
                                                         & indisc])
-        df.loc[galname, 'vc100'] = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
+        df.loc[galname, 'vc100'] = df.loc[galname, 
+                                          'v_dot_phihat_disc(T<=1e4)'] / 100.
+        print(df.loc[galname, 'vc100'])
         df.loc[galname,
                'v_dot_phihat_shell(T<=1e4)'] = np.mean(d['PartType0']\
                                                         ['v_dot_phihat']\
@@ -862,7 +871,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
                                               v_mags=None,
                                               v_vecs=v_vecs_cyl_gas[cooler1e4],
                                               zs=zs_gas[cooler1e4], 
-                                              dz=dz)[1]
+                                              dz=dz, verbose=False)[1]
         df.loc[galname,
                 'std(v_dot_phihat_disc(T<=1e4))'] = np.std(v_vecs_cyl_gas[:,1]\
                                                                 [inshell
@@ -881,7 +890,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
     if 'PartType1' in vcircparts:
         den_shell, disp_dm_cart = get_den_disp(rsolar, rs_dm, dr=drsolar, 
                                                ms=ms_dm, v_mags=v_mags_dm, 
-                                               v_vecs=v_vecs_dm)
+                                               v_vecs=v_vecs_dm, verbose=False)
         df.loc[galname,['den_shell',
                         'disp_dm_shell_cart']] = den_shell, \
                                                  disp_dm_cart
@@ -1069,10 +1078,14 @@ def convert_den(dens):
     dens = dens.to(u.GeV / u.cm**3.)
     return dens
 
-def test_gen_data():
-    df_old = load_data('dm_stats_20221208.h5')
-    df_new = gen_data(source='cropped')
+def test_gen_data(test_fname=None):
+    df_old = load_data('dm_stats_dz1.0_20230616.h5')
+    if test_fname is not None:
+        df_new = load_data(test_fname)
+    else:
+        df_new = gen_data(source='cropped')
 
+    changed_cols = []
     for col in df_old.columns:
         if col in df_new.columns:
             old = df_old[col]
@@ -1088,12 +1101,11 @@ def test_gen_data():
                 unchaged = unchanged and np.array_equal(old, new)
             else:
                 unchanged = unchaged and np.allclose(old, new)
-            try:
-                assert unchanged
-            except Exception as e:
+            if not unchanged:
+                changed_cols += [col]
                 print('\n{0:s} failed'.format(col))
                 print( np.array( [old, new] ).T )
-                raise e
+    assert len(changed_cols) == 0
     print('gen_data test passed.')
     return None
 
@@ -1138,11 +1150,17 @@ def load_data(fname):
     direc = os.path.dirname(abspath) #path to this script's directory
     direc += '/data/'
     fname=direc+fname
+
+    # Ensure the file exists
+    if not os.path.isfile(fname):
+        raise FileNotFoundError(fname)
+
     try:
         with pd.HDFStore(fname) as store:
             df=store['data']
             df.attrs=store.get_storer('data').attrs.metadata
     except (KeyError, ValueError):
+        print(fname)
         df=pd.read_hdf(fname)
     return df
 
