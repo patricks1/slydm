@@ -729,7 +729,7 @@ def draw_shades(ax, ycol, vc, dvc, xmult=1.):
     draw_xshade(ax, vc, dvc, xmult)
     return None
 
-def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
+def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_dz1.0_20230626.h5',
               update_val=False,
               forecast_sig=1.-0.682, #forecast significance
               verbose=False, 
@@ -747,6 +747,11 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
         If draw_arrow is True (False), an arrow will (will not) link the data
             point with its label.
     '''
+    if len(label_overrides) > 0:
+        for gal in label_overrides:
+            if len(label_overrides[gal]) != 3:
+                raise ValueError('`label_overrides` must be in the form '
+                                 '{galname: (annx, anny, draw_arrow)}.')
     vc /= 100.
     dvc /= 100.
 
@@ -803,7 +808,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
 
     # Set the pos of the MW label
     if ycol == 'disp_dm_disc_cyl':
-        mw_text_kwargs = {'xytext':(0.2, 0.65)} 
+        mw_text_kwargs = {'xytext':(0.33, 0.66)} 
     elif ycol == 'den_disc':
         mw_text_kwargs = {'xytext':(0.33, 0.55)}
     mw_text = ax.annotate('Milky Way', (vc, yhat_vc[0][0,0]), 
@@ -908,11 +913,16 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                 data_x = df.loc[text, 'vc100']
                 point = (data_x, data_y)
                 # Create the new label
+                if label_overrides[text][2]: 
+                    # If the override is set to draw an arrow:
+                    arrowprops_override = {'arrowstyle':'-', 'shrinkB': 5}
+                else:
+                    arrowprops_override = None
                 ax.annotate(text,
                             xy=point,
                             xytext=(label_overrides[text][0],
                                     label_overrides[text][1]),
-                            arrowprops={'arrowstyle':'-', 'shrinkB': 5},
+                            arrowprops=arrowprops_override,
                             bbox=dict(pad=0., facecolor='none', ec='none'),
                             fontsize=labelsize)
         elif isinstance(child, mpl.patches.FancyArrowPatch):
@@ -929,7 +939,8 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     
     return yhat_vc
 
-def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
+def plt_vs_gmr_vc(ycol, tgt_fname=None, 
+                  source_fname='dm_stats_dz1.0_20230626.h5',
                   forecast_sig=1.-0.682, verbose=False, 
                   adjust_text_kwargs={}, show_formula='outside',
                   figsize=(10,5), labelsize=14., vc=vc_eilers, dvc=dvc_eilers):
@@ -1003,7 +1014,7 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
     
     return yhat_vc
 
-def plt_disc_diffs(df_source='dm_stats_20220715.h5', 
+def plt_disc_diffs(df_source='dm_stats_dz1.0_20230626.h5', 
                    diff_source='den_disp_dict_20220818.pkl',
                    only_linear=False, 
                    only_log=False, figsize=None, tgt_fname=None,
@@ -1110,7 +1121,7 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
     
     return None
 
-def plt_gmr_vs_vc(df_source='dm_stats_20220715.h5', tgt_fname=None,
+def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
                   figsize=(8,4),
                   labelsize=11., adjust_text_kwargs={}):
     df = dm_den.load_data(df_source).drop(['m12z','m12w'])
@@ -1152,7 +1163,7 @@ def plt_gmr_vs_vc(df_source='dm_stats_20220715.h5', tgt_fname=None,
 
     return None
 
-def plt_particle_counts(df_source='dm_stats_20220715.h5'):
+def plt_particle_counts(df_source='dm_stats_dz1.0_20230626.h5'):
     import cropper
 
     df = dm_den.load_data(df_source)
