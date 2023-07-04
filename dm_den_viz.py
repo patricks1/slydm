@@ -116,7 +116,7 @@ def plt_slr(fname, xcol, ycol,
             showlabels=True,
             labelsize=15, arrowprops=None, formula_y=-0.2,
             dropgals=None, show_formula=True, adjust_text_kwargs={},
-            tgt_fname=None, minarrow=0.02, ax_slr_kwargs={}):
+            tgt_fname=None, ax_slr_kwargs={}):
     'Plot a simple linear regression'
 
     fig = plt.figure(figsize=figsize, dpi=dpi)
@@ -129,7 +129,7 @@ def plt_slr(fname, xcol, ycol,
                  showlabels,
                  labelsize, arrowprops, formula_y,
                  dropgals, show_formula=show_formula, 
-                 adjust_text_kwargs=adjust_text_kwargs, minarrow=minarrow,
+                 adjust_text_kwargs=adjust_text_kwargs, 
                  **ax_slr_kwargs)
 
     if tgt_fname is not None:
@@ -154,7 +154,7 @@ def ax_slr(ax, fname, xcol, ycol,
            labelsize=15, arrowprops=None, formula_y=-0.2,
            dropgals=None, showGeV=True, show_formula=True,
            x_forecast=None, dX=None, forecast_sig=1.-0.682, verbose=False,
-           minarrow=0.02, adjust_text_kwargs={}, legend_txt=None, 
+           adjust_text_kwargs={}, legend_txt=None, 
            return_error=False, show_band=False,
            **kwargs):
     'Plot a simple linear regression on ax'
@@ -281,7 +281,7 @@ def ax_slr(ax, fname, xcol, ycol,
             Ys = prediction_y[0]
             dYs = prediction_y[1]
         eb = plt_forecast(ax, x_forecast, Ys, dYs)
-        adjust_text_kwargs['add_objects'] = eb
+        adjust_text_kwargs['objects'] = eb
 
     df = dm_den.load_data(fname)
     if dropgals:
@@ -303,7 +303,7 @@ def ax_slr(ax, fname, xcol, ycol,
                 yadjustment=display_yadj,
                 showcorr=False,
                 arrowprops=arrowprops, showlabels=showlabels, 
-                minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
+                adjust_text_kwargs=adjust_text_kwargs,
                 labelsize=labelsize, **kwargs)
     ###########################################################################
     
@@ -515,7 +515,7 @@ def fill_ax_new(ax, df, xcol, ycol,
                 xscale='linear', yscale='linear', 
                 showlabels=True,
                 labelsize=15, arrowprops=None, color='blue', alpha=1., 
-                showcorr=True, legend_txt=None, minarrow=0.02,
+                showcorr=True, legend_txt=None, 
                 adjust_text_kwargs={}, xtickspace=None, ytickspace=None,
                 **kwargs):
     if xcol == 'den_solar' and xadjustment == 'log' and xlabel is None:
@@ -571,19 +571,8 @@ def fill_ax_new(ax, df, xcol, ycol,
             texts+=[ax.annotate(name, (float(x), float(y)), 
                                 fontsize=labelsize)]
         if arrowprops:
-            adjust_text(texts, arrowprops=arrowprops, ax=ax, 
-                        **adjust_text_kwargs)
-            ###################################################################
-            # Remove short arrows
-            ###################################################################
-            for child in ax.get_children():
-                if isinstance(child, mpl.text.Annotation):
-                    arrowlen = np.linalg.norm(np.array(child.xy) \
-                                              - np.array([child._x, 
-                                                          child._y]))
-                    if arrowlen < minarrow:
-                        child.arrowprops=None
-            ###################################################################
+            adjust_text(texts, ax=ax, 
+                        **adjust_text_kwargs, arrowprops=arrowprops)
         else:
             adjust_text(texts, ax=ax)
 
@@ -743,13 +732,23 @@ def draw_shades(ax, ycol, vc, dvc, xmult=1.):
 def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
               update_val=False,
               forecast_sig=1.-0.682, #forecast significance
-              verbose=False, minarrow=0.03,
+              verbose=False, 
               adjust_text_kwargs={}, show_formula='outside',
               figsize=(10,5), labelsize=14., vc=vc_eilers, dvc=dvc_eilers,
+              label_overrides={},
               **kwargs):
+    '''
+    Parameters
+    ----------
+    ...
+    label_overrides: dict
+        A dictionary for overwriting the auto-placed data labels in the form 
+            {galname: (annx, anny, draw_arrow)}
+        If draw_arrow is True (False), an arrow will (will not) link the data
+            point with its label.
+    '''
     vc /= 100.
     dvc /= 100.
-
 
     df = dm_den.load_data(source_fname)
     textxy = (0.04, 0.96)
@@ -792,7 +791,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
                       showlabels=True, 
                       x_forecast=x_forecast, forecast_sig=forecast_sig, 
                       dX=dX, showGeV=True, verbose=verbose,
-                      minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
+                      adjust_text_kwargs=adjust_text_kwargs,
                       labelsize=labelsize, return_error=True, 
                       show_band=True, **kwargs)
     delta_beta = reg_disc[-3] #errors on the regression coefficients
@@ -802,10 +801,11 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     # The [Ys, dYs] from the y prediction made at x_forecast:
     yhat_vc = reg_disc[-1] 
 
+    # Set the pos of the MW label
     if ycol == 'disp_dm_disc_cyl':
-        mw_text_kwargs = {'xytext':(0.2,0.65)}
+        mw_text_kwargs = {'xytext':(0.2, 0.65)} 
     elif ycol == 'den_disc':
-        mw_text_kwargs = {'xytext':(0.3,0.5)}
+        mw_text_kwargs = {'xytext':(0.33, 0.55)}
     mw_text = ax.annotate('Milky Way', (vc, yhat_vc[0][0,0]), 
                           fontsize=labelsize,
                           color='red', 
@@ -891,9 +891,35 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     display(Latex('$|z|\in[0,{1:0.2f}]\,\mathrm{{kpc}}$' \
                   .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
 
+    # Take the vc/100 values that the x-axis is based on and turn them into vc:
     ax.xaxis.set_major_formatter(lambda x, pos: '{0:0.0f}'.format(x*100.))
+
+    # Replace the necessary labels/annotations with their overrides
+    for child in ax.get_children():
+        if isinstance(child, mpl.text.Annotation):
+            text = child.get_text()
+            if text in label_overrides:
+                child.remove() # Delete the existing text label
+
+                # Get the location of the data point
+                data_y = df.loc[text, ycol]
+                if ycol == 'den_disc':
+                    data_y = np.log10(data_y)
+                data_x = df.loc[text, 'vc100']
+                point = (data_x, data_y)
+                # Create the new label
+                ax.annotate(text,
+                            xy=point,
+                            xytext=(label_overrides[text][0],
+                                    label_overrides[text][1]),
+                            arrowprops={'arrowstyle':'-', 'shrinkB': 5},
+                            bbox=dict(pad=0., facecolor='none', ec='none'),
+                            fontsize=labelsize)
+        elif isinstance(child, mpl.patches.FancyArrowPatch):
+            text = child.patchA.get_text()
+            if text in label_overrides:
+                child.remove() # Delete the existing arrow
     plt.draw()
-    
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
@@ -904,7 +930,7 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_20220715.h5',
     return yhat_vc
 
 def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
-                  forecast_sig=1.-0.682, verbose=False, minarrow=0.03,
+                  forecast_sig=1.-0.682, verbose=False, 
                   adjust_text_kwargs={}, show_formula='outside',
                   figsize=(10,5), labelsize=14., vc=vc_eilers, dvc=dvc_eilers):
     df = dm_den.load_data(source_fname)
@@ -938,7 +964,7 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
                       show_formula=show_formula, x_forecast=[[vc]],
                       dX=[[dvc]], showGeV=False, 
                       showlabels=True, formula_y=formula_y, verbose=verbose,
-                      minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
+                      adjust_text_kwargs=adjust_text_kwargs,
                       labelsize=labelsize)
     yhat_gmr = reg_gmr[-1]
     #plt_forecast(ax0, yhat_gmr)
@@ -955,7 +981,7 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None, source_fname='dm_stats_20220715.h5',
                      showlabels=True, 
                      x_forecast=[[vc]], forecast_sig=forecast_sig, 
                      dX=[[dvc]], showGeV=True, verbose=verbose,
-                     minarrow=minarrow, adjust_text_kwargs=adjust_text_kwargs,
+                     adjust_text_kwargs=adjust_text_kwargs,
                      labelsize=labelsize)
     yhat_vc = reg_disc[-1]
     ax1.set_ylabel(None)
@@ -1086,7 +1112,7 @@ def plt_disc_diffs(df_source='dm_stats_20220715.h5',
 
 def plt_gmr_vs_vc(df_source='dm_stats_20220715.h5', tgt_fname=None,
                   figsize=(8,4),
-                  labelsize=11., minarrow=0.01, adjust_text_kwargs={}):
+                  labelsize=11., adjust_text_kwargs={}):
     df = dm_den.load_data(df_source).drop(['m12z','m12w'])
     xcol = 'v_dot_phihat_disc(T<=1e4)'
     ycol = 'vcirc'
@@ -1100,7 +1126,7 @@ def plt_gmr_vs_vc(df_source='dm_stats_20220715.h5', tgt_fname=None,
            yadjustment='log',
            show_formula='outside', dropgals=['m12z','m12w'],
            labelsize=labelsize, arrowprops={'arrowstyle':'-'},
-           minarrow=minarrow, legend_txt='best fit',
+           legend_txt='best fit',
            adjust_text_kwargs=adjust_text_kwargs)
     
     #Plot 1:1 line

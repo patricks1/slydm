@@ -188,7 +188,7 @@ def unpack_new(df, galname, dr=1.5, drsolar=None, typ='fire',
     #files, the file name convention will reflect that.
     h=get_data(almost_full_path,N,'Header','HubbleParam')
 
-    # Getting host halo info
+    # Getting host halo info 
     p, rvir, v, mvir = get_halo_info(halodirec, suffix, typ, host_key, 
                                      mass_class)
     
