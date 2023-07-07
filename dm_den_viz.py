@@ -1190,7 +1190,10 @@ def plt_particle_counts(df_source='dm_stats_dz1.0_20230626.h5'):
         ax.set_xticks(bins, 
                       labels=['{0:0.0f}'.format(b/split) for b in bins])
         ax.tick_params(axis='x', labelrotation=45)
-        ax.grid()
+        ax.grid(False)
+        ax.set_ylabel('$N_\mathrm{gals}$')
+        ax.set_xlabel('$N_\mathrm{DM}$')
+        ax.set_title('Sliced {0:0.0f} times'.format(split))
         plt.show()
 
     return None
