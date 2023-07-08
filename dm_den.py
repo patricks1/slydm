@@ -566,9 +566,10 @@ def atan(y,x):
         atan_val += 2.*np.pi
     return atan_val
 
-def den_disp_phi_bins(source_fname, tgt_fname=None, N_bins=15, verbose=False):
+def den_disp_phi_bins(source_fname, tgt_fname=None, N_slices=15, 
+                      verbose=False):
     '''
-    Generate a dictionary of density and dispersion in phi bins, split up by
+    Generate a dictionary of density and dispersion in phi slices, split up by
     galaxy
     '''
     import cropper
@@ -576,7 +577,7 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_bins=15, verbose=False):
     df = load_data(source_fname)
     pbar = ProgressBar()
     d = {} #initialize dictionary
-    phi_bins = np.linspace(0., 2.*np.pi, N_bins+1)
+    phi_slices = np.linspace(0., 2.*np.pi, N_slices+1)
     for k, galname in enumerate(pbar(df.index)):
         gal = cropper.load_data(galname, getparts=['PartType1'], verbose=False)
         phis = np.array([atan(y,x) \
@@ -591,17 +592,18 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_bins=15, verbose=False):
         d[galname] = {}
         d[galname]['dens'] = []
         d[galname]['disps'] = []
-        d[galname]['phi_bins'] = phi_bins.copy()
+        d[galname]['phi_bins'] = phi_slices.copy()
         dens = d[galname]['dens']
         disps = d[galname]['disps']
 
         zs = gal['PartType1']['coord_rot'][:,2]
-        for i, phi_bin in enumerate([phi_bins[j:j+2] for j in range(N_bins)]):
+        for i, phi_bin in enumerate([phi_slices[j:j+2] 
+                                     for j in range(N_slices)]):
             # phi_bin is a 2-element list. The 0 element is the beginning edge
             # of the bin. The 1 element is the ending edge of the bin.
             #using a copy just to make sure phi_bin doesn't get modified
             bin_ = phi_bin.copy() 
-            if i == N_bins-1:
+            if i == N_slices-1:
                 # Add a small value to the ending edge of the bin, which is 
                 # 2pi. We do this in case any particles are *exactly* at 2pi;
                 # otherwise we would miss them.

@@ -1015,7 +1015,7 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None,
     return yhat_vc
 
 def plt_disc_diffs(df_source='dm_stats_dz1.0_20230626.h5', 
-                   diff_source='den_disp_dict_20220818.pkl',
+                   diff_source='den_disp_dict_N15_dz1.0_20230707.pkl',
                    only_linear=False, 
                    only_log=False, figsize=None, tgt_fname=None,
                    update_val=False):
@@ -1023,7 +1023,7 @@ def plt_disc_diffs(df_source='dm_stats_dz1.0_20230626.h5',
     For density and dispersion, plot histograms of the fractional difference
     between the average value in 
     the solar ring and that
-    measured in various phi bins in that ring.
+    measured in various phi slices in that ring.
 
     The density and dispersion values come from a pickled dictionary that was
     created by dm_den.den_disp_phi_bins.
@@ -1089,7 +1089,7 @@ def plt_disc_diffs(df_source='dm_stats_dz1.0_20230626.h5',
     w = 1.
     N = 10
     ec = 'w'
-    ylabel = '$N_\mathrm{\phi\,bin}$'
+    ylabel = '$N_{\phi\,\mathrm{slices}}$'
     
     if not only_log:
         denlabel, displabel, dens, disps = setup(False)
@@ -1111,6 +1111,10 @@ def plt_disc_diffs(df_source='dm_stats_dz1.0_20230626.h5',
         i += 1
         axs[i].hist(disps, N, rwidth=w, ec=ec)
         axs[i].set_xlabel(displabel)
+
+    # Set the x tick labels to be 3 decimals
+    axs[-2].xaxis.set_major_formatter(lambda x, pos: '{0:0.3f}'.format(x))
+    axs[-1].xaxis.set_major_formatter(lambda x, pos: '{0:0.3f}'.format(x))
 
     if tgt_fname:
         plt.savefig(paths.figures+tgt_fname,
@@ -1192,8 +1196,8 @@ def plt_particle_counts(df_source='dm_stats_dz1.0_20230626.h5'):
         ax.tick_params(axis='x', labelrotation=45)
         ax.grid(False)
         ax.set_ylabel('$N_\mathrm{gals}$')
-        ax.set_xlabel('$N_\mathrm{DM}$')
-        ax.set_title('Sliced {0:0.0f} times'.format(split))
+        ax.set_xlabel('$N_\mathrm{DM}$ per slice')
+        ax.set_title('{0:0.0f} slices'.format(split))
         plt.show()
 
     return None
