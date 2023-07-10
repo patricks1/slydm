@@ -1014,8 +1014,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None,
     
     return yhat_vc
 
-def plt_disc_diffs(df_source='dm_stats_dz1.0_20230626.h5', 
-                   diff_source='den_disp_dict_N15_dz1.0_20230707.pkl',
+def plt_disc_diffs(df_source, 
+                   diff_source,
                    only_linear=False, 
                    only_log=False, figsize=None, tgt_fname=None,
                    update_val=False):
@@ -1055,12 +1055,19 @@ def plt_disc_diffs(df_source='dm_stats_dz1.0_20230626.h5',
                              for galname in galnames]).flatten()
             disps = np.array([den_disp_dict[galname]['log(disps)/log(avg)'] \
                               for galname in galnames]).flatten()
+            den_percent_diff = staudt_utils.round_up(
+                100.*np.max(np.abs(1.-dens)),
+                3)
+            disp_percent_diff = staudt_utils.round_up(
+                100.*np.max(np.abs(1.-disps)),
+                3)
             percent_diff = staudt_utils.round_up(
                 100.*np.max(np.abs(1.-np.array([dens,disps]))),
                 3)
+            print('{0:0.2f}% max den diff'.format(den_percent_diff))
+            print('{0:0.2f}% max disp diff'.format(disp_percent_diff))
             if update_val:
                 #update the value in data.dat for the paper
-                print('{0:0.2f}\%'.format(percent_diff))
                 dm_den.save_var_latex('maxdiff',
                                       '{0:0.2f}\%'.format(percent_diff))
             staudt_utils.print_eq('\min\Delta\log\\rho/\log\overline{\\rho}',
@@ -1167,7 +1174,7 @@ def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
 
     return None
 
-def plt_particle_counts(df_source='dm_stats_dz1.0_20230626.h5'):
+def plt_particle_counts(df_source):
     import cropper
 
     df = dm_den.load_data(df_source)
