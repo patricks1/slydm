@@ -208,7 +208,7 @@ def label_axes(axs, gals):
 
 def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
     import dm_den
-    df = dm_den.load_data('dm_stats_20221208.h5')
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     if gals == 'discs':
         df = df.drop(['m12w', 'm12z'])
     elif isinstance(gals, (list, np.ndarray)):
@@ -343,7 +343,8 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
 
     return vesc_fits
 
-def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
+def fit_vdamp(gals='discs', show_exp=False, show_mao=False, show_rms=False,
+              tgt_fname=None):
     '''
     Plot the best posible distributions, individually fitting vdamp and v0 for
     each galaxy
@@ -365,7 +366,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
         Dictionary keyed by galaxy of the best fit vdamps
     '''
     import dm_den
-    df = dm_den.load_data('dm_stats_20221208.h5')
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     if gals == 'discs':
         df = df.drop(['m12w', 'm12z'])
     elif isinstance(gals, (list, np.ndarray)):
@@ -454,6 +455,13 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                                       show=False).replace('$','')
         
         axs[i].stairs(ps_truth, bins, color='k', label='data')
+
+        # Set label for the line from this work
+        if show_exp or show_mao:
+            label_this = 'fit, sigmoid trunc'
+        else:
+            label_this = 'fit'
+
         axs[i].plot(
             vs_postfit, 
             smooth_step_max(
@@ -461,7 +469,7 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                 res_v0_vesc.params['v0'], 
                 res_v0_vesc.params['vdamp'],
                 res_v0_vesc.params['k']),
-            label='fit, sigmoid trunc', color='C2')
+                label=label_this, color='C2')
         if show_exp:
             del(p['k'])
             res_exp = lmfit.minimize(resids_exp_max, p, method='nelder',
@@ -490,44 +498,45 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
             # Draw vesc line
             #axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
 
-        # Testing Mao parameterization
-        model_mao = lmfit.Model(mao)
-        params_mao = model_mao.make_params()
-        params_mao['v0'].set(value=vc, vary=True, min=100., max=400.)
-        params_mao['vesc'].set(value=vesc, vary=False, min=vc, max=900.)
-        params_mao['p'].set(value=1., vary=True, min=0.)
-        result_mao = model_mao.fit(ps_truth, params_mao,
-                                   v=vs_truth,
-                                   method='nelder')
-        axs[i].plot(vs_postfit,
-                    mao(vs_postfit,
-                        result_mao.params['v0'].value,
-                        result_mao.params['vesc'].value,
-                        result_mao.params['p'].value),
-                    label='Mao, fixed $v_\mathrm{esc}(\Phi)$',
-                    color='C3')
-        rms_err_mao_fixed = calc_rms_err(vs_truth, ps_truth, mao,
-                                         args=[result_mao.params[key] 
-                                               for key in result_mao.params])
-        rms_txt_mao_fixed = staudt_utils.mprint(rms_err_mao_fixed, d=1, 
-                                                show=False).replace('$','')
+        if show_mao:
+            # Testing Mao parameterization
+            model_mao = lmfit.Model(mao)
+            params_mao = model_mao.make_params()
+            params_mao['v0'].set(value=vc, vary=True, min=100., max=400.)
+            params_mao['vesc'].set(value=vesc, vary=False, min=vc, max=900.)
+            params_mao['p'].set(value=1., vary=True, min=0.)
+            result_mao = model_mao.fit(ps_truth, params_mao,
+                                       v=vs_truth,
+                                       method='nelder')
+            axs[i].plot(vs_postfit,
+                        mao(vs_postfit,
+                            result_mao.params['v0'].value,
+                            result_mao.params['vesc'].value,
+                            result_mao.params['p'].value),
+                        label='Mao, fixed $v_\mathrm{esc}(\Phi)$',
+                        color='C3')
+            rms_err_mao_fixed = calc_rms_err(vs_truth, ps_truth, mao,
+                                             args=[result_mao.params[key] 
+                                                   for key in result_mao.params])
+            rms_txt_mao_fixed = staudt_utils.mprint(rms_err_mao_fixed, d=1, 
+                                                    show=False).replace('$','')
 
-        params_mao['vesc'].set(vary=True)
-        result_mao = model_mao.fit(ps_truth, params_mao,
-                                   v=vs_truth,
-                                   method='nelder')
-        axs[i].plot(vs_postfit,
-                    mao(vs_postfit,
-                        result_mao.params['v0'].value,
-                        result_mao.params['vesc'].value,
-                        result_mao.params['p'].value),
-                    label='Mao, free $v_\mathrm{esc}$',
-                    color='C4')
-        rms_err_mao_free = calc_rms_err(vs_truth, ps_truth, mao,
-                                        args=[result_mao.params[key] 
-                                               for key in result_mao.params])
-        rms_txt_mao_free = staudt_utils.mprint(rms_err_mao_free, d=1, 
-                                               show=False).replace('$','')
+            params_mao['vesc'].set(vary=True)
+            result_mao = model_mao.fit(ps_truth, params_mao,
+                                       v=vs_truth,
+                                       method='nelder')
+            axs[i].plot(vs_postfit,
+                        mao(vs_postfit,
+                            result_mao.params['v0'].value,
+                            result_mao.params['vesc'].value,
+                            result_mao.params['p'].value),
+                        label='Mao, free $v_\mathrm{esc}$',
+                        color='C4')
+            rms_err_mao_free = calc_rms_err(vs_truth, ps_truth, mao,
+                                            args=[result_mao.params[key] 
+                                                   for key in result_mao.params])
+            rms_txt_mao_free = staudt_utils.mprint(rms_err_mao_free, d=1, 
+                                                   show=False).replace('$','')
 
         axs[i].grid(False)
         # Make ticks on both sides of the x-axis:
@@ -546,27 +555,30 @@ def fit_vdamp(gals='discs', show_exp=False, tgt_fname=None):
                         **kwargs_txt)
         loc[1] -= 0.15
         kwargs_txt['fontsize'] = 9.
-        axs[i].annotate(#'$v_\mathrm{{esc}}'
-                        #'={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
-                        #'$v_\mathrm{{damp}}'
-                        #'={1:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
-                        #'$v_0={3:0.0f}$\n'
-                        #'$k={6:0.4f}$\n'
-                        '$\mathrm{{RMS_{{sig}}}}={4:s}$\n'
-                        '$\mathrm{{RMS_{{Mao\,fixed}}}}={7:s}$\n'
-                        '$\mathrm{{RMS_{{Mao\,free}}}}={8:s}$'
-                        #'N$_\mathrm{{eval}}={5:0.0f}$'
-                        .format(vesc, 
-                                res_v0_vesc.params['vdamp'].value,
-                                res_v0_vesc.chisqr, 
-                                res_v0_vesc.params['v0'].value,
-                                rms_txt_sigmoid,
-                                res_v0_vesc.nfev,
-                                res_v0_vesc.params['k'].value,
-                                rms_txt_mao_fixed,
-                                rms_txt_mao_free
-                               ),
-                        loc, **kwargs_txt)
+        if show_rms:
+            annotation = (#'$v_\mathrm{{esc}}'
+                          #'={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
+                          #'$v_\mathrm{{damp}}'
+                          #'={1:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
+                          #'$v_0={3:0.0f}$\n'
+                          #'$k={6:0.4f}$\n'
+                          '$\mathrm{{RMS_{{sig}}}}={4:s}$\n'
+                          #'N$_\mathrm{{eval}}={5:0.0f}$'
+                         )
+            if show_mao:
+                annotation += ('$\mathrm{{RMS_{{Mao\,fixed}}}}={7:s}$\n' 
+                               '$\mathrm{{RMS_{{Mao\,free}}}}={8:s}$' )
+            axs[i].annotate(annotation.format(vesc, 
+                                    res_v0_vesc.params['vdamp'].value,
+                                    res_v0_vesc.chisqr, 
+                                    res_v0_vesc.params['v0'].value,
+                                    rms_txt_sigmoid,
+                                    res_v0_vesc.nfev,
+                                    res_v0_vesc.params['k'].value,
+                                    rms_txt_mao_fixed if show_mao else None,
+                                    rms_txt_mao_free if show_mao else None
+                                   ),
+                            loc, **kwargs_txt)
         '''
         if show_exp:
             loc[1] -= 0.2
@@ -641,7 +653,7 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
     import dm_den
-    df = dm_den.load_data('dm_stats_20221208.h5')
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     if gals == 'discs':
         df.drop(['m12w', 'm12z'], inplace=True)
     elif isinstance(gals, (list, np.ndarray)):
@@ -888,7 +900,7 @@ def fit_universal_no_uncert(gals='discs', method='leastsq', update_vals=False,
         raise ValueError('tgt_fname for plot image can only be specified if'
                          ' plot is True')
     import dm_den
-    df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
     pdfs = copy.deepcopy(pdfs_v)
@@ -1122,7 +1134,7 @@ def calc_gs(vmins, vcircs, d, e, h, j, k, parallel=False):
 
 def fit_g(galaxy='discs', limit=None, update_values=False, parallel=False):
     import dm_den
-    df = dm_den.load_data('dm_stats_20221208.h5')
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     pdfs = copy.deepcopy(pdfs_v)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
@@ -1214,7 +1226,7 @@ def plt_universal(gals='discs', update_values=False,
                          'all the discs.')
     import dm_den
     import dm_den_viz
-    df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
     if gals == 'discs':
@@ -1270,10 +1282,10 @@ def plt_universal(gals='discs', update_values=False,
 
     if vc100:
         params['d'].set(value=114.970072, vary=True, min=0.)
-        params['e'].set(value=0.92818194, vary=False, min=0.)
+        params['e'].set(value=0.92818194, vary=True, min=0.)
         params['h'].set(value=388.227498, vary=True, min=0.)
-        params['j'].set(value=0.27035486, vary=False, min=0.)
-        params['k'].set(value=0.03089876, vary=False, min=0.0001, max=1.)
+        params['j'].set(value=0.27035486, vary=True, min=0.)
+        params['k'].set(value=0.03089876, vary=True, min=0.0001, max=1.)
     else:
         params['d'].set(value=1.60030613, vary=True, min=0.1, max=4.)
         params['e'].set(value=0.92819047, vary=True, min=0.1, max=4.)
@@ -1581,7 +1593,7 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18, v0char=1., N_samples=1000,
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
     
-    df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         result = pickle.load(f)
     pdfs = copy.deepcopy(pdfs_v)
@@ -1844,7 +1856,7 @@ def plt_universal_mc(gals='discs', m=1.):
     '''
     import dm_den
 
-    df = dm_den.load_data('dm_stats_20221208.h5')
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     df.drop(['m12z', 'm12w'], inplace=True)
 
     pdfs = copy.deepcopy(pdfs_v)
@@ -2004,7 +2016,7 @@ def plt_universal_mc(gals='discs', m=1.):
 
 def three_d_distribs():
     import dm_den
-    df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     #if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
     #    raise ValueError('Unexpected value provided for gals arg')
     pdfs = copy.deepcopy(pdfs_v)
@@ -2190,7 +2202,7 @@ def diff_fr68(params, assume_corr=False, incl_area=True,
 
     def count_within(gal, ddfrac, dhfrac):
         import dm_den
-        df = dm_den.load_data('dm_stats_20221208.h5')
+        df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
 
         pdf_gal = pdfs[gal]
         ps = pdf_gal['ps']
@@ -2281,7 +2293,7 @@ def count_within_agg(ddfrac, dhfrac, df, assume_corr=False,
 
 def diff_fr68_agg(params, assume_corr=False, incl_area=True,
                   verbose=False):
-    df = pd.read_pickle(paths.data + 'dm_stats_20221208.pkl')
+    df = pd.read_pickle(paths.data + 'dm_stats_dz1.0_20230626.pkl')
 
     ddfrac = params['ddfrac']
     dhfrac = params['dhfrac']
@@ -2336,7 +2348,7 @@ def compare_methods(save_fname=None, verbose=False):
     import dm_den
     with open(paths.data + 'rms_errs.pkl', 'rb') as f:
         rms_dict = pickle.load(f)
-    df = dm_den.load_data('dm_stats_20221208.h5')
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     df_rms = pd.DataFrame.from_dict(rms_dict)
     df = pd.concat([df, df_rms], axis=1).drop(['m12w', 'm12z'])
     if verbose:

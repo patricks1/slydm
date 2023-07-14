@@ -5,12 +5,13 @@ import h5py
 import time
 import scipy
 import sys
+import datetime
 import pandas as pd
 import multiprocessing as mp
 import numpy as np
 
-N = 25 
-maximum = 0.15
+N = 26 
+maximum = 0.16
 
 dhfracs = np.linspace(0.0, maximum, N)
 Nh = len(dhfracs)
@@ -22,9 +23,15 @@ override = False
 if override:
     fname = 'grid_gfit.h5' # Location to store / from which to pull grid data
     with open(paths.data + 'data_raw_gfit.pkl', 'rb') as f: 
+        # Give fitting.count_within_agg hard-coded parameters from fitting
+        # for the halo integral
         data_override = pickle.load(f)
 else:
-    fname = 'grid.h5' # Location to store / from which to pull grid data
+    date = datetime.date.today().strftime('%Y%m%d')
+    # Location to store / from which to pull grid data
+    fname = 'grid_' + date + '.h5' 
+    # Don't give fitting.count_within_agg hard-coded parameters. Let it look
+    # up the parameters stored in data_raw.pkl.
     data_override = None
 
 def get_df():

@@ -900,6 +900,21 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_dz1.0_20230626.h5',
     ax.xaxis.set_major_formatter(lambda x, pos: '{0:0.0f}'.format(x*100.))
 
     # Replace the necessary labels/annotations with their overrides
+    override_labels(label_overrides, ax, df, ycol, 'vc100', labelsize,
+                    xadjustment=None, yadjustment=yadjustment)
+
+    plt.draw()
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=140)
+
+    plt.show()
+    
+    return yhat_vc
+
+def override_labels(label_overrides, ax, df, ycol, xcol, labelsize,
+                    xadjustment=None, yadjustment=None):
     for child in ax.get_children():
         if isinstance(child, mpl.text.Annotation):
             text = child.get_text()
@@ -908,9 +923,11 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_dz1.0_20230626.h5',
 
                 # Get the location of the data point
                 data_y = df.loc[text, ycol]
-                if ycol == 'den_disc':
+                data_x = df.loc[text, xcol]
+                if yadjustment == 'log':
                     data_y = np.log10(data_y)
-                data_x = df.loc[text, 'vc100']
+                if xadjustment == 'log':
+                    data_x = np.log10(data_x)
                 point = (data_x, data_y)
                 # Create the new label
                 if label_overrides[text][2]: 
@@ -929,15 +946,6 @@ def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_dz1.0_20230626.h5',
             text = child.patchA.get_text()
             if text in label_overrides:
                 child.remove() # Delete the existing arrow
-    plt.draw()
-    if tgt_fname is not None:
-        plt.savefig(paths.figures+tgt_fname,
-                    bbox_inches='tight',
-                    dpi=140)
-
-    plt.show()
-    
-    return yhat_vc
 
 def plt_vs_gmr_vc(ycol, tgt_fname=None, 
                   source_fname='dm_stats_dz1.0_20230626.h5',
@@ -1134,7 +1142,17 @@ def plt_disc_diffs(df_source,
 
 def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
                   figsize=(8,4),
-                  labelsize=11., adjust_text_kwargs={}):
+                  labelsize=11., adjust_text_kwargs={}, label_overrides={}):
+    '''
+    Parameters
+    ----------
+    ...
+    label_overrides: dict
+        A dictionary for overwriting the auto-placed data labels in the form 
+            {galname: (annx, anny, draw_arrow)}
+        If draw_arrow is True (False), an arrow will (will not) link the data
+            point with its label.
+    '''
     df = dm_den.load_data(df_source).drop(['m12z','m12w'])
     xcol = 'v_dot_phihat_disc(T<=1e4)'
     ycol = 'vcirc'
@@ -1164,6 +1182,9 @@ def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
     display(Latex('$r^2_\mathrm{{1:1}}={0:0.2f}$'.format(r2_1to1)))
 
     ax.legend(fontsize=11)
+
+    override_labels(label_overrides, ax, df, ycol, xcol, labelsize, 
+                    'log', 'log')
 
     if tgt_fname:
         plt.savefig(paths.figures+tgt_fname,
