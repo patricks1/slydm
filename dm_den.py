@@ -845,7 +845,6 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
                                                         & indisc])
         df.loc[galname, 'vc100'] = df.loc[galname, 
                                           'v_dot_phihat_disc(T<=1e4)'] / 100.
-        print(df.loc[galname, 'vc100'])
         df.loc[galname,
                'v_dot_phihat_shell(T<=1e4)'] = np.mean(d['PartType0']\
                                                         ['v_dot_phihat']\
@@ -1062,10 +1061,18 @@ def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
     df = init_df(mass_class)
     #df = df[df.index=='m12b']
     df = insert_analysis(df)
+
+    with open(paths.data + 'vescs_rot_20230514.pkl', 'rb') as f:
+        vescs = pickle.load(f)
+
+    for gal in df.index:
+        df.loc[gal, 'vesc'] = vescs[gal]['ve_avg']
+
     df.attrs = {}
     df.attrs['dr'] = dr
     df.attrs['drsolar'] = drsolar
     df.attrs['dz'] = dz
+    test_gen_data(df)
     if fname:
         save_data(df, fname)
     return df
@@ -1079,92 +1086,6 @@ def convert_den(dens):
     dens = dens * u.Msun / u.kpc**3. * c.c**2.
     dens = dens.to(u.GeV / u.cm**3.)
     return dens
-
-def test_gen_data(test_fname=None):
-    df_old = load_data('dm_stats_dz1.0_20230616.h5')
-    if test_fname is not None:
-        df_new = load_data(test_fname)
-    else:
-        df_new = gen_data(source='cropped')
-
-    changed_cols = []
-    for col in df_old.columns:
-        if col in df_new.columns:
-            old = df_old[col]
-            new = df_new[col]
-            unchanged = True # initializing the variable
-            if 'den' in col:
-                gev_old = convert_den(old).value
-                gev_new = convert_den(new).value
-                unchanged = np.allclose(gev_old, gev_new)
-                old = np.log10(old)
-                new = np.log10(new)
-            if old.dtype == 'object':
-                unchaged = unchanged and np.array_equal(old, new)
-            else:
-                unchanged = unchaged and np.allclose(old, new)
-            if not unchanged:
-                changed_cols += [col]
-                print('\n{0:s} failed'.format(col))
-                print( np.array( [old, new] ).T )
-    assert len(changed_cols) == 0
-    print('gen_data test passed.')
-    return None
-
-def compare_dfs(fname1, fname2):
-    df1 = load_data(fname1)
-    df2 = load_data(fname2)
-
-    for col in df1.columns:
-        if col in df2.columns:
-            one = df1[col]
-            two = df2[col]
-            if 'den' in col:
-                gev_one = convert_den(one).value
-                gev_two = convert_den(two).value
-                unchanged = np.allclose(gev_one, gev_two)
-                if not unchanged:
-                    print('\n{0:s} has changed.'.format(col))
-                    print( np.array( [gev_one, gev_two] ).T )
-                one = np.log10(one)
-                two = np.log10(two)
-            if one.dtype == 'object':
-                unchanged = np.array_equal(one, two)
-            else:
-                unchanged = np.allclose(one, two)
-            if not unchanged:
-                print('\n{0:s} has changed.'.format(col))
-                print( np.array( [one, two] ).T )
-    return None
-
-def save_data(df, fname):
-    abspath = os.path.abspath(__file__) #path to this script
-    direc = os.path.dirname(abspath) #path to this script's directory
-    direc += '/data/'
-    fname=direc+fname
-    with pd.HDFStore(fname) as store:
-        store.put('data',df)
-        store.get_storer('data').attrs.metadata = df.attrs
-    return None
-
-def load_data(fname):
-    abspath = os.path.abspath(__file__) #path to this script
-    direc = os.path.dirname(abspath) #path to this script's directory
-    direc += '/data/'
-    fname=direc+fname
-
-    # Ensure the file exists
-    if not os.path.isfile(fname):
-        raise FileNotFoundError(fname)
-
-    try:
-        with pd.HDFStore(fname) as store:
-            df=store['data']
-            df.attrs=store.get_storer('data').attrs.metadata
-    except (KeyError, ValueError):
-        print(fname)
-        df=pd.read_hdf(fname)
-    return df
 
 def calc_f_vals(df):
     fs = 10.**7./df['den_solar']
@@ -1627,6 +1548,215 @@ def get_v_escs(fname=None, rotate=False):
         raise e 
     return v_escs
 
+def find_vcrits_fr_halo_int():
+    import fitting
+
+    df = load_data('dm_stats_dz1.0_20230626.h5')
+    gals = list(df.index)
+    for gal_ in ['m12w', 'm12z']:
+        gals.remove(gal_)
+    with open('./data/data_raw.pkl', 'rb') as f:
+        params = pickle.load(f)
+    with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
+        pdfs = pickle.load(f)
+    with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
+        vescs = pickle.load(f)
+    vs = np.linspace(200., 650., 500)
+
+    vcrits = {} 
+    pbar = ProgressBar()
+    for gal in pbar(gals):
+        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        vc100 = df.loc[gal, 'vc100']
+        assert vc100 == vc / 100.
+        v0 = params['d'] * vc100 ** params['e']
+        vdamp = params['h'] * vc100 ** params['j']
+        gs_sigmoid = fitting.calc_g_general(vs,
+                                            fitting.pN_smooth_step_max,
+                                            (v0, vdamp, params['k']))
+        gs_max = fitting.calc_g_general(vs,
+                                        fitting.pN_smooth_step_max,
+                                        (vc, np.inf, np.inf))
+
+        diffs = np.log10(gs_max / gs_sigmoid)
+        ddifs = diffs[1:] - diffs[:-1]
+        dvs = vs[1:] - vs[:-1]
+        ddif_dv = ddifs / dvs
+        mid_vs = (vs[1:] + vs[:-1]) / 2.
+        mid_gs_max = (gs_max[1:] + gs_max[:-1]) / 2.
+        mid_gs_sigmoid = (gs_sigmoid[1:] + gs_sigmoid[:-1]) / 2.
+        # Critical change in units of log g per change in speed:
+        critical_derivative = 0.1 / 35.
+        # Critical index:
+        icrit = np.min(np.where((ddif_dv >= critical_derivative) 
+                                & (mid_gs_sigmoid <= mid_gs_max))[0])
+        vcrits[gal] = vs[icrit]
+
+    with open('./data/vcrits.pkl', 'wb') as f:
+        pickle.dump(vcrits, f, pickle.HIGHEST_PROTOCOL)
+    
+    return vcrits
+
+def find_vcrits_fr_distrib(method='direct', update_values=False):
+    import fitting
+    import dm_den_viz
+
+    if method not in ['direct', 'derivative']:
+        raise ValueError('Unexpected argument passed for `method`. \'direct\''
+                         'and \'derivative\' are acceptable.')
+    df = load_data('dm_stats_dz1.0_20230626.h5')
+    df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = dm_den_viz.vc_eilers
+    df.loc['mw', 'vc100'] = df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] / 100.
+    gals = list(df.index)
+    for gal_ in ['m12w', 'm12z']:
+        gals.remove(gal_)
+    with open('./data/data_raw.pkl', 'rb') as f:
+        params = pickle.load(f)
+    with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
+        pdfs = pickle.load(f)
+    with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
+        vescs = pickle.load(f)
+    vescs['mw'] = {'ve_avg': 550.}
+    vs = np.linspace(200., 650., 500)
+
+    vcrits = {} 
+    pbar = ProgressBar()
+    for gal in pbar(gals):
+        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        vc100 = df.loc[gal, 'vc100']
+        assert vc100 == vc / 100.
+        vesc = vescs[gal]['ve_avg']
+        v0 = params['d'] * vc100 ** params['e']
+        vdamp = params['h'] * vc100 ** params['j']
+        ps_sigmoid = fitting.smooth_step_max(vs, v0, vdamp, params['k'])
+        ps_max_hard = fitting.smooth_step_max(vs, vc, vesc,
+                                             np.inf)
+        #ps_undamped = fitting.smooth_step_max(vs, v0, np.inf, np.inf)
+
+        if method == 'derivative':
+            diffs = np.log10(ps_max_hard / ps_sigmoid)
+            ddifs = diffs[1:] - diffs[:-1]
+            dvs = vs[1:] - vs[:-1]
+            ddif_dv = ddifs / dvs
+            mid_vs = (vs[1:] + vs[:-1]) / 2.
+            mid_ps_max_hard = (ps_max_hard[1:] + ps_max_hard[:-1]) / 2.
+            mid_ps_sigmoid = (ps_sigmoid[1:] + ps_sigmoid[:-1]) / 2.
+            # Critical change in units of log g per change in speed:
+            critical_derivative = 0.1 / 65.
+            # Critical index:
+            icrit = np.min(np.where((ddif_dv >= critical_derivative) 
+                                    & (mid_ps_sigmoid <= mid_ps_max_hard))[0])
+            vcrits[gal] = mid_vs[icrit]
+        elif method == 'direct':
+            i_cross = np.min(np.where((ps_sigmoid[::-1] \
+                                       > ps_max_hard[::-1])
+                                      & (vs[::-1] < vesc))[0])
+            vcrits[gal] = vs[::-1][i_cross]
+
+    if update_values:
+        with open('./data/vcrits_fr_distrib.pkl', 'wb') as f:
+            pickle.dump(vcrits, f, pickle.HIGHEST_PROTOCOL)
+        save_var_latex('vcrit_mw', vcrits['mw'])
+    
+    return vcrits
+
+###############################################################################
+# Saving functions
+###############################################################################
+
+def test_gen_data(df_new=None, test_fname=None):
+    if df_new is not None and test_fname is not None:
+        raise Exception('You can only specify one of `df_new`'
+                        ' or `test_fname`.')
+    df_old = load_data('dm_stats_dz1.0_20230616.h5')
+    if test_fname is not None:
+        df_new = load_data(test_fname)
+    elif df_new is not None:
+        pass
+    else:
+        df_new = gen_data(source='cropped')
+
+    changed_cols = []
+    for col in df_old.columns:
+        if col in df_new.columns:
+            old = df_old[col]
+            new = df_new[col]
+            unchanged = True # initializing the variable
+            if 'den' in col:
+                gev_old = convert_den(old).value
+                gev_new = convert_den(new).value
+                unchanged = np.allclose(gev_old, gev_new)
+                old = np.log10(old)
+                new = np.log10(new)
+            if old.dtype == 'object':
+                unchaged = unchanged and np.array_equal(old, new)
+            else:
+                unchanged = unchaged and np.allclose(old, new)
+            if not unchanged:
+                changed_cols += [col]
+                print('\n{0:s} failed'.format(col))
+                print( np.array( [old, new] ).T )
+    if len(changed_cols) != 0:
+        raise Exception('One or more columns have changed.')
+    else:
+        print('gen_data test passed.')
+    return None
+
+def compare_dfs(fname1, fname2):
+    df1 = load_data(fname1)
+    df2 = load_data(fname2)
+
+    for col in df1.columns:
+        if col in df2.columns:
+            one = df1[col]
+            two = df2[col]
+            if 'den' in col:
+                gev_one = convert_den(one).value
+                gev_two = convert_den(two).value
+                unchanged = np.allclose(gev_one, gev_two)
+                if not unchanged:
+                    print('\n{0:s} has changed.'.format(col))
+                    print( np.array( [gev_one, gev_two] ).T )
+                one = np.log10(one)
+                two = np.log10(two)
+            if one.dtype == 'object':
+                unchanged = np.array_equal(one, two)
+            else:
+                unchanged = np.allclose(one, two)
+            if not unchanged:
+                print('\n{0:s} has changed.'.format(col))
+                print( np.array( [one, two] ).T )
+    return None
+
+def save_data(df, fname):
+    abspath = os.path.abspath(__file__) #path to this script
+    direc = os.path.dirname(abspath) #path to this script's directory
+    direc += '/data/'
+    fname=direc+fname
+    with pd.HDFStore(fname) as store:
+        store.put('data',df)
+        store.get_storer('data').attrs.metadata = df.attrs
+    return None
+
+def load_data(fname):
+    abspath = os.path.abspath(__file__) #path to this script
+    direc = os.path.dirname(abspath) #path to this script's directory
+    direc += '/data/'
+    fname=direc+fname
+
+    # Ensure the file exists
+    if not os.path.isfile(fname):
+        raise FileNotFoundError(fname)
+
+    try:
+        with pd.HDFStore(fname) as store:
+            df=store['data']
+            df.attrs=store.get_storer('data').attrs.metadata
+    except (KeyError, ValueError):
+        print(fname)
+        df=pd.read_hdf(fname)
+    return df
+
 def save_var_latex(key, value):
     dict_var = {}
 
@@ -1648,8 +1778,8 @@ def save_var_latex(key, value):
 
     return None
 
-def save_var_raw(dict_add):
-    file_path = paths.data + 'data_raw.pkl'
+def save_var_raw(dict_add, fname='data_raw.pkl'):
+    file_path = paths.data + fname
     try:
         with open(file_path, 'rb') as f:
             d = pickle.load(f)

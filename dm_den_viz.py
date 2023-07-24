@@ -72,16 +72,21 @@ def plotter_old(gals, dat, gal_names, datloc, ylabel,
     #ax.legend(bbox_to_anchor=(1.04,0.5), loc='center left')
     plt.show()
 
-disp_vir_label='$\sigma(R_\mathrm{vir})\ [\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]$'
+disp_vir_label = '$\sigma(R_\mathrm{vir})' \
+                 '\ [\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]$'
 disp_solar_label='$\sigma(R_0)\ [\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]$'
-disp_dm_solar_label='$\sigma_\mathrm{DM}(R_0)\ [\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]$'
-disp_gas_solar_label='$\sigma_\mathrm{gas}(R_0)\ [\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]$'
-log_disp_solar_label='$\log(\,\sigma(R_0)\,/\,[\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]\,)$'
+disp_dm_solar_label = '$\sigma_\mathrm{DM}(R_0)' \
+                      '\ [\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]$'
+disp_gas_solar_label = '$\sigma_\mathrm{gas}(R_0)' \
+                       '\ [\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]$'
+log_disp_solar_label = '$\log(\,\sigma(R_0)' \
+                       '\,/\,[\,\mathrm{km}\cdot\mathrm{s}^{-1}\,]\,)$'
 m_label='$M_\mathrm{vir}\ [\mathrm{M}_\odot]$'
 mbtw_label='$M(10\,\mathrm{kpc}<r<R_\mathrm{vir})\[\mathrm{M}_\odot]$'
 log_rho_solar_label='$\log(\,\\rho(R_0)\,/\,[\,\mathrm{M}_\odot'\
                     '\mathrm{kpc}^{-3}\,]\,)$'
-log_rho_label='$\log(\,\\rho(R_\mathrm{vir})\,/\,[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]\,)$'
+log_rho_label = '$\log(\,\\rho(R_\mathrm{vir})' \
+                '\,/\,[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]\,)$'
 rho_label='$\\rho(R_\mathrm{vir})\;[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]$'
 den_label = '$\\rho\,/\,\\left[\mathrm{M_\odot kpc^{-3}}\\right]$'
 disp_label = '$\\sigma_\mathrm{3D}\,/\,'\
@@ -1231,7 +1236,7 @@ def plt_particle_counts(df_source):
     return None
 
 def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None, 
-                         ymax=None):
+                         ymax=None, show_bands=True, show_sigmoid_exp=False):
     import dm_den
     import fitting
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
@@ -1244,9 +1249,11 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
         if dhfrac is None:
             dhfrac = grid_results[1]
             print('Using dhfrac = {0:0.5f}'.format(dhfrac))
-    df = dm_den.load_data('dm_stats_20221208.h5').drop(['m12w', 'm12z'])
-    with open('./data/v_pdfs.pkl','rb') as f:
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
+    with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs=pickle.load(f)
+    with open(paths.data + 'vescs_rot_20230514.pkl', 'rb') as f:
+        vescs = pickle.load(f)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
     if gals == 'discs':
@@ -1256,7 +1263,8 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
     vs_postfit = np.linspace(0., 700., N_postfit)
     
     fig, axs = fitting.setup_universal_fig(gals)
-    if type(result) == lmfit.model.ModelResult:
+    if type(result) in [lmfit.model.ModelResult, 
+                        lmfit.minimizer.MinimizerResult]:
         d, e, h, j, k = [result.params[key] 
                          for key in ['d', 'e', 'h', 'j', 'k']]
     elif type(result) == dict:
@@ -1272,19 +1280,20 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
                                              v0, vdamp,
                                              k)
 
-	# Error bands
-        samples_color = plt.cm.viridis(0.5)
-        lowers, uppers = fitting.gal_bands(gal, vs_postfit, df, 
-				           result, ddfrac=ddfrac, 
-                                           dhfrac=dhfrac,
-                                           assume_corr=False,
-                                           ax = axs[i], 
-                                           samples_color=samples_color)
-        axs[i].fill_between(vs_postfit, lowers, uppers, 
-                            color=plt.cm.viridis(1.), 
-			    alpha=0.9, 
-			    ec=samples_color, zorder=1, 
-			    label='$1\sigma$ band')
+        if show_bands:
+            # Error bands
+            samples_color = plt.cm.viridis(0.5)
+            lowers, uppers = fitting.gal_bands(gal, vs_postfit, df, 
+                                               result, ddfrac=ddfrac, 
+                                               dhfrac=dhfrac,
+                                               assume_corr=False,
+                                               ax = axs[i], 
+                                               samples_color=samples_color)
+            axs[i].fill_between(vs_postfit, lowers, uppers, 
+                                color=plt.cm.viridis(1.), 
+                                alpha=0.9, 
+                                ec=samples_color, zorder=1, 
+                                label='$1\sigma$ band')
 
         # Plot data
         axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='k',
@@ -1294,6 +1303,15 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
                     ps_postfit,
                     '-',
                     label='prediction from $v_\mathrm{c}$', color='C3', lw=1.5)
+        
+        if show_sigmoid_exp:
+            # Plot the prediction with an exponential cut @ vesc
+            axs[i].plot(vs_postfit,
+                        fitting.max_double_exp(vs_postfit,
+                                               v0, vdamp, k,
+                                               vescs[gal]['ve_avg']),
+                        label='prediction, exp cut @ $v_\mathrm{esc}$')
+
         # Make ticks on both sides of the x-axis:
         axs[i].tick_params(axis='x', direction='inout', length=6)
         # Put y-axis in scientific notation
@@ -1357,10 +1375,9 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
     else:
         legend_y = -0.04
         ncol = 2
-    fig.suptitle('Fit based on velocity distrib', fontsize=18.)
     return None
 
-def plt_mw(tgt_fname=None, dvc=0.):
+def plt_mw(tgt_fname=None, dvc=0., dpi=600):
     import grid_eval
     import dm_den
     import fitting
@@ -1378,26 +1395,27 @@ def plt_mw(tgt_fname=None, dvc=0.):
         vdamp = results['h'] * (vc / 100.) ** results['j']
         ps = fitting.smooth_step_max(vs, v0, vdamp, results['k'])
         ax.plot(vs, ps, label='prediction from $v_\mathrm{c}$',
-                #label = '$v_\mathrm{{c}} = {0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'\
-                #        .format(vc),
                 **kwargs)
         lowers, uppers = fitting.gal_bands('mw', vs, df, results, ddfrac, 
                                            dhfrac, 
                                            ax=None, dvc=dvc)
         ax.fill_between(vs, lowers, uppers, 
-                        alpha=0.9, 
-                        color='#c0c0c0',
+                        alpha=0.7, 
+                        lw=0.,
+                        #color='#c0c0c0',
+                        color='pink',
                         zorder=1, 
                         label='$1\sigma$ band')
         return None
     
-    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=600,
+    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=dpi,
                      facecolor = (1., 1., 1., 0.))
-    #fig = plt.figure(figsize = (5., 2.5), dpi=200)
     ax = fig.add_subplot(111)
 
-    #predict(228., ax, c='C0', lw=3., dashes=[2., 0.5])
     predict(vc, ax, c='C3')
+
+    ax.plot(vs, fitting.smooth_step_max(vs, vc, 550., np.inf),
+            label='std assumption, $v_0=v_\mathrm{c}$')
 
     ax.set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
     ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
@@ -1441,6 +1459,189 @@ def plt_mw(tgt_fname=None, dvc=0.):
                     dpi=250)
 
     plt.show()
+
+def plt_halo_integrals(gals, 
+                       show_sigmoid_hard=False, show_sigmoid_exp=False,
+                       show_max_hard=False, show_max_exp=False,
+                       show_mao=False,
+                       show_vesc=False, show_vcrit=False):
+    import dm_den
+    import fitting
+    if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
+        raise ValueError('Unexpected value provided for gals arg')
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
+    with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
+        vescs = pickle.load(f)
+    if gals == ['mw']:
+        df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc_eilers
+        df.loc['mw', 'vc100'] = vc_eilers / 100.
+        vescs['mw'] = dict(ve_avg=550.) 
+    with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
+        pdfs=pickle.load(f)
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        params = pickle.load(f)
+    with open('./data/vcrits.pkl', 'rb') as f:
+        vcrits = pickle.load(f)
+    if gals == 'discs':
+        gal_names = list(pdfs.keys())
+        for gal in ['m12z', 'm12w']:
+            gal_names.remove(gal)
+    else:
+        gal_names = gals.copy()
+
+    fig, axs = setup_multigal_fig(gals, show_resids=False) 
+
+    pbar = ProgressBar()
+    for i, gal in enumerate(pbar(gal_names)):
+        vc100 = df.loc[gal, 'vc100']
+        vesc = vescs[gal]['ve_avg']
+
+        if gal != 'mw':
+            # Plot data
+            gs = fitting.numeric_halo_integral(pdfs[gal]['bins'], pdfs[gal]['ps'])
+            axs[i].stairs(gs, pdfs[gal]['bins'], color='k',
+                          label='data', baseline=None)
+
+        # Plot the prediction
+        vs_hat = np.linspace(0., 800., 300)
+        v0 = params['d'] * vc100 ** params['e']
+        vdamp = params['h'] * vc100 ** params['j']
+        gs_hat = fitting.g_smooth_step_max(vs_hat, v0, vdamp, params['k'])
+        axs[i].plot(vs_hat, gs_hat, label='prediction from $v_\mathrm{c}$',
+                    color='C3')
+
+        if show_sigmoid_exp:
+            # Plot the prediction with an additional exponential cutoff reaching
+            # 0 at vesc
+            axs[i].plot(vs_hat, 
+                        fitting.calc_g_general(vs_hat,
+                                               fitting.pN_max_double_exp,
+                                               (v0, vdamp, params['k'], vesc)),
+                        label='prediction from $v_\mathrm{c}$'
+                              ', exp cut @ $v_\mathrm{esc}$',
+                        color='C3', ls=':')
+            
+        if show_sigmoid_hard:
+            # Plot the prediction with a final hard cutoff at vesc
+            axs[i].plot(vs_hat, 
+                        fitting.calc_g_general(vs_hat,
+                                               fitting.pN_max_double_hard,
+                                               (v0, vdamp, params['k'], vesc)),
+                        #label='prediction from $v_\mathrm{c}$'
+                        #      ', cut @ $v_\mathrm{esc}$',
+                        color='C3', ls='--')
+
+        # Plot simple maxwellian with v0 = vc
+        gs_max = fitting.g_smooth_step_max(vs_hat, vc100 * 100.,
+                                           np.inf, np.inf)
+        axs[i].plot(vs_hat,
+                    gs_max,
+                    label='$v_0=v\mathrm{c}$',
+                    color='C0')
+        
+        if show_max_exp:
+            # Plot Maxwellian with v0 = vc and an exponential cutoff at vesc
+            axs[i].plot(vs_hat,
+                        fitting.g_exp(vs_hat, vc100 * 100., vesc),
+                        color='C0', ls=':',
+                        label='$v_0=v_\mathrm{c}$, exp cut @ $v_\mathrm{esc}$')
+
+        if show_max_hard:
+            # Plot maxwellian with v0 = vc, hard truncation @ vesc
+            axs[i].plot(vs_hat,
+                        fitting.g_smooth_step_max(vs_hat, vc100 * 100.,
+                                                  vesc, np.inf),
+                        #label='$v_0=v\mathrm{c}$, cut @ $v_\mathrm{esc}$',
+                        color='C0', ls='--')
+
+        if show_mao:
+            # Plot Mao
+            with open('./data/results_mao.pkl', 'rb') as f:
+                results_mao = pickle.load(f)
+            v0_mao = results_mao['d'] * vc100 ** results_mao['e']
+            axs[i].plot(vs_hat,
+                        fitting.calc_g_general(vs_hat,
+                                               fitting.pN_mao,
+                                               (v0_mao, vesc, 
+                                                results_mao['p'])),
+                        label='Mao prediction from $v_\mathrm{c}$', color='C1')
+
+        loc = [0.97,0.95]
+        kwargs_txt = dict(fontsize=16, xycoords='axes fraction',
+                          va='top', ha='right',
+                          bbox=dict(facecolor='white', alpha=0.8, 
+                                    edgecolor='none'))
+        axs[i].annotate(gal, loc,
+                        **kwargs_txt)
+
+        if show_vesc:
+            # Draw vesc line
+            axs[i].axvline(vesc, ls='--', c='grey', alpha=0.5)
+            trans = mpl.transforms.blended_transform_factory(axs[i].transData,
+                                                             axs[i].transAxes)
+            axs[i].text(vesc + 20., 0.45, '$v_\mathrm{esc}(\Phi)$', 
+                        transform=trans,
+                        fontsize=15., rotation=90., color='gray', 
+                        horizontalalignment='left')
+
+        if show_vcrit:
+            # Draw vcrit line
+            axs[i].axvline(vcrits[gal], ls='--', c='grey', alpha=0.5)
+
+        axs[i].set_yscale('log')
+        axs[i].set_ylim(1.e-6, 9.e-3)
+
+    if gals == 'discs':
+        ax_ylabel = axs[4]
+        xlabel_y = 0.05
+        legend_y = -0.02
+        legend_cols = 2
+    else:
+        ax_ylabel = axs[0]
+        xlabel_y = 0.
+        legend_y = -0.1
+        legend_cols = 2 
+    ax_ylabel.set_ylabel('$g(v_\mathrm{min})'
+                         '\ \mathrm{\left[km\,s^{-1}\\right]}$')
+    axs[-1].set_xlabel('$v_\mathrm{min}\ \mathrm{\left[km\,s^{-1}\\right]}$')
+    axs[-1].xaxis.set_label_coords(0.5, xlabel_y, transform=fig.transFigure)                       
+    axs[-1].legend(loc='upper center', bbox_to_anchor=(.5, legend_y),
+                   bbox_transform=fig.transFigure, ncols=legend_cols)
+
+    plt.show()
+
+    return None 
+
+def setup_multigal_fig(gals, show_resids=True):
+    if gals == 'discs':
+        figsize = (19., 12.)
+        Nrows = 3
+        Ncols = 4
+        Ngals = 12
+    else:
+        Ncols = min(len(gals), 4)
+        Nrows = math.ceil(len(gals) / Ncols)
+        Ngals = len(gals)
+    xfigsize = 4.6 / 2. * Ncols + 1.
+    yfigsize = 1.5 * Nrows + 1. 
+    if Ngals == 2 and show_resids:
+        # Add room for residual plots
+        Nrows += 1
+        yfigsize += 1. 
+        height_ratios = [4,1]
+    else:
+        height_ratios = None
+    fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
+                         sharey='row',
+                         sharex=True, dpi=140, height_ratios=height_ratios)
+    if Ngals == 1:
+        axs=[axs]
+    else:
+        axs=axs.ravel()
+    fig.subplots_adjust(wspace=0.,hspace=0.)
+    fig.Nrows = Nrows
+
+    return fig, axs
 
 if __name__=='__main__':
     fname=sys.argv[1]

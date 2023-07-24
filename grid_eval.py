@@ -5,7 +5,6 @@ import h5py
 import time
 import scipy
 import sys
-import datetime
 import pandas as pd
 import multiprocessing as mp
 import numpy as np
@@ -27,15 +26,17 @@ if override:
         # for the halo integral
         data_override = pickle.load(f)
 else:
-    date = datetime.date.today().strftime('%Y%m%d')
     # Location to store / from which to pull grid data
-    fname = 'grid_' + date + '.h5' 
+    fname = 'grid_20230713.h5' 
     # Don't give fitting.count_within_agg hard-coded parameters. Let it look
     # up the parameters stored in data_raw.pkl.
     data_override = None
 
 def get_df():
-    df = pd.read_pickle(paths.data + 'dm_stats_20221208.pkl')
+    # It seems to break with h5py but not with pickle. I can't remember why.
+    df = pd.read_pickle(paths.data + 'dm_stats_dz1.0_20230626.pkl')
+    #import dm_den
+    #df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     return df
 
 def base_op(ddfrac):
