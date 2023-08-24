@@ -1,4 +1,3 @@
-from scipy.stats.stats import pearsonr
 from adjustText import adjust_text
 from IPython.display import display, Latex
 import numpy as np
@@ -13,8 +12,12 @@ import itertools
 import math
 import grid_eval
 import lmfit
+import copy
 import staudt_fire_utils as utils
 from progressbar import ProgressBar
+
+import scipy
+from scipy.stats.stats import pearsonr
 
 from astropy import units as u
 from astropy import constants as c
@@ -35,7 +38,6 @@ rcParams['axes.titlesize']=24
 rcParams['axes.titlepad']=15
 rcParams['legend.frameon'] = True
 rcParams['legend.facecolor']='white'
-rcParams['legend.fontsize']=18
 rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
 def plotter_old(gals, dat, gal_names, datloc, ylabel,
@@ -97,7 +99,7 @@ vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
 
 # vc from Eilers et al. 2019
 vc_eilers = 229.
-dvc_eilers = 6.
+dvc_eilers = 7.
 
 # vc ranges from Sofue 2020
 vc_sofue=238.
@@ -151,6 +153,78 @@ def plt_slr(fname, xcol, ycol,
     else:
         return None
 
+def plt_forecast(ax, X_forecast, Yhat, dYhat, xadjustment):
+    '''
+    Parmeters
+    ---------
+    ax: matplotlib.axes
+        The axes on which to plot the forecast.
+    X_forecast: np.ndarray, shape=(number of datapoints forecasted,
+                                   number of features)
+        Feature matrix, i.e. independent variable(s) vector, with which the
+        forecast was made.
+    Y_hat: np.ndarray, shape=(number of datapoints forecasted, 1)
+        Forecast vector. dm_den.mlr keeps forecast vectors in 2D so it can do
+        matrix math with them, so we write this function to take those 2D
+        vectors directly. When not inputting dm_den.mlr outputs directly into
+        this function, it may be necessary for the user to massage their 
+        forecast
+        float into a 2D vector.
+    dYhat: np.array: shape=(number of datapoints forecasted, 1) if symmetric; 
+                     shape=(number of datapoints forecasted, 2) if asymmetric
+        Error bars for Y_hat.
+    '''
+    if xadjustment=='log':
+        X_forecast = np.log10(X_forecast)
+    else:
+        X_forecast = np.array(X_forecast)
+    # Returns a list of errorbar objects 
+    N = len(X_forecast)
+    eb = []
+    colors = [plt.cm.cool(i) 
+              for i in np.linspace(0, 
+                                   1, 
+                                   N)]
+    colors = itertools.cycle(['r']+colors)
+    for i in range(N):
+        color = next(colors)
+        if len(dYhat[i]) == 2:
+            # asymmetric error
+            yerr = np.array([[dYhat[i][1]], [dYhat[i][0]]])
+        elif len(dYhat[i]) == 1:
+            # symmetric error
+            yerr = dYhat[i][0]
+        else:
+            raise ValueError('dYhat[{0:0.0f}] has an unexpected shape.'
+                             .format(i))
+        eb_add = ax.errorbar(X_forecast.flatten()[i], 
+                     Yhat[i,0],
+                     yerr=yerr,
+                     c=color, capsize=3,
+                     marker='o', ms=8, 
+                     mec=color, mfc=color
+                     )
+        eb += [eb_add[0]]
+
+    for x, y, error in zip(X_forecast, Yhat, dYhat):
+        if not isinstance(error, (list, np.ndarray)):
+            display(Latex('$y(x={0:0.4f})={1:0.4f}\pm {2:0.4f}$'\
+                          .format(x[0], y[0], error[0])))
+        else:
+            if len(error) == 1:
+                display(Latex('$y(x={0:0.4f})={1:0.4f}\pm {2:0.4f}$'\
+                              .format(x[0], y[0], error[0])))
+            elif len(error) == 2:
+                display(Latex('$y(x={0:0.4f})={1:0.4f}'
+                              '^{{+{2:0.4f}}}'
+                              '_{{-{3:0.4f}}}$'\
+                              .format(x[0], y[0], error[0], error[1])))
+            else:
+                raise ValueError('Error array has the wrong number of '
+                                 'elements.')
+
+    return eb 
+
 def ax_slr(ax, fname, xcol, ycol,
            xlabel,ylabel,
            xadjustment=None, yadjustment=None,
@@ -164,57 +238,6 @@ def ax_slr(ax, fname, xcol, ycol,
            **kwargs):
     'Plot a simple linear regression on ax'
 
-    def plt_forecast(ax, X_forecast, Yhat, dYhat):
-        if xadjustment=='log':
-            X_forecast = np.log10(X_forecast)
-        else:
-            X_forecast = np.array(X_forecast)
-        # Returns a list of errorbar objects 
-        N = len(X_forecast)
-        eb = []
-        colors = [plt.cm.cool(i) 
-                  for i in np.linspace(0, 
-                                       1, 
-                                       N)]
-        colors = itertools.cycle(['r']+colors)
-        for i in range(N):
-            color = next(colors)
-            if len(dYhat[i]) == 2:
-                # asymmetric error
-                yerr = np.array([[dYhat[i][1]], [dYhat[i][0]]])
-            elif len(dYhat[i]) == 1:
-                # symmetric error
-                yerr = dYhat[i][0]
-            else:
-                raise ValueError('dYhat[{0:0.0f}] has an unexpected shape.'
-                                 .format(i))
-            eb_add = ax.errorbar(X_forecast.flatten()[i], 
-                         Yhat[i,0],
-                         yerr=yerr,
-                         c=color, capsize=3,
-                         marker='o', ms=8, 
-                         mec=color, mfc=color
-                         )
-            eb += [eb_add[0]]
-
-        for x, y, error in zip(X_forecast, Yhat, dYhat):
-            if not isinstance(error, (list, np.ndarray)):
-                display(Latex('$y(x={0:0.4f})={1:0.4f}\pm {2:0.4f}$'\
-                              .format(x[0], y[0], error[0])))
-            else:
-                if len(error) == 1:
-                    display(Latex('$y(x={0:0.4f})={1:0.4f}\pm {2:0.4f}$'\
-                                  .format(x[0], y[0], error[0])))
-                elif len(error) == 2:
-                    display(Latex('$y(x={0:0.4f})={1:0.4f}'
-                                  '^{{+{2:0.4f}}}'
-                                  '_{{-{3:0.4f}}}$'\
-                                  .format(x[0], y[0], error[0], error[1])))
-                else:
-                    raise ValueError('Error array has the wrong number of '
-                                     'elements.')
-
-        return eb 
 
     #Perform the regression in linear space unless we're plotting log data, as
     #opposed to plotting unadjusted data but on a log scale
@@ -231,7 +254,8 @@ def ax_slr(ax, fname, xcol, ycol,
         reg_xscale = 'linear'
         display_xadj = None
     else:
-        raise ValueError('x adjustment should be \'log\' or None')
+        raise ValueError('x adjustment should be \'log\''
+                         ', \'logreg_linaxunits\' or None')
     if yadjustment == 'log':
         reg_yscale = 'log'
         display_yadj = 'log'
@@ -266,7 +290,9 @@ def ax_slr(ax, fname, xcol, ycol,
         if yadjustment == 'logreg_linaxunits':
             band_disp[1:] = 10.**band_disp[1:]
 
-        ax.fill_between(*band_disp, color='grey', alpha=0.2, lw=0.)
+        # band[-1] is just the Y_hat @ the X used for the band, so we don't
+        # use it in ax.fill_between.
+        ax.fill_between(*band_disp[:-1], color='grey', alpha=0.2, lw=0.)
 
     if x_forecast is not None:
         prediction_y = mlr_res[-1] #[y, y uncertainty] 
@@ -285,7 +311,7 @@ def ax_slr(ax, fname, xcol, ycol,
         else:
             Ys = prediction_y[0]
             dYs = prediction_y[1]
-        eb = plt_forecast(ax, x_forecast, Ys, dYs)
+        eb = plt_forecast(ax, x_forecast, Ys, dYs, xadjustment)
         adjust_text_kwargs['objects'] = eb
 
     df = dm_den.load_data(fname)
@@ -463,6 +489,8 @@ def showGeV_y(ax, yadjustment):
     visible_ticks = labs.to(u.M_sun/u.kpc**3.)
     if yadjustment == 'log':
         visible_ticks = np.log10(visible_ticks.value)
+    else:
+        visible_ticks = visible_ticks.value
 
     ax2.set_ylim(x0,x1)
     ax2.set_yticks(visible_ticks)
@@ -579,7 +607,7 @@ def fill_ax_new(ax, df, xcol, ycol,
             adjust_text(texts, ax=ax, 
                         **adjust_text_kwargs, arrowprops=arrowprops)
         else:
-            adjust_text(texts, ax=ax)
+            adjust_text(texts, ax=ax, **adjust_text_kwargs)
 
     if yscale == 'log':
         ax.yaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
@@ -734,7 +762,124 @@ def draw_shades(ax, ycol, vc, dvc, xmult=1.):
     draw_xshade(ax, vc, dvc, xmult)
     return None
 
-def plt_vs_vc(ycol, tgt_fname, source_fname='dm_stats_dz1.0_20230626.h5',
+def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11, 
+                   adjust_text_kwargs={}, formula_y=-0.3, dpi_show=120,
+                   xtickspace=None, ytickspace=None, label_overrides={},
+                   marker_label_size=11,
+                   show_formula=True,
+                   update_values=False, tgt_fname=None, verbose=False):
+    ycol = 'vesc'
+    xcol = 'vc100'
+    df = dm_den.load_data(df_source)
+    df.drop(['m12z', 'm12w'], inplace=True)
+    fig = plt.figure(figsize=figsize, dpi=dpi_show)
+    ax = fig.add_subplot(111)
+    X_forecast = np.array([[vc_eilers / 100.]]) # MW vcirc
+    xadjustment='logreg_linaxunits'
+    yadjustment='logreg_linaxunits'
+    P1sigma = scipy.special.erf(1. / np.sqrt(2)) # ~68%
+
+    reg = dm_den.mlr(df_source, xcols=[xcol], ycol=ycol,
+                     xscales=['log'], yscale='log',
+                     dropgals=['m12z', 'm12w'], 
+                     prediction_x=X_forecast,
+                     dX=np.array([[dvc_eilers / 100.]]),
+                     fore_sig=1.-P1sigma,
+                     beta_sig=1.-P1sigma,
+                     return_band=True,
+                     return_coef_errors=True,
+                     verbose=verbose)
+
+    # delta_beta is the fit parameter errors
+    coefs, log_intercept, r2, Xs, ys, ys_pred, r2a, resids, delta_beta, band \
+            = reg[:10]
+    slope = coefs[0]
+
+    # reg[-1] has two components; reg[-1][0] is the forecast; reg[-1][1] is the
+    # uncertainty on the forecast. In order to be able to do the matrix math
+    # in multiple regression, ax_slr keeps reg[-1][0] as 2 dimensional, but we
+    # can just take the [0,0] element (0th datapoint, 0th column). 
+    vesc_hat_mw = reg[-1][0][0,0] # Predicted MW vesc
+
+    # mlr proves dyhat as 2 dimensional in
+    # case the uncertainty on y is asymmetric and in case we're forecasting
+    # multiple datapoints. We can take the 0 element of reg[-1][1] (the 0th 
+    # datapoint) but want to keep all columuns
+    # of reg[-1][1][0] in case the uncertainty is asymmetric.
+    dvesc_mw = reg[-1][1][0]
+
+ 
+    # Errors on the fit parameters (i.e. on the beta vector)
+    dbeta = reg[-3] 
+
+    ax.fill_between(10. ** band[0] * 100., *(10. ** band[1:]), 
+                    color='grey', alpha=0.2,
+                    lw=0.)
+    # Plot the best fit line
+    ax.plot(10. ** band[0] * 100., 
+            10. ** band[-1], '-')
+    fill_ax_new(ax, df, 
+                'v_dot_phihat_disc(T<=1e4)', ycol, 
+                xlabel=vc_label,
+                ylabel='$v_\mathrm{esc}\,/\,\left[\mathrm{km\,s^{-1}}\\right]$',
+                xscale='log', yscale='log',
+                color='masses',
+                labelsize=marker_label_size,
+                xtickspace=xtickspace, 
+                ytickspace=ytickspace,
+                showcorr=False, adjust_text_kwargs=adjust_text_kwargs,
+                arrowprops={'arrowstyle': '-'})
+    vesc_hat_mw_transform = staudt_utils.log2linear(vesc_hat_mw, dvesc_mw[0]) 
+    plt_forecast(ax, X_forecast * 100., np.array([[vesc_hat_mw_transform[0]]]),
+                 np.array([vesc_hat_mw_transform[1:]]),
+                 xadjustment=None)
+    ax.annotate('Milky Way', (vc_eilers, vesc_hat_mw_transform[0]), 
+                fontsize=labelsize,
+                color='red', 
+                arrowprops={'arrowstyle':'-|>', 'color':'red'}, 
+                textcoords='axes fraction',
+                xytext=(0.33, 0.66))
+
+    override_labels(label_overrides, ax, dm_den.load_data(df_source),
+                    ycol, 'v_dot_phihat_disc(T<=1e4)', labelsize )
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=350)
+    plt.show()
+
+    if update_values:
+        # Save the MW vesc prediction in the LaTeX data
+        vesc_hat_mw_txt, dvesc_mw_txt = staudt_utils.sig_figs(
+                vesc_hat_mw_transform[0], vesc_hat_mw_transform[1:])
+        dm_den.save_prediction('vesc_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
+
+        # Save the amplitude to the LaTeX data
+        dlog_intercept = dbeta[0][0]
+        intercept_transform = staudt_utils.log2linear(log_intercept, 
+                                                      dbeta[0][0])
+        amp = intercept_transform[0]
+        damp = intercept_transform[1:]
+        amp_str, damp_str = staudt_utils.sig_figs(amp, damp)
+        dm_den.save_prediction('veschat_amp', amp_str, damp_str)
+
+        # Save the slope to the LaTeX data
+        slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
+        dm_den.save_prediction('veschat_slope', slope_str, dslope_str)
+
+        # Save the vesc(vc) predictions
+        df = dm_den.load_data(df_source)
+        if xadjustment in ['logreg_linaxunits', 'log'] \
+           and yadjustment in ['logreg_linaxunits', 'log']:
+            vesc_hat_dict = dict(amp * df[xcol] ** slope)
+        vesc_hat_dict['mw'] = vesc_hat_mw
+        with open(paths.data + 'vesc_hat_dict.pkl', 'wb') as f:
+            pickle.dump(vesc_hat_dict, f, pickle.HIGHEST_PROTOCOL)
+
+    return None
+
+def plt_vs_vc(ycol, source_fname, tgt_fname=None,
               update_val=False,
               forecast_sig=1.-0.682, #forecast significance
               verbose=False, 
@@ -1081,6 +1226,10 @@ def plt_disc_diffs(df_source,
             print('{0:0.2f}% max disp diff'.format(disp_percent_diff))
             if update_val:
                 #update the value in data.dat for the paper
+                dm_den.save_var_latex('maxdendiff',
+                                      '{0:0.2f}\%'.format(den_percent_diff))
+                dm_den.save_var_latex('maxdispdiff',
+                                      '{0:0.2f}\%'.format(disp_percent_diff))
                 dm_den.save_var_latex('maxdiff',
                                       '{0:0.2f}\%'.format(percent_diff))
             staudt_utils.print_eq('\min\Delta\log\\rho/\log\overline{\\rho}',
@@ -1164,19 +1313,19 @@ def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
 
     fig = plt.figure(figsize=figsize, dpi=110)
     ax = fig.add_subplot(111)
-    ax_slr(ax, df_source, 
-           xcol, ycol, 
-           xlabel=vc_label, ylabel=gmr_label, 
-           xadjustment='log',
-           yadjustment='log',
-           show_formula='outside', dropgals=['m12z','m12w'],
-           labelsize=labelsize, arrowprops={'arrowstyle':'-'},
-           legend_txt='best fit',
-           adjust_text_kwargs=adjust_text_kwargs)
+    #ax_slr(ax, df_source, 
+    #       xcol, ycol, 
+    #       xlabel=vc_label, ylabel=gmr_label, 
+    #       xadjustment=None,
+    #       yadjustment=None,
+    #       show_formula='outside', dropgals=['m12z','m12w'],
+    #       labelsize=labelsize, arrowprops={'arrowstyle':'-'},
+    #       legend_txt='best fit',
+    #       adjust_text_kwargs=adjust_text_kwargs)
     
     #Plot 1:1 line
-    xs = np.log10(df[xcol])
-    ys = np.log10(df[ycol])
+    xs = (df[xcol])
+    ys = (df[ycol])
     ax.plot([xs.min(), xs.max()], [xs.min(), xs.max()], color='gray', 
             ls='--', label='1:1')
     errors = (ys-xs).values
@@ -1185,6 +1334,12 @@ def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
     tss = diffs.T @ diffs
     r2_1to1 = 1.-sse/tss
     display(Latex('$r^2_\mathrm{{1:1}}={0:0.2f}$'.format(r2_1to1)))
+
+    fill_ax_new(ax, df, xcol, ycol, 
+                xlabel=vc_label, ylabel=gmr_label,
+                xadjustment=None, showcorr=False, labelsize=labelsize,
+                arrowprops={'arrowstyle': '-'},
+                adjust_text_kwargs=adjust_text_kwargs)
 
     ax.legend(fontsize=11)
 
@@ -1235,8 +1390,29 @@ def plt_particle_counts(df_source):
 
     return None
 
+def make_sci_y(axs, i, order_of_mag):
+    '''
+    Put y-axis in scientific notation
+    '''
+    if i < 4:
+        # If the plot is in the very first row, do proper scientific
+        # notation so the multiplier appears at the top.
+        axs[i].ticklabel_format(style='sci', axis='y', 
+                                scilimits=(order_of_mag,
+                                           order_of_mag),
+                                useMathText=True)
+    else:
+        # Otherwise, just reformat the labels, because we don't want
+        # multiple multiplier labels cluttering the plot.
+        axs[i].yaxis.set_major_formatter(
+                lambda y, pos: '{0:0.0f}'.format(y / 10.**order_of_mag))
+    return None
+
 def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None, 
-                         ymax=None, show_bands=True, show_sigmoid_exp=False):
+                         ymax=None, show_bands=True, show_sigmoid_exp=False,
+                         show_mao=False,
+                         xtickspace=None, show_rms=False,
+                         tgt_fname=None):
     import dm_den
     import fitting
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
@@ -1254,15 +1430,21 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
         pdfs=pickle.load(f)
     with open(paths.data + 'vescs_rot_20230514.pkl', 'rb') as f:
         vescs = pickle.load(f)
+    if show_mao:
+        with open(paths.data + 'results_mao.pkl', 'rb') as f:
+            fit_mao = pickle.load(f)
+        with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
+            vesc_hat_dict = pickle.load(f)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
     if gals == 'discs':
-        gals = pdfs.keys() #Change `gals` from a str to a list-like of galnames
-    Ngals = len(gals) 
+        galnames = pdfs.keys() 
+    elif isinstance(gals, (list, np.ndarray, pd.core.indexes.base.Index)):
+        galnames = copy.deepcopy(gals)
+    Ngals = len(galnames) 
     N_postfit = 300
     vs_postfit = np.linspace(0., 700., N_postfit)
     
-    fig, axs = fitting.setup_universal_fig(gals)
     if type(result) in [lmfit.model.ModelResult, 
                         lmfit.minimizer.MinimizerResult]:
         d, e, h, j, k = [result.params[key] 
@@ -1272,24 +1454,51 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
                          for key in ['d', 'e', 'h', 'j', 'k']]
     else:
         raise ValueError('Unexpected data type provided for `params`')
-    for i, gal in enumerate(df.index):
+    samples = fitting.load_samples()
+
+    if show_mao:
+        fit_mao_naive = fitting.fit_mao_naive_aggp()
+
+    fig, axs = setup_multigal_fig(gals)
+
+    sse_mao_full = 0. # SSE for the fully predictive Mao model
+    sse_staudt = 0. # SSE for our predictive model
+    N_data = 0. # Number of truth datapoints evaluated, for agg RMS calculation
+
+    pbar = ProgressBar()
+    for i, gal in enumerate(pbar(galnames)):
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         v0 = d * (vc / 100.) ** e
         vdamp = h * (vc / 100.) ** j
+        vesc_hat = vesc_hat_dict[gal]
         ps_postfit = fitting.smooth_step_max(vs_postfit,
                                              v0, vdamp,
                                              k)
+        if show_rms:
+            vs_truth = pdfs[gal]['vs']
+            N_data += len(vs_truth)
+            ps_truth = pdfs[gal]['ps']
+            _, sse_staudt_add = fitting.calc_rms_err(vs_truth, ps_truth,
+                                                     fitting.smooth_step_max,
+                                                     args=[v0, vdamp, k])
+            sse_staudt += sse_staudt_add
 
         if show_bands:
             # Error bands
             samples_color = plt.cm.viridis(0.5)
-            lowers, uppers = fitting.gal_bands(gal, vs_postfit, df, 
-                                               result, ddfrac=ddfrac, 
-                                               dhfrac=dhfrac,
-                                               assume_corr=False,
-                                               ax = axs[i], 
-                                               samples_color=samples_color)
-            axs[i].fill_between(vs_postfit, lowers, uppers, 
+            lowers, uppers = fitting.gal_bands_from_samples(samples['vs'],
+                                                            samples[gal],
+                                                            samples_color,
+                                                            axs[i])
+            #lowers, uppers = fitting.gal_bands(gal, vs_postfit, df, 
+            #                                   result, ddfrac=ddfrac, 
+            #                                   dhfrac=dhfrac,
+            #                                   assume_corr=False,
+            #                                   ax = axs[i], 
+            #                                   samples_color=samples_color)
+            axs[i].fill_between(#vs_postfit, 
+                                samples['vs'],
+                                lowers, uppers, 
                                 color=plt.cm.viridis(1.), 
                                 alpha=0.9, 
                                 ec=samples_color, zorder=1, 
@@ -1312,14 +1521,33 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
                                                vescs[gal]['ve_avg']),
                         label='prediction, exp cut @ $v_\mathrm{esc}$')
 
+        if show_mao:
+            v0_mao = fit_mao['d'] * (vc / 100.) ** fit_mao['e'],
+            axs[i].plot(vs_postfit,
+                        fitting.mao(vs_postfit, 
+                                    v0_mao,
+                                    vesc_hat,
+                                    fit_mao['p']),
+                        label='Mao prediction from $v_\mathrm{c}$')
+            if show_rms:
+                _, sse_mao_full_add = fitting.calc_rms_err(vs_truth, ps_truth,
+                                                           fitting.mao,
+                                                           args=[v0_mao,
+                                                                 vesc_hat,
+                                                                 fit_mao['p']])
+                sse_mao_full += sse_mao_full_add
+                                                                 
+            axs[i].plot(vs_postfit,
+                        fitting.mao(vs_postfit,
+                                    vc, vesc_hat_dict[gal], 
+                                    fit_mao_naive.params['p'].value),
+                        label='Mao, $v_0=v_\mathrm{c}$')
         # Make ticks on both sides of the x-axis:
         axs[i].tick_params(axis='x', direction='inout', length=6)
-        # Put y-axis in scientific notation
+
         order_of_mag = -3
-        axs[i].ticklabel_format(style='sci', axis='y', 
-                                scilimits=(order_of_mag,
-                                           order_of_mag),
-                                useMathText=True)
+        make_sci_y(axs, i, order_of_mag)
+
         if Ngals == 2:
             # Remove the 0 tick label because of overlap
             y0, y1 = axs[i].get_ylim()
@@ -1338,23 +1566,25 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
             resids = np.append(resids, resids_extend, axis=0)
             axs[i+2].plot(vs_resids, resids / 10.**order_of_mag, color='C3')
             axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5, lw=1.)
-            axs[i+2].set_ylim(-resids_lim, resids_lim)
+            axs[i+2].set_ylim(-fitting.resids_lim, fitting.resids_lim)
             if i == 0:
                 axs[i+2].set_ylabel('resids')
-        loc = [0.97,0.96]
+        loc = [0.97,0.95]
         if Ngals == 12:
             namefs = 13. #Font size for galaxy name
             vcfs = 9. #Font size for circular velocity
+            spacing = 0.16
         else:
             namefs = 16. #Font size for galaxy name
             vcfs = 11. #Font size for circular velocity
+            spacing = 0.12
         kwargs_txt = dict(fontsize=namefs, xycoords='axes fraction',
                           va='top', ha='right',
                           bbox=dict(facecolor='white', alpha=0.8, 
                                     edgecolor='none'))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
-        loc[1] -= 0.15
+        loc[1] -= spacing
         kwargs_txt['fontsize'] = vcfs 
         #rms_err = fitting.calc_rms_err(pdfs[gal]['vs'], pdfs[gal]['ps'],
         #                               fitting.smooth_step_max,
@@ -1369,15 +1599,54 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
         axs[i].grid(False)
         if ymax is not None:
             axs[i].set_ylim(top=ymax)
+
+        if xtickspace is not None:
+            axs[i].xaxis.set_major_locator(
+                    mpl.ticker.MultipleLocator(base=xtickspace))
+            axs[i].xaxis.set_minor_locator(plt.NullLocator())
+
+    label_axes(axs, fig, gals)
     if fig.Nrows == 3:
-        legend_y = 0.
         ncol = 4
+        legend_y = 0.03
     else:
-        legend_y = -0.04
         ncol = 2
+        legend_y = 0.
+    handles, labels = axs[0].get_legend_handles_labels()
+    if show_bands:
+        handles.append(mpl.lines.Line2D([0], [0], color=samples_color, lw=1.,
+                                        label='rand samples'))
+    axs[0].legend(handles=handles,
+                  bbox_to_anchor=(0.5, legend_y), 
+                  loc='upper center', ncol=ncol,
+                  bbox_transform=fig.transFigure,
+                  borderaxespad=1.5)
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=350)
+    plt.show()
+
+    if show_rms:
+        d = 2
+        if show_mao:
+            txt = staudt_utils.mprint(
+                    np.sqrt(sse_mao_full / N_data),
+                    d=d, 
+                    show=False).replace('$','')
+            display(Latex('$\mathrm{{RMS_{{Mao, prediction}}}}={0:s}$'
+                          .format(txt)))
+
+        txt = staudt_utils.mprint(
+                np.sqrt(sse_staudt / N_data),
+                d=d, 
+                show=False).replace('$','')
+        display(Latex('$\mathrm{{RMS_{{Staudt, prediction}}}}={0:s}$' \
+                          .format(txt)))
     return None
 
-def plt_mw(tgt_fname=None, dvc=0., dpi=600):
+def plt_mw(tgt_fname=None, dvc=0., dpi=140, show_vcrit=False):
     import grid_eval
     import dm_den
     import fitting
@@ -1386,7 +1655,7 @@ def plt_mw(tgt_fname=None, dvc=0., dpi=600):
     ddfrac, dhfrac = grid_eval.identify()
 
     vc = vc_eilers
-    vs = np.linspace(0., 750., 300)
+    vs = np.linspace(0., 700., 300)
 
     def predict(vc, ax, **kwargs):
         df = dm_den.load_data('dm_stats_20221208.h5')
@@ -1414,9 +1683,16 @@ def plt_mw(tgt_fname=None, dvc=0., dpi=600):
 
     predict(vc, ax, c='C3')
 
-    ax.plot(vs, fitting.smooth_step_max(vs, vc, 550., np.inf),
+    with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
+        vesc_hat_dict = pickle.load(f)
+    ax.plot(vs, fitting.smooth_step_max(vs, vc, vesc_hat_dict['mw'], np.inf),
+            ls='--',
             label='std assumption, $v_0=v_\mathrm{c}$')
-
+    #ax.plot(vs, fitting.exp_max(vs, vc, vesc_hat_dict['mw']))
+    if show_vcrit:
+        with open(paths.data + 'vcrits_fr_distrib.pkl', 'rb') as f:
+            vcrits = pickle.load(f)
+        ax.axvline(vcrits['mw'], ls='--', color='grey', alpha=0.8)
     ax.set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
     ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
     ax.set_ylim(0., None)
@@ -1424,7 +1700,7 @@ def plt_mw(tgt_fname=None, dvc=0., dpi=600):
     kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
                       va='top', ha='right',
                       bbox=dict(facecolor='white', alpha=0.8, 
-                                edgecolor='none'))
+                                edgecolor='none', pad=0.1))
     ax.annotate('Milky Way', loc,
                 **kwargs_txt)
     loc[1] -= 0.15
@@ -1463,19 +1739,23 @@ def plt_mw(tgt_fname=None, dvc=0., dpi=600):
 def plt_halo_integrals(gals, 
                        show_sigmoid_hard=False, show_sigmoid_exp=False,
                        show_max_hard=False, show_max_exp=False,
-                       show_mao=False,
-                       show_vesc=False, show_vcrit=False):
+                       show_mao_prediction=False,
+                       show_mao_naive=False,
+                       show_vesc=False, show_vcrit=False,
+                       xmax=None,
+                       ymin=1.e-6, ymax=9.e-3,
+                       xtickspace=None, scale='log',
+                       tgt_fname=None, show_rms=False):
     import dm_den
     import fitting
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
-    with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
-        vescs = pickle.load(f)
+    with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
+        vesc_hat_dict = pickle.load(f)
     if gals == ['mw']:
         df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc_eilers
         df.loc['mw', 'vc100'] = vc_eilers / 100.
-        vescs['mw'] = dict(ve_avg=550.) 
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs=pickle.load(f)
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
@@ -1489,60 +1769,85 @@ def plt_halo_integrals(gals,
     else:
         gal_names = gals.copy()
 
+    if show_mao_naive:
+        fit_mao_naive = fitting.fit_mao_naive_aggp()
+
     fig, axs = setup_multigal_fig(gals, show_resids=False) 
+
+    # Setting some figure parameters that should differ based on how big the
+    # figure is / how many galaxies we're showing
+    if fig.Ncols > 3:
+        vesc_fs = 12.
+        vesc_y = 0.4
+        legend_ncols = 4
+    elif fig.Ncols == 1:
+        legend_ncols = 1
+    else:
+        vesc_fs = 15.
+        vesc_y = 0.45
+        legend_ncols = 2
 
     pbar = ProgressBar()
     for i, gal in enumerate(pbar(gal_names)):
         vc100 = df.loc[gal, 'vc100']
-        vesc = vescs[gal]['ve_avg']
+        vesc_hat = vesc_hat_dict[gal]
+        vs_truth = pdfs[gal]['vs']
 
         if gal != 'mw':
             # Plot data
-            gs = fitting.numeric_halo_integral(pdfs[gal]['bins'], pdfs[gal]['ps'])
+            gs = fitting.numeric_halo_integral(pdfs[gal]['bins'], 
+                                               pdfs[gal]['ps'])
             axs[i].stairs(gs, pdfs[gal]['bins'], color='k',
                           label='data', baseline=None)
 
         # Plot the prediction
-        vs_hat = np.linspace(0., 800., 300)
+        vs_hat = np.linspace(0., 820., 300)
         v0 = params['d'] * vc100 ** params['e']
         vdamp = params['h'] * vc100 ** params['j']
         gs_hat = fitting.g_smooth_step_max(vs_hat, v0, vdamp, params['k'])
         axs[i].plot(vs_hat, gs_hat, label='prediction from $v_\mathrm{c}$',
-                    color='C3')
+                    color='C3', zorder=10)
+        if show_rms:
+            rms_staudt, _ = fitting.calc_rms_err(vs_truth, gs, 
+                                                 fitting.g_smooth_step_max,
+                                                 (v0, vdamp, params['k']))
 
         if show_sigmoid_exp:
-            # Plot the prediction with an additional exponential cutoff reaching
+            # Plot the prediction with an additional exponential cutoff 
+            # reaching
             # 0 at vesc
             axs[i].plot(vs_hat, 
                         fitting.calc_g_general(vs_hat,
                                                fitting.pN_max_double_exp,
-                                               (v0, vdamp, params['k'], vesc)),
+                                               (v0, vdamp, params['k'], 
+                                                vesc_hat)),
                         label='prediction from $v_\mathrm{c}$'
                               ', exp cut @ $v_\mathrm{esc}$',
-                        color='C3', ls=':')
+                        color='C3', ls=':', zorder=10)
             
         if show_sigmoid_hard:
             # Plot the prediction with a final hard cutoff at vesc
             axs[i].plot(vs_hat, 
                         fitting.calc_g_general(vs_hat,
                                                fitting.pN_max_double_hard,
-                                               (v0, vdamp, params['k'], vesc)),
+                                               (v0, vdamp, params['k'], 
+                                                vesc_hat)),
                         #label='prediction from $v_\mathrm{c}$'
                         #      ', cut @ $v_\mathrm{esc}$',
-                        color='C3', ls='--')
+                        color='C3', ls='--', zorder=10)
 
         # Plot simple maxwellian with v0 = vc
         gs_max = fitting.g_smooth_step_max(vs_hat, vc100 * 100.,
                                            np.inf, np.inf)
         axs[i].plot(vs_hat,
                     gs_max,
-                    label='$v_0=v\mathrm{c}$',
+                    label='std assumption, $v_0=v\mathrm{c}$',
                     color='C0')
         
         if show_max_exp:
             # Plot Maxwellian with v0 = vc and an exponential cutoff at vesc
             axs[i].plot(vs_hat,
-                        fitting.g_exp(vs_hat, vc100 * 100., vesc),
+                        fitting.g_exp(vs_hat, vc100 * 100., vesc_hat),
                         color='C0', ls=':',
                         label='$v_0=v_\mathrm{c}$, exp cut @ $v_\mathrm{esc}$')
 
@@ -1550,67 +1855,300 @@ def plt_halo_integrals(gals,
             # Plot maxwellian with v0 = vc, hard truncation @ vesc
             axs[i].plot(vs_hat,
                         fitting.g_smooth_step_max(vs_hat, vc100 * 100.,
-                                                  vesc, np.inf),
+                                                  vesc_hat, np.inf),
                         #label='$v_0=v\mathrm{c}$, cut @ $v_\mathrm{esc}$',
                         color='C0', ls='--')
 
-        if show_mao:
-            # Plot Mao
+        if show_mao_prediction or show_mao_naive:
             with open('./data/results_mao.pkl', 'rb') as f:
                 results_mao = pickle.load(f)
+        if show_mao_prediction:
+            # Plot the halo integral resulting from a universal Mao fit
             v0_mao = results_mao['d'] * vc100 ** results_mao['e']
             axs[i].plot(vs_hat,
                         fitting.calc_g_general(vs_hat,
                                                fitting.pN_mao,
-                                               (v0_mao, vesc, 
+                                               (v0_mao, vesc_hat, 
                                                 results_mao['p'])),
-                        label='Mao prediction from $v_\mathrm{c}$', color='C1')
+                        label='Mao prediction from $v_\mathrm{c}$',
+                        color='c')
+        if show_mao_naive:
+            # Plot the halo integral from using v0=vc with Mao
+            axs[i].plot(vs_hat,
+                        fitting.calc_g_general(
+                            vs_hat,
+                            fitting.pN_mao,
+                            (vc100 * 100., vesc_hat,
+                            fit_mao_naive.params['p'].value)),
+                        label='Mao, $v_0=v_\mathrm{c}$',
+                        color='c')
+            if show_rms:
+                rms_mao_naive, _ = fitting.calc_rms_err(
+                        vs_truth, gs,
+                        fitting.calc_g_general,
+                        (fitting.pN_mao,
+                         (vc100 * 100., 
+                          vesc_hat,
+                          results_mao['p'])))
 
         loc = [0.97,0.95]
-        kwargs_txt = dict(fontsize=16, xycoords='axes fraction',
+        if fig.Nrows == 3:
+            namefs = 13.
+        else:
+            namefs = 16. 
+        kwargs_txt = dict(fontsize=namefs, xycoords='axes fraction',
                           va='top', ha='right',
                           bbox=dict(facecolor='white', alpha=0.8, 
                                     edgecolor='none'))
-        axs[i].annotate(gal, loc,
+        if gal == 'mw':
+            galtxt = 'Milky Way'
+        else:
+            galtxt = gal
+        axs[i].annotate(galtxt, loc,
                         **kwargs_txt)
-
+        if show_rms:
+            step = 0.15
+            loc[1] -= step 
+            kwargs_txt['fontsize'] = 9.
+            axs[i].annotate('RMS$_\mathrm{{Staudt}}={0:0.2e}$'.format(
+                                rms_staudt),
+                            loc, **kwargs_txt)
+            if show_mao_naive:
+                loc[1] -= step
+                axs[i].annotate('RMS$_\mathrm{{Mao}}={0:0.2e}$'.format(
+                                    rms_mao_naive),
+                                loc, **kwargs_txt)
         if show_vesc:
             # Draw vesc line
-            axs[i].axvline(vesc, ls='--', c='grey', alpha=0.5)
+            axs[i].axvline(vesc_hat, ls='--', c='grey', alpha=0.5)
             trans = mpl.transforms.blended_transform_factory(axs[i].transData,
                                                              axs[i].transAxes)
-            axs[i].text(vesc + 20., 0.45, '$v_\mathrm{esc}(\Phi)$', 
-                        transform=trans,
-                        fontsize=15., rotation=90., color='gray', 
-                        horizontalalignment='left')
+            #axs[i].text(vesc_hat + 20., vesc_y, 
+            #            '$\hat{v}_\mathrm{esc}(v_\mathrm{c})$', 
+            #            transform=trans,
+            #            fontsize=vesc_fs, rotation=90., color='gray', 
+            #            horizontalalignment='left')
 
         if show_vcrit:
             # Draw vcrit line
             axs[i].axvline(vcrits[gal], ls='--', c='grey', alpha=0.5)
 
-        axs[i].set_yscale('log')
-        axs[i].set_ylim(1.e-6, 9.e-3)
+        axs[i].set_yscale(scale)
+        if scale == 'linear':
+            order_of_mag = -3
+            axs[i].ticklabel_format(style='sci', axis='y', 
+                                    scilimits=(order_of_mag,
+                                               order_of_mag),
+                                    useMathText=True)
+        if xtickspace is not None:
+            axs[i].xaxis.set_major_locator(
+                    mpl.ticker.MultipleLocator(base=xtickspace))
+            axs[i].xaxis.set_minor_locator(plt.NullLocator())
 
+    if xmax is not None or ymin is not None or ymax is not None:
+        plt.draw()
+        # Need to draw everything before going back and doing this because
+        # otherwise we'll lock in the upper y limit (x limit) for each row with
+        # the
+        # automatically determined upper limit for the galaxy in the first
+        # column (row) of that row (column).
+        for ax in axs:
+            if xmax is not None:
+                ax.set_xlim(right=xmax)
+            if ymin is not None:
+                ax.set_ylim(bottom=ymin)
+            if ymax is not None:
+                ax.set_ylim(top=ymax)
     if gals == 'discs':
         ax_ylabel = axs[4]
         xlabel_y = 0.05
         legend_y = -0.02
-        legend_cols = 2
     else:
         ax_ylabel = axs[0]
         xlabel_y = 0.
         legend_y = -0.1
-        legend_cols = 2 
     ax_ylabel.set_ylabel('$g(v_\mathrm{min})'
-                         '\ \mathrm{\left[km\,s^{-1}\\right]}$')
+                         '\ \mathrm{\left[km^{-1}\,s\\right]}$')
     axs[-1].set_xlabel('$v_\mathrm{min}\ \mathrm{\left[km\,s^{-1}\\right]}$')
     axs[-1].xaxis.set_label_coords(0.5, xlabel_y, transform=fig.transFigure)                       
-    axs[-1].legend(loc='upper center', bbox_to_anchor=(.5, legend_y),
-                   bbox_transform=fig.transFigure, ncols=legend_cols)
+    handles, labels = axs[-1].get_legend_handles_labels()
+    if show_vesc:
+        handles.append(mpl.lines.Line2D(
+            [0], [0], color='grey', 
+            ls='--', alpha=0.5,
+            label='$\hat{v}_\mathrm{esc}(v_\mathrm{c})$'))
+    axs[-1].legend(handles=handles, loc='upper center', 
+                   bbox_to_anchor=(.5, legend_y),
+                   bbox_transform=fig.transFigure, ncols=legend_ncols)
 
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=350)
     plt.show()
 
     return None 
+
+def plt_halo_integrals_dblscale(gals, df_source,
+                                show_max_hard=True,
+                                show_mao_naive=False,
+                                xmax=None,
+                                logymin=1.e-5,
+                                show_vesc=True,
+                                tgt_fname=None):
+    import fitting
+    import dm_den
+    df = dm_den.load_data(df_source)
+    with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
+        pdfs=pickle.load(f)
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        params = pickle.load(f)
+    with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
+        vesc_hat_dict = pickle.load(f)
+    if show_mao_naive:
+        fit_mao_naive = fitting.fit_mao_naive_aggp()
+    
+    Ncols = min(len(gals), 4)
+    Nrows = 2
+    Ngals = len(gals)
+    xfigsize = 4.6 / 2. * Ncols + 1.
+    yfigsize = 1.5 * Nrows + 1. 
+    xfigsize *= 1.2
+    yfigsize *= 1.2
+    fig, axs = plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize),
+                            sharey='row', sharex=True, dpi=140)
+    fig.subplots_adjust(wspace=0.,hspace=0.1)
+
+    vs_hat = np.linspace(0., 820., 300)
+    integrals = {}
+    for gal in gals:
+        vc100 = df.loc[gal, 'vc100']
+        integrals[gal] = {}
+        # data
+        integrals[gal]['gs_data'] = fitting.numeric_halo_integral(
+                pdfs[gal]['bins'], 
+                pdfs[gal]['ps'])
+        # Staudt prediction
+        v0 = params['d'] * vc100 ** params['e']
+        vdamp = params['h'] * vc100 ** params['j']
+        integrals[gal]['gs_staudt'] = fitting.g_smooth_step_max(
+                vs_hat, v0, vdamp, params['k'])
+        # Simple maxwellian with v0 = vc
+        integrals[gal]['gs_max'] = fitting.g_smooth_step_max(
+                vs_hat, vc100 * 100.,
+                np.inf, np.inf)
+        # Maxwellian with v0 = vc, hard truncation @ vesc
+        if show_max_hard:
+            integrals[gal]['gs_max_hard'] = fitting.g_smooth_step_max(
+                    vs_hat, vc100 * 100.,
+                    vesc_hat_dict[gal], np.inf)
+        # Mao with v0=vc
+        if show_mao_naive:
+            integrals[gal]['gs_mao_naive'] = fitting.calc_g_general(
+                vs_hat,
+                fitting.pN_mao,
+                (vc100 * 100., vesc_hat_dict[gal],
+                 fit_mao_naive.params['p'].value))
+    def fill_row(i):
+        for j, gal in enumerate(gals):
+            vs_truth = pdfs[gal]['vs']
+
+            # Plot data
+            axs[i, j].stairs(integrals[gal]['gs_data'], pdfs[gal]['bins'], 
+                             color='k',
+                             label='data', baseline=None)
+
+            # Plot the prediction
+            axs[i, j].plot(vs_hat, integrals[gal]['gs_staudt'],
+                           label='prediction from $v_\mathrm{c}$',
+                           color='C3', zorder=10)
+
+            # Plot simple maxwellian with v0 = vc
+            axs[i, j].plot(vs_hat,
+                           integrals[gal]['gs_max'],
+                           label='std assumption, $v_0=v\mathrm{c}$',
+                           color='C0')
+
+            # Plot maxwellian with v0 = vc, hard truncation @ vesc
+            if show_max_hard:
+                axs[i, j].plot(
+                        vs_hat, integrals[gal]['gs_max_hard'],
+                        #label='$v_0=v\mathrm{c}$, cut @ $v_\mathrm{esc}$',
+                        color='C0', ls='--')
+
+            # Plot the halo integral from using v0=vc with Mao
+            if show_mao_naive:
+                axs[i, j].plot(vs_hat, integrals[gal]['gs_mao_naive'],
+                            label='Mao, $v_0=v_\mathrm{c}$',
+                            color='c')
+            
+            if i == 0:
+                loc = [0.97,0.95]
+                kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
+                                  va='top', ha='right',
+                                  bbox=dict(facecolor='white', alpha=0.8, 
+                                            edgecolor='none'))
+                axs[i, j].annotate(gal, loc,
+                                   **kwargs_txt)
+                axs[i, j].set_yscale('linear')
+
+                order_of_mag = -3
+                axs[i, j].ticklabel_format(style='sci', axis='y', 
+                                           scilimits=(order_of_mag,
+                                                      order_of_mag),
+                                           useMathText=True)
+            if show_vesc:
+                # Draw vesc line
+                axs[i, j].axvline(vesc_hat_dict[gal], ls='--', c='grey', 
+                                  alpha=0.5)
+
+            if i == 1:
+                axs[i, j].set_yscale('log')
+                axs[i, j].yaxis.set_major_locator(mpl.ticker.LogLocator(
+                    numticks=999))
+                axs[i, j].yaxis.set_minor_locator(mpl.ticker.LogLocator(
+                    numticks=999, subs="auto"))
+
+    fill_row(0)
+    fill_row(1)
+
+    plt.draw()
+    # Need to draw everything before going back and doing this because
+    # otherwise we'll lock in the upper y limit (x limit) for each row with
+    # the
+    # automatically determined upper limit for the galaxy in the first
+    # column (row) of that row (column).
+    axs[1, 0].set_ylim(bottom=logymin)
+    if xmax is not None:
+        for j in range(len(gals)):
+            axs[1, j].set_xlim(right=xmax)
+
+    axs[0, 0].set_ylabel('$g(v_\mathrm{min})'
+                         '\ \mathrm{\left[km^{-1}\,s\\right]}$')
+    axs[0, 0].yaxis.set_label_coords(0.03, 0.5, transform=fig.transFigure)
+    axs[0, 0].set_xlabel(
+            '$v_\mathrm{min}\ \mathrm{\left[km\,s^{-1}\\right]}$')
+    axs[0, 0].xaxis.set_label_coords(0.5, 0.03, transform=fig.transFigure)                       
+
+    handles, labels = axs[0, 0].get_legend_handles_labels()
+    if show_vesc:
+        handles.append(mpl.lines.Line2D(
+            [0], [0], color='grey', 
+            ls='--', alpha=0.5,
+            label='$\hat{v}_\mathrm{esc}(v_\mathrm{c})$'))
+    axs[0, -1].legend(handles=handles, loc='upper center', 
+                      bbox_to_anchor=(0.5, -0.05),
+                      bbox_transform=fig.transFigure, ncols=2,
+                      handlelength=1.2, columnspacing=0.8)
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=350)
+
+    plt.show()
+
+    return None
 
 def setup_multigal_fig(gals, show_resids=True):
     if gals == 'discs':
@@ -1624,7 +2162,7 @@ def setup_multigal_fig(gals, show_resids=True):
         Ngals = len(gals)
     xfigsize = 4.6 / 2. * Ncols + 1.
     yfigsize = 1.5 * Nrows + 1. 
-    if Ngals == 2 and show_resids:
+    if Ngals <= 4 and show_resids:
         # Add room for residual plots
         Nrows += 1
         yfigsize += 1. 
@@ -1640,8 +2178,22 @@ def setup_multigal_fig(gals, show_resids=True):
         axs=axs.ravel()
     fig.subplots_adjust(wspace=0.,hspace=0.)
     fig.Nrows = Nrows
+    fig.Ncols = Ncols
 
     return fig, axs
+
+def label_axes(axs, fig, gals):
+    if not isinstance(gals, (list, np.ndarray, pd.core.indexes.base.Index)) \
+       and gals == 'discs':
+        for i in [4]:
+            axs[i].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+        xlabel_yloc = 0.05
+    elif len(gals) < 4:
+        axs[0].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+        xlabel_yloc = 0.02
+    axs[0].set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+    axs[0].xaxis.set_label_coords(0.5, xlabel_yloc, transform=fig.transFigure)
+    return None
 
 if __name__=='__main__':
     fname=sys.argv[1]

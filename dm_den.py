@@ -740,6 +740,69 @@ def calc_vesc(ms, coords, rvec):
     v_esc = np.sqrt(2.*np.abs(pot))
     return v_esc.to(u.km/u.s)
 
+def get_v_escs(fname=None, rotate=False):
+    '''
+    Get escape velocities for all M12's, without any pre-existing analysis
+    '''
+
+    def fill_v_escs_dic(gal):
+        if rotate:
+            import rotation_wrapper
+            dic = rotation_wrapper.get_rotated_gal(df, gal)
+        else:
+            dic = unpack_4pot(df, gal)
+        
+        thetas = np.pi*np.array([1./4., 1./2., 
+                                 3./4., 1., 
+                                 5./4., 3./2., 
+                                 7./4., 2.])
+        v_escs[gal] = {}
+        v_escs[gal]['v_escs'] = []
+        
+        print('Calculating v_e:')
+        pbar = ProgressBar()
+        for theta in pbar(thetas):
+            rvec = r * np.array([np.cos(theta), np.sin(theta), 0.])
+            if rotate:
+                coords = dic['coord_rot']
+            else:
+                coords = dic['pos']
+            v_escs[gal]['v_escs'] += [calc_vesc(dic['mass'], 
+                                                coords, rvec).value]
+        print('')
+        v_escs[gal]['std_ve'] = np.std(v_escs[gal]['v_escs'])
+        v_escs[gal]['ve_avg'] = np.mean(v_escs[gal]['v_escs'])
+
+        return None
+
+    v_escs = {}
+    df = init_df()
+    r = 8.3 #kpc
+
+    try:
+        if fname:
+            direc='/export/nfs0home/pstaudt/projects/project01/data/'
+            fname=direc+fname
+            f = open(fname,'wb')
+        for gal in df.index:
+            print('Analyzing {0:s}'.format(gal))
+            fill_v_escs_dic(gal)
+        
+        if fname:
+            pickle.dump(v_escs, f, pickle.HIGHEST_PROTOCOL)
+            f.close()
+    except KeyboardInterrupt as e:
+        if fname:
+            f.close()
+            print('File closed: {0:s}'.format(str(f.closed)))
+        raise e
+    except Exception as e:
+        if fname:
+            f.close()
+            print('File closed: {0:s}'.format(str(f.closed)))
+        raise e 
+    return v_escs
+
 def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
             vcircparts=['PartType0','PartType1','PartType4'],
             source='original', dz=0.5):
@@ -1487,67 +1550,6 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
 
     return tuple(results) 
 
-def get_v_escs(fname=None, rotate=False):
-    '''
-    Get escape velocities for all M12's, without any pre-existing analysis
-    '''
-
-    def fill_v_escs_dic(gal):
-        if rotate:
-            import rotation_wrapper
-            dic = rotation_wrapper.get_rotated_gal(df, gal)
-        else:
-            dic = unpack_4pot(df, gal)
-        
-        thetas = np.pi*np.array([1./4., 1./2., 3./4., 1., 5./4., 3./2., 7./4., 
-                                 2.])
-        v_escs[gal] = {}
-        v_escs[gal]['v_escs'] = []
-        
-        print('Calculating v_e:')
-        pbar = ProgressBar()
-        for theta in pbar(thetas):
-            rvec = r * np.array([np.cos(theta), np.sin(theta), 0.])
-            if rotate:
-                coords = dic['coord_rot']
-            else:
-                coords = dic['pos']
-            v_escs[gal]['v_escs'] += [calc_vesc(dic['mass'], 
-                                                coords, rvec).value]
-        print('')
-        v_escs[gal]['std_ve'] = np.std(v_escs[gal]['v_escs'])
-        v_escs[gal]['ve_avg'] = np.mean(v_escs[gal]['v_escs'])
-
-        return None
-
-    v_escs = {}
-    df = init_df()
-    r = 8.3 #kpc
-
-    try:
-        if fname:
-            direc='/export/nfs0home/pstaudt/projects/project01/data/'
-            fname=direc+fname
-            f = open(fname,'wb')
-        for gal in df.index:
-            print('Analyzing {0:s}'.format(gal))
-            fill_v_escs_dic(gal)
-        
-        if fname:
-            pickle.dump(v_escs, f, pickle.HIGHEST_PROTOCOL)
-            f.close()
-    except KeyboardInterrupt as e:
-        if fname:
-            f.close()
-            print('File closed: {0:s}'.format(str(f.closed)))
-        raise e
-    except Exception as e:
-        if fname:
-            f.close()
-            print('File closed: {0:s}'.format(str(f.closed)))
-        raise e 
-    return v_escs
-
 def find_vcrits_fr_halo_int():
     import fitting
 
@@ -1559,8 +1561,8 @@ def find_vcrits_fr_halo_int():
         params = pickle.load(f)
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs = pickle.load(f)
-    with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
-        vescs = pickle.load(f)
+    with open('./data/vesc_hat_dict.pkl', 'rb') as f:
+        vescs_hat_dict = pickle.load(f)
     vs = np.linspace(200., 650., 500)
 
     vcrits = {} 
@@ -1614,9 +1616,8 @@ def find_vcrits_fr_distrib(method='direct', update_values=False):
         params = pickle.load(f)
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs = pickle.load(f)
-    with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
-        vescs = pickle.load(f)
-    vescs['mw'] = {'ve_avg': 550.}
+    with open('./data/vesc_hat_dict.pkl', 'rb') as f:
+        vescs_hat_dict = pickle.load(f)
     vs = np.linspace(200., 650., 500)
 
     vcrits = {} 
@@ -1625,11 +1626,11 @@ def find_vcrits_fr_distrib(method='direct', update_values=False):
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         vc100 = df.loc[gal, 'vc100']
         assert vc100 == vc / 100.
-        vesc = vescs[gal]['ve_avg']
+        vesc_hat = vescs_hat_dict[gal]
         v0 = params['d'] * vc100 ** params['e']
         vdamp = params['h'] * vc100 ** params['j']
         ps_sigmoid = fitting.smooth_step_max(vs, v0, vdamp, params['k'])
-        ps_max_hard = fitting.smooth_step_max(vs, vc, vesc,
+        ps_max_hard = fitting.smooth_step_max(vs, vc, vesc_hat,
                                              np.inf)
         #ps_undamped = fitting.smooth_step_max(vs, v0, np.inf, np.inf)
 
@@ -1650,13 +1651,13 @@ def find_vcrits_fr_distrib(method='direct', update_values=False):
         elif method == 'direct':
             i_cross = np.min(np.where((ps_sigmoid[::-1] \
                                        > ps_max_hard[::-1])
-                                      & (vs[::-1] < vesc))[0])
+                                      & (vs[::-1] < vesc_hat))[0])
             vcrits[gal] = vs[::-1][i_cross]
 
     if update_values:
         with open('./data/vcrits_fr_distrib.pkl', 'wb') as f:
             pickle.dump(vcrits, f, pickle.HIGHEST_PROTOCOL)
-        save_var_latex('vcrit_mw', vcrits['mw'])
+        save_var_latex('vcrit_mw', '{0:0.0f}'.format(round(vcrits['mw'], -1)))
     
     return vcrits
 
