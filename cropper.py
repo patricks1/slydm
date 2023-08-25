@@ -252,6 +252,7 @@ def load_data(galname, getparts='all', verbose=True):
 
     df = init_df()
 
+    print(galname)
     suffix=df.loc[galname,'fsuffix']
     suffix_cropped = df.loc[galname, 'fsuffix_cropped']
     res=df.loc[galname,'res']

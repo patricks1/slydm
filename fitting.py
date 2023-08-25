@@ -203,6 +203,7 @@ def numeric_halo_integral(vbins, ps):
     vs = (vbins[1:] + vbins[:-1]) / 2.
     integrand = ps / vs
     gs = [np.sum(integrand[i:] * v_widths[i:]) for i in range(len(integrand))]
+    gs = np.array(gs)
     return gs
 
 def g_smooth_step_max(vmins, v0, vesc, k):
@@ -479,9 +480,12 @@ def calc_cut_integral(vmins, vcircs, d, e, h, j, k, l, m, parallel=False):
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         log_gs = np.log10(gs)
+    isnan = np.isinf(log_gs)
+    log_gs[isnan] = -9.
     return log_gs
 
-def fit_second_cut(df_source, parallel=False, update_values=False):
+def fit_second_cut(df_source, limit=None,
+                   parallel=False, update_values=False):
     import dm_den
     with open(paths.data + '/data_raw.pkl', 'rb') as f:
         speed_dist_params = pickle.load(f)
@@ -500,21 +504,28 @@ def fit_second_cut(df_source, parallel=False, update_values=False):
     gs_truth = np.concatenate([pdfs[gal]['gs'] for gal in pdfs])
     vcircs = np.concatenate([pdfs[gal]['vcirc'] for gal in pdfs])
 
-    is_zero = gs_truth == 0.
-    vmins = vmins[~is_zero]
-    gs_truth = gs_truth[~is_zero]
-    vcircs = vcircs[~is_zero]
+    if limit is not None:
+        too_small = gs_truth < limit
+        vmins = vmins[~too_small]
+        gs_truth = gs_truth[~too_small]
+        vcircs = vcircs[~too_small]
+    else:
+        is_zero = gs_truth == 0.
+        vmins = vmins[~is_zero]
+        gs_truth = gs_truth[~is_zero]
+        vcircs = vcircs[~is_zero]
 
     model = lmfit.model.Model(calc_cut_integral, 
                               independent_vars=['vmins', 'vcircs', 'd', 'e',
                                                 'h', 'j', 'k'],
-                              nan_policy='propagate',
+                              #nan_policy='propagate',
+                              nan_policy='omit',
                               parallel=parallel)
     params = model.make_params()
-    params['l'].set(value=275., vary=True, min=10., max=700.)
+    params['l'].set(value=275., vary=True, min=100., max=700.)
     params['m'].set(value=1., vary=True, min=0.01)
     result = model.fit(np.log10(gs_truth), params, 
-                       #method='nelder',
+                       method='nelder',
                        vmins=vmins, vcircs=vcircs,
                        d=speed_dist_params['d'], e=speed_dist_params['e'], 
                        h=speed_dist_params['h'],
@@ -529,6 +540,134 @@ def fit_second_cut(df_source, parallel=False, update_values=False):
                         f, pickle.HIGHEST_PROTOCOL)
 
     return result
+
+###############################################################################
+# For indv gal
+###############################################################################
+
+def chopped_integrand_gal(v, vc, N_dict, d, e, h, j, k, vesc):
+    v0 = d * (vc / 100.) ** e
+    vdamp = h * (vc / 100.) ** j
+    N = N_dict[vc]
+    pN = pN_max_double_hard(v, v0, vdamp, k, vesc_hat)
+    return pN / v / N
+
+def calc_cut_integral_i_gal(i, vmins, vc, N_dict, d, e, h, j, k, vesc):
+    if len(vmins) != len(vcircs):
+        raise ValueError('vmins and vcircs should be the same length.')
+    vmin = vmins[i]
+    g = scipy.integrate.quad(chopped_integrand, vmin, np.inf,
+                             args=(vc, N_dict, d, e, h, j, k, l, m),
+                             epsabs=0)[0]
+    gi = np.array([g, i])
+    return gi
+
+def calc_cut_integral_gal(vmins, vc, d, e, h, j, k, vesc, parallel=False):
+    if len(vmins) != len(vcircs):
+        raise ValueError('vmins and vcircs should be the same length.')
+    def normalize(vc):
+        v0 = d * (vc / 100.) ** e
+        vdamp = h * (vc / 100.) ** j
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                    'ignore', 
+                    category=scipy.integrate.IntegrationWarning)
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
+            N = scipy.integrate.quad(pN_max_double_hard, 0., np.inf,
+                                     (v0, vdamp, k, vesc), epsabs=0)[0]
+        return N
+    N_dict = {vc: normalize(vc)}
+    if parallel:
+        pool = mp.Pool(mp.cpu_count())
+        gi_s = [pool.apply_async(calc_cut_integral_i_gal,
+                                 args=(i, vmins, vc, N_dict, 
+                                       d, e, h, j, k, vesc))
+                for i in range(len(vmins))]
+        pool.close()
+        gs, indices = np.array([gi.get() for gi in gi_s]).T
+        inorder = np.all(np.diff(indices) >= 0.)
+        if not inorder:
+            raise ValueError('That thing you were hoping wouldn\'t happen '
+                             'happened.')
+    else:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                    'ignore',
+                    category=scipy.integrate.IntegrationWarning)
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
+            gs = [scipy.integrate.quad(chopped_integrand_gal, vmin, np.inf,
+                                       args=(vc, N_dict, 
+                                             d, e, h, j, k, vesc),
+                                       epsabs=0)[0]
+                  for vmin in vmins]
+        gs = np.array(gs)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        log_gs = np.log10(gs)
+    try:
+        isnan = np.isinf(log_gs)
+    except RuntimeWarning:
+        print(log_gs)
+    log_gs[isnan] = -9.
+    return log_gs
+
+def fit_vesc_indv(df_source, limit=1.e-5,
+                  update_values=False):
+    import dm_den
+    with open(paths.data + '/data_raw.pkl', 'rb') as f:
+        speed_dist_params = pickle.load(f)
+    df = dm_den.load_data(df_source)
+    pdfs = copy.deepcopy(pdfs_v)
+    for gal in ['m12z', 'm12w']:
+        pdfs.pop(gal)
+
+    vesc_dict = {}
+
+    for gal in pdfs:
+        print('Fitting {0:s}'.format(gal))
+        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        gs_truth = numeric_halo_integral(pdfs[gal]['bins'],
+                                         pdfs[gal]['ps'])
+        vmins = pdfs[gal]['vs']
+
+        if limit is not None:
+            too_small = gs_truth < limit
+            vmins = vmins[~too_small]
+            gs_truth = gs_truth[~too_small]
+        else:
+            is_zero = gs_truth == 0.
+            vmins = vmins[~is_zero]
+            gs_truth = gs_truth[~is_zero]
+
+        v0 = speed_dist_params['d'] * (vc / 100.) ** speed_dist_params['e']
+        vdamp = speed_dist_params['h'] * (vc / 100.) ** speed_dist_params['j']
+
+        def calc_log_halo_integral(vmins, vesc):
+            gs = calc_g_general(vmins, pN_max_double_hard,
+                                (v0, vdamp, speed_dist_params['k'], vesc))
+            log_gs = np.log10(gs)
+            isinf = np.isinf(log_gs)
+            log_gs[isinf] = -8.
+            return log_gs
+
+        model = lmfit.model.Model(calc_log_halo_integral, 
+                                  #nan_policy='propagate',
+                                  nan_policy='omit')
+        params = model.make_params()
+        params['vesc'].set(value=500., vary=True, min=300., max=700.)
+
+        result = model.fit(np.log10(gs_truth), params, 
+                           method='nelder',
+                           vmins=vmins)
+
+        vesc_dict[gal] = result.params['vesc'].value
+
+    if update_values:
+        with open(paths.data + 'vesc_ideal_v2.pkl', 'wb') as f:
+            pickle.dump(vesc_dict,
+                        f, pickle.HIGHEST_PROTOCOL)
+
+    return vesc_dict
 
 ###############################################################################
 # Fit and plot speed distributions

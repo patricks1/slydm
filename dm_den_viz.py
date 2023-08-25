@@ -1751,7 +1751,9 @@ def plt_halo_integrals(gals,
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
-    with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
+    #with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
+    #    vesc_hat_dict = pickle.load(f)
+    with open(paths.data + 'vesc_ideal_v2.pkl', 'rb') as f:
         vesc_hat_dict = pickle.load(f)
     if gals == ['mw']:
         df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc_eilers

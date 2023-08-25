@@ -1246,7 +1246,7 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, dz=0.5,
     plt.close()
     return ps, bins, mu
 
-def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False, dz=0.5,
+def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False, dz=1.,
                 density=True):
     df=init_df() 
     pdfs={}
@@ -1660,6 +1660,28 @@ def find_vcrits_fr_distrib(method='direct', update_values=False):
         save_var_latex('vcrit_mw', '{0:0.0f}'.format(round(vcrits['mw'], -1)))
     
     return vcrits
+
+def find_last_v(dfsource):
+    with open(paths.data + 'v_pdfs_disc_dz1.0.pkl', 'rb') as f:
+        pdfs = pickle.load(f)
+    for gal in ['m12z', 'm12w']:
+        pdfs.pop(gal)
+    vesc_dict = {}
+    for gal in pdfs:
+        ps = pdfs[gal]['ps']
+        print(ps)
+        i = np.where(pdfs[gal]['ps'] == 0.)[0].min()
+        vesc_dict[gal] = pdfs[gal]['bins'][i]
+    return vesc_dict
+
+def find_max_v(dfsource):
+    import cropper
+    df = load_data('dm_stats_dz1.0_20230724.h5').drop(['m12w', 'm12z'])
+    for gal in df.index:
+        data = cropper.load_data(gal, getparts='PartType0')
+        print(data.keys())
+    return None
+
 
 ###############################################################################
 # Saving functions
