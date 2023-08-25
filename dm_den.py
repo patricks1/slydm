@@ -1661,26 +1661,29 @@ def find_vcrits_fr_distrib(method='direct', update_values=False):
     
     return vcrits
 
-def find_last_v(dfsource):
+def find_last_v():
     with open(paths.data + 'v_pdfs_disc_dz1.0.pkl', 'rb') as f:
         pdfs = pickle.load(f)
     for gal in ['m12z', 'm12w']:
         pdfs.pop(gal)
     vesc_dict = {}
     for gal in pdfs:
-        ps = pdfs[gal]['ps']
-        print(ps)
-        i = np.where(pdfs[gal]['ps'] == 0.)[0].min()
-        vesc_dict[gal] = pdfs[gal]['bins'][i]
+        vesc_dict[gal] = pdfs[gal]['bins'][-1]
     return vesc_dict
 
-def find_max_v(dfsource):
+def find_max_v(dfsource, r=8.3, dr=1.5, dz=1.):
     import cropper
     df = load_data('dm_stats_dz1.0_20230724.h5').drop(['m12w', 'm12z'])
+    speeds_dict = {}
     for gal in df.index:
-        data = cropper.load_data(gal, getparts='PartType0')
-        print(data.keys())
-    return None
+        data = cropper.load_data(gal, getparts=['PartType1'])
+        speeds = np.linalg.norm(data['PartType1']['v_vec_rot'], axis=1)
+        rs = data['PartType1']['r'] 
+        zs = data['PartType1']['coord_rot'][:, 2]
+        in_ring = (rs <= r + dr/2.) & (rs >= r - dr/2.)
+        in_disc = np.abs(zs) <= dz/2.
+        speeds_dict[gal] = speeds[in_ring & in_disc].max() 
+    return speeds_dict 
 
 
 ###############################################################################

@@ -1753,8 +1753,9 @@ def plt_halo_integrals(gals,
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     #with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
     #    vesc_hat_dict = pickle.load(f)
-    with open(paths.data + 'vesc_ideal_v2.pkl', 'rb') as f:
-        vesc_hat_dict = pickle.load(f)
+    #with open(paths.data + 'vesc_ideal_v2.pkl', 'rb') as f:
+    #    vesc_hat_dict = pickle.load(f)
+    vesc_hat_dict = dm_den.find_last_v()
     if gals == ['mw']:
         df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc_eilers
         df.loc['mw', 'vc100'] = vc_eilers / 100.
