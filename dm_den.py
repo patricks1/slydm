@@ -1783,6 +1783,30 @@ def load_data(fname):
         df=pd.read_hdf(fname)
     return df
 
+def load_vcuts(vcut_type):
+    '''
+    Parameters
+    ---------------------
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
+        Specifies how to determine the speed distribution cutoff.
+    '''
+    if vcut_type == 'lim_fit':
+        with open(paths.data + 'vcut_hat_dict.pkl', 'rb') as f:
+            vcut_dict = pickle.load(f)
+    elif vcut_type == 'lim':
+        vcut_dict = dm_den.find_last_v()
+    elif vcut_type == 'vesc_fit':
+        with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
+            vcut_dict = pickle.load(f)
+    elif vcut_type == 'vesc':
+        vcut_dict = dict(df['vesc'])
+    elif vcut_type == 'ideal':
+        with open(paths.data + 'vesc_ideal.pkl', 'rb') as f:
+            vcut_dict = pickle.load(f)
+    else:
+        raise ValueError('Unexpected vcut_type')
+    return vcut_dict
+
 def save_var_latex(key, value):
     dict_var = {}
 

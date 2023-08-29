@@ -31,8 +31,8 @@ with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
     vesc_dict = pickle.load(f)
 with open('./data/v_pdfs_incl_ve_20220205.pkl','rb') as f:
     pdfs_v_incl_vearth=pickle.load(f)
-with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
-    vesc_hat_dict = pickle.load(f)
+#with open(paths.data + 'vcut_hat_dict.pkl', 'rb') as f:
+#    vcut_hat_dict = pickle.load(f)
 
 for gal in pdfs_v:
     bins = pdfs_v[gal]['bins']
@@ -645,9 +645,10 @@ def fit_vesc_indv(df_source, limit=1.e-5,
         def calc_log_halo_integral(vmins, vesc):
             gs = calc_g_general(vmins, pN_max_double_hard,
                                 (v0, vdamp, speed_dist_params['k'], vesc))
+            is_zero = gs == 0.
+            gs[is_zero] = 1.e-8
             log_gs = np.log10(gs)
             isinf = np.isinf(log_gs)
-            log_gs[isinf] = -8.
             return log_gs
 
         model = lmfit.model.Model(calc_log_halo_integral, 
@@ -663,7 +664,7 @@ def fit_vesc_indv(df_source, limit=1.e-5,
         vesc_dict[gal] = result.params['vesc'].value
 
     if update_values:
-        with open(paths.data + 'vesc_ideal_v2.pkl', 'wb') as f:
+        with open(paths.data + 'vesc_ideal.pkl', 'wb') as f:
             pickle.dump(vesc_dict,
                         f, pickle.HIGHEST_PROTOCOL)
 
@@ -1621,11 +1622,18 @@ def fit_universal_no_uncert(gals='discs', method='leastsq', update_vals=False,
 
     return result_dehjk
 
-def fit_mao(update_values=True):
+def fit_mao(vcut_type, update_values=True):
     '''
     Find a universal d, e, and p for the Mao parameterization where
     v0 = d * vc ^ e.
-    Escape speeds are assumed to be the measured vesc(Phi).
+    
+    Parameters
+    ----------
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
+               default 'lim_fit'
+        Specifies how to determine the speed distribution cutoff.
+    update_values: bool, default True
+        Whether to save parameters to the LaTeX data and a raw .pkl file.
     '''
     import dm_den
     import dm_den_viz
@@ -1634,13 +1642,14 @@ def fit_mao(update_values=True):
     galnames = list(pdfs.keys())
     for gal in ['m12z', 'm12w']:
         galnames.remove(gal)
+    vcut_dict = dm_den.load_vcuts(vcut_type)
     for gal in galnames:
         dict_gal = pdfs[gal]
         bins = dict_gal['bins']
         dict_gal['vcirc'] = np.repeat(
             df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'],
             len(dict_gal['ps']))
-        dict_gal['vesc'] = np.repeat(vesc_dict[gal]['ve_avg'],
+        dict_gal['vesc'] = np.repeat(vcut_dict[gal],
                                      len(dict_gal['ps']))
 
     ps_truth = np.array([pdfs[galname]['ps']
@@ -1698,24 +1707,27 @@ def fit_mao(update_values=True):
                    for key in result.params.keys()}
         covar = {'covar': result.covar}
         data2save = data2save | stderrs | covar #combine dictionaries
-        dm_den.save_var_raw(data2save, 'results_mao.pkl')
+        dm_den.save_var_raw(data2save, 'results_mao_' + vcut_type + '.pkl')
 
     ###########################################################################
     return result
 
-def fit_mao_naive_aggp():
+def fit_mao_naive_aggp(vcut_type):
     '''
     Find the best p parameter based on the aggregation of all twelve discs.
     v0 is assumed to be the circular speed.
-    vesc is *predicted* from fitting veschat(vc) = vesc0 * (vc/100) ^ epsilon
+    
+    Parameters
+    ---------------------
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
+        Specifies how to determine the speed distribution cutoff.
     '''
     import dm_den
     import dm_den_viz
-    with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
-        vesc_hat_dict = pickle.load(f)
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     pdfs = copy.deepcopy(pdfs_v)
     galnames = list(pdfs.keys())
+    vcut_dict = dm_den.load_vcuts(vcut_type)
     for gal in ['m12z', 'm12w']:
         galnames.remove(gal)
     for gal in galnames:
@@ -1724,7 +1736,7 @@ def fit_mao_naive_aggp():
         dict_gal['vcirc'] = np.repeat(
             df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'],
             len(dict_gal['ps']))
-        dict_gal['vesc'] = np.repeat(vesc_hat_dict[gal],
+        dict_gal['vesc'] = np.repeat(vcut_dict[gal],
                                      len(dict_gal['ps']))
 
     ps_truth = np.array([pdfs[galname]['ps']
@@ -1771,18 +1783,6 @@ def fit_mao_naive_aggp():
                            vcircs=vcircs, 
                            vescs=vescs,
                            method='nelder')
-
-    update_values = False
-    if update_values:
-        # Save raw variables to data_raw.pkl
-        data2save = {key: result.params[key].value
-                     for key in result.params.keys()}
-        stderrs = {key+'_stderr': result.params[key].stderr
-                   for key in result.params.keys()}
-        covar = {'covar': result.covar}
-        data2save = data2save | stderrs | covar #combine dictionaries
-        #dm_den.save_var_raw(data2save, 'results_mao.pkl')
-
     ###########################################################################
 
     return result
@@ -1796,8 +1796,6 @@ def fit_mao_naive_indvp(gal):
     import dm_den
     import dm_den_viz
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
-    with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
-        vesc_hat_dict = pickle.load(f)
 
     ###########################################################################
     ## Fitting 
@@ -1823,7 +1821,7 @@ def fit_mao_naive_indvp(gal):
     ps_truth = pdfs_v[gal]['ps']
     vs_truth = pdfs_v[gal]['vs']
     vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
-    vesc = vesc_hat_dict[gal]
+    vesc = vcut_hat_dict[gal]
     with warnings.catch_warnings():
         warnings.filterwarnings(
                 'ignore', 

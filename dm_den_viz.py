@@ -13,6 +13,7 @@ import math
 import grid_eval
 import lmfit
 import copy
+import os
 import staudt_fire_utils as utils
 from progressbar import ProgressBar
 
@@ -225,6 +226,86 @@ def plt_forecast(ax, X_forecast, Yhat, dYhat, xadjustment):
 
     return eb 
 
+def make_formula_appear(show_formula,
+                        xcol, ycol,
+                        intercept, coefs, r2,
+                        reg_xscale, reg_yscale,
+                        xadjustment, yadjustment, ax=None):
+    if show_formula == True and ax is None:
+        raise ValueError('If show_formula is True, the user must provide an '
+                         'ax.')
+    formula_strings = {'vcirc_R0':'v_\mathrm{c}',
+                       'v_cool_gas':'v_\\phi',
+                       'disp_dm_solar':'\sigma_\mathrm{{DM}}', 
+                       'den_solar':'\\rho_\mathrm{{DM}}',
+                       'v_dot_phihat_disc(T<=1e4)': 'v_\mathrm{c}',
+                       'disp_dm_disc_cyl': '\sigma',
+                       'den_disc': '\\rho'
+                       }
+    
+    def get_strs():
+        try:
+            xstring = formula_strings[xcol]
+        except:
+            xstring = 'x'
+        try:
+            ystring = formula_strings[ycol]
+        except:
+            ystring = 'y'
+        return xstring, ystring
+
+    if reg_xscale == 'log' and reg_yscale=='log':
+        # if plotting log data on both axes, show the formula of the form 
+        # y=Ax^m
+        
+        if intercept <= 1.:
+            amplitude_str = staudt_utils.mprint(10.**intercept,
+                                                d=1,
+                                                show=False).replace('$','')
+        
+        else:
+            amplitude_str = '10^{{{0:0.1f}}}'.format(intercept)
+        
+        xstring, ystring = get_strs()
+        if show_formula=='outside':
+            display(Latex('${3:s}={0:s}\,{4:s}^{{{1:0.2f}}}$'
+                        .format(amplitude_str, 
+                                coefs[0], r2, ystring, xstring)))
+            display(Latex('$r^2_\mathrm{{log\,space}}={2:0.2f}$'\
+                        .format(amplitude_str, 
+                                coefs[0], r2, ystring, xstring)))
+        else:
+            ax.annotate('${3:s}={0:s}\,{4:s}^{{{1:0.2f}}}$\n'
+                        '$r^2_\mathrm{{log\,space}}={2:0.2f}$'\
+                        .format(amplitude_str, 
+                                coefs[0], r2, ystring, xstring),
+                        (0,formula_y),
+                        xycoords='axes fraction', fontsize=18)
+    elif xadjustment is None and yadjustment is None:
+        xstring, ystring = get_strs()
+        if intercept<0.:
+            operator = '-'
+        else:
+            operator = '+'
+        if show_formula=='outside':
+            display(Latex('${0:s}={1:0.2f}{2:s}{5:s}{3:0.2f}$'
+                        .format(ystring, coefs[0], xstring, 
+                                np.abs(intercept), r2,
+                                operator)))
+            display(Latex('$r^2={4:0.2f}$'
+                        .format(ystring, coefs[0], xstring, 
+                                np.abs(intercept), r2,
+                                operator)))
+        else:
+            ax.annotate('${0:s}={1:0.2f}{2:s}{5:s}{3:0.2f}$\n'
+                        '$r^2={4:0.2f}$'\
+                        .format(ystring, coefs[0], xstring, 
+                                np.abs(intercept), r2,
+                                operator),
+                        (0., formula_y),
+                        xycoords='axes fraction', fontsize=18)
+    return None
+
 def ax_slr(ax, fname, xcol, ycol,
            xlabel,ylabel,
            xadjustment=None, yadjustment=None,
@@ -345,76 +426,11 @@ def ax_slr(ax, fname, xcol, ycol,
     ax.plot(Xs[0], ys_pred, label=legend_txt) #Plot the regression line
 
     if show_formula:
-        formula_strings = {'vcirc_R0':'v_\mathrm{c}',
-                           'v_cool_gas':'v_\\phi',
-                           'disp_dm_solar':'\sigma_\mathrm{{DM}}', 
-                           'den_solar':'\\rho_\mathrm{{DM}}',
-                           'v_dot_phihat_disc(T<=1e4)': 'v_\mathrm{c}',
-                           'disp_dm_disc_cyl': '\sigma',
-                           'den_disc': '\\rho'
-                           }
-        
-        def get_strs():
-            try:
-                xstring = formula_strings[xcol]
-            except:
-                xstring = 'x'
-            try:
-                ystring = formula_strings[ycol]
-            except:
-                ystring = 'y'
-            return xstring, ystring
-
-        if reg_xscale == 'log' and reg_yscale=='log':
-            # if plotting log data on both axes, show the formula of the form 
-            # y=Ax^m
-            
-            if intercept <= 1.:
-                amplitude_str = staudt_utils.mprint(10.**intercept,
-                                                    d=1,
-                                                    show=False).replace('$','')
-            
-            else:
-                amplitude_str = '10^{{{0:0.1f}}}'.format(intercept)
-            
-            xstring, ystring = get_strs()
-            if show_formula=='outside':
-                display(Latex('${3:s}={0:s}\,{4:s}^{{{1:0.2f}}}$'
-                            .format(amplitude_str, 
-                                    coefs[0], r2, ystring, xstring)))
-                display(Latex('$r^2_\mathrm{{log\,space}}={2:0.2f}$'\
-                            .format(amplitude_str, 
-                                    coefs[0], r2, ystring, xstring)))
-            else:
-                ax.annotate('${3:s}={0:s}\,{4:s}^{{{1:0.2f}}}$\n'
-                            '$r^2_\mathrm{{log\,space}}={2:0.2f}$'\
-                            .format(amplitude_str, 
-                                    coefs[0], r2, ystring, xstring),
-                            (0,formula_y),
-                            xycoords='axes fraction', fontsize=18)
-        elif xadjustment is None and yadjustment is None:
-            xstring, ystring = get_strs()
-            if intercept<0.:
-                operator = '-'
-            else:
-                operator = '+'
-            if show_formula=='outside':
-                display(Latex('${0:s}={1:0.2f}{2:s}{5:s}{3:0.2f}$'
-                            .format(ystring, coefs[0], xstring, 
-                                    np.abs(intercept), r2,
-                                    operator)))
-                display(Latex('$r^2={4:0.2f}$'
-                            .format(ystring, coefs[0], xstring, 
-                                    np.abs(intercept), r2,
-                                    operator)))
-            else:
-                ax.annotate('${0:s}={1:0.2f}{2:s}{5:s}{3:0.2f}$\n'
-                            '$r^2={4:0.2f}$'\
-                            .format(ystring, coefs[0], xstring, 
-                                    np.abs(intercept), r2,
-                                    operator),
-                            (0., formula_y),
-                            xycoords='axes fraction', fontsize=18)
+        make_formula_appear(show_formula,
+                            xcol, ycol,
+                            intercept, coefs, r2,
+                            reg_xscale, reg_yscale,
+                            xadjustment, yadjustment)
 
     den_cols = ['den_solar','den_disc','den_shell'] 
 
@@ -762,11 +778,146 @@ def draw_shades(ax, ycol, vc, dvc, xmult=1.):
     draw_xshade(ax, vc, dvc, xmult)
     return None
 
-def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11, 
+def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11, 
                    adjust_text_kwargs={}, formula_y=-0.3, dpi_show=120,
                    xtickspace=None, ytickspace=None, label_overrides={},
                    marker_label_size=11,
                    show_formula=True,
+                   update_values=False, tgt_fname=None, verbose=False):
+    import dm_den
+    df = dm_den.load_data(dfsource)
+
+    vcut_d = dm_den.find_last_v()
+    df_vcut = pd.DataFrame.from_dict(vcut_d, orient='index', columns=['vcut'])
+    df = pd.concat([df, df_vcut], axis=1)
+    
+    df_source = 'dm_stats_w_vcut.h5'
+    dm_den.save_data(df, df_source)
+    
+    ycol = 'vcut'
+    xcol = 'vc100'
+    df.drop(['m12z', 'm12w'], inplace=True)
+    fig = plt.figure(figsize=figsize, dpi=dpi_show)
+    ax = fig.add_subplot(111)
+    X_forecast = np.array([[vc_eilers / 100.]]) # MW vcirc
+    xadjustment='logreg_linaxunits'
+    yadjustment='logreg_linaxunits'
+    P1sigma = scipy.special.erf(1. / np.sqrt(2)) # ~68%
+
+    reg = dm_den.mlr(df_source, xcols=[xcol], ycol=ycol,
+                     xscales=['log'], yscale='log',
+                     dropgals=['m12z', 'm12w'], 
+                     prediction_x=X_forecast,
+                     dX=np.array([[dvc_eilers / 100.]]),
+                     fore_sig=1.-P1sigma,
+                     beta_sig=1.-P1sigma,
+                     return_band=True,
+                     return_coef_errors=True,
+                     verbose=verbose)
+
+    # delta_beta is the fit parameter errors
+    coefs, log_intercept, r2, Xs, ys, ys_pred, r2a, resids, delta_beta, band \
+            = reg[:10]
+    slope = coefs[0]
+
+    # reg[-1] has two components; reg[-1][0] is the forecast; reg[-1][1] is the
+    # uncertainty on the forecast. In order to be able to do the matrix math
+    # in multiple regression, ax_slr keeps reg[-1][0] as 2 dimensional, but we
+    # can just take the [0,0] element (0th datapoint, 0th column). 
+    vesc_hat_mw = reg[-1][0][0,0] # Predicted MW vesc
+
+    # mlr proves dyhat as 2 dimensional in
+    # case the uncertainty on y is asymmetric and in case we're forecasting
+    # multiple datapoints. We can take the 0 element of reg[-1][1] (the 0th 
+    # datapoint) but want to keep all columuns
+    # of reg[-1][1][0] in case the uncertainty is asymmetric.
+    dvesc_mw = reg[-1][1][0]
+
+ 
+    # Errors on the fit parameters (i.e. on the beta vector)
+    dbeta = reg[-3] 
+
+    ax.fill_between(10. ** band[0] * 100., *(10. ** band[1:]), 
+                    color='grey', alpha=0.2,
+                    lw=0.)
+    # Plot the best fit line
+    ax.plot(10. ** band[0] * 100., 
+            10. ** band[-1], '-')
+    fill_ax_new(ax, df, 
+                'v_dot_phihat_disc(T<=1e4)', ycol, 
+                xlabel=vc_label,
+                ylabel='$v_\mathrm{cut}\,/\,'
+                       '\left[\mathrm{km\,s^{-1}}\\right]$',
+                xscale='log', yscale='log',
+                color='masses',
+                labelsize=marker_label_size,
+                xtickspace=xtickspace, 
+                ytickspace=ytickspace,
+                showcorr=False, adjust_text_kwargs=adjust_text_kwargs,
+                arrowprops={'arrowstyle': '-'})
+    vesc_hat_mw_transform = staudt_utils.log2linear(vesc_hat_mw, dvesc_mw[0]) 
+    plt_forecast(ax, X_forecast * 100., np.array([[vesc_hat_mw_transform[0]]]),
+                 np.array([vesc_hat_mw_transform[1:]]),
+                 xadjustment=None)
+    ax.annotate('Milky Way', (vc_eilers, vesc_hat_mw_transform[0]), 
+                fontsize=labelsize,
+                color='red', 
+                arrowprops={'arrowstyle':'-|>', 'color':'red'}, 
+                textcoords='axes fraction',
+                xytext=(0.33, 0.66))
+
+    override_labels(label_overrides, ax, dm_den.load_data(df_source),
+                    ycol, 'v_dot_phihat_disc(T<=1e4)', labelsize )
+
+    if show_formula:
+        make_formula_appear(show_formula,
+                            xcol, ycol,
+                            log_intercept, coefs, r2,
+                            reg_xscale='log', reg_yscale='log',
+                            xadjustment=xadjustment, yadjustment=yadjustment)
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=350)
+    plt.show()
+
+    if update_values:
+        # Save the MW vesc prediction in the LaTeX data
+        vesc_hat_mw_txt, dvesc_mw_txt = staudt_utils.sig_figs(
+                vesc_hat_mw_transform[0], vesc_hat_mw_transform[1:])
+        dm_den.save_prediction('vcut_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
+
+        # Save the amplitude to the LaTeX data
+        dlog_intercept = dbeta[0][0]
+        intercept_transform = staudt_utils.log2linear(log_intercept, 
+                                                      dbeta[0][0])
+        amp = intercept_transform[0]
+        damp = intercept_transform[1:]
+        amp_str, damp_str = staudt_utils.sig_figs(amp, damp)
+        dm_den.save_prediction('vcuthat_amp', amp_str, damp_str)
+
+        # Save the slope to the LaTeX data
+        slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
+        dm_den.save_prediction('vcuthat_slope', slope_str, dslope_str)
+
+        # Save the vesc(vc) predictions
+        df = dm_den.load_data(df_source)
+        if xadjustment in ['logreg_linaxunits', 'log'] \
+           and yadjustment in ['logreg_linaxunits', 'log']:
+            vesc_hat_dict = dict(amp * df[xcol] ** slope)
+        vesc_hat_dict['mw'] = vesc_hat_mw
+        with open(paths.data + 'vcut_hat_dict.pkl', 'wb') as f:
+            pickle.dump(vesc_hat_dict, f, pickle.HIGHEST_PROTOCOL)
+
+    os.remove(paths.data + df_source)
+
+    return None
+
+def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11, 
+                   adjust_text_kwargs={}, formula_y=-0.3, dpi_show=120,
+                   xtickspace=None, ytickspace=None, label_overrides={},
+                   marker_label_size=11,
                    update_values=False, tgt_fname=None, verbose=False):
     ycol = 'vesc'
     xcol = 'vc100'
@@ -1412,7 +1563,14 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
                          ymax=None, show_bands=True, show_sigmoid_exp=False,
                          show_mao=False,
                          xtickspace=None, show_rms=False,
-                         tgt_fname=None):
+                         tgt_fname=None, scale='linear', vcut_type='lim_fit'):
+    '''
+    Noteworthy parameters
+    ---------------------
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
+               default 'lim_fit'
+        Specifies how to determine the speed distribution cutoff.
+    '''
     import dm_den
     import fitting
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
@@ -1428,13 +1586,11 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs=pickle.load(f)
-    with open(paths.data + 'vescs_rot_20230514.pkl', 'rb') as f:
-        vescs = pickle.load(f)
+    vcut_dict = dm_den.load_vcuts(vcut_type)
+
     if show_mao:
-        with open(paths.data + 'results_mao.pkl', 'rb') as f:
+        with open(paths.data + 'results_mao_' + vcut_type + '.pkl', 'rb') as f:
             fit_mao = pickle.load(f)
-        with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
-            vesc_hat_dict = pickle.load(f)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
     if gals == 'discs':
@@ -1457,7 +1613,7 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
     samples = fitting.load_samples()
 
     if show_mao:
-        fit_mao_naive = fitting.fit_mao_naive_aggp()
+        fit_mao_naive = fitting.fit_mao_naive_aggp(vcut_type)
 
     fig, axs = setup_multigal_fig(gals)
 
@@ -1470,7 +1626,7 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         v0 = d * (vc / 100.) ** e
         vdamp = h * (vc / 100.) ** j
-        vesc_hat = vesc_hat_dict[gal]
+        vcut = vcut_dict[gal]
         ps_postfit = fitting.smooth_step_max(vs_postfit,
                                              v0, vdamp,
                                              k)
@@ -1514,11 +1670,11 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
                     label='prediction from $v_\mathrm{c}$', color='C3', lw=1.5)
         
         if show_sigmoid_exp:
-            # Plot the prediction with an exponential cut @ vesc
+            # Plot the prediction with an exponential cut @ vcut
             axs[i].plot(vs_postfit,
                         fitting.max_double_exp(vs_postfit,
                                                v0, vdamp, k,
-                                               vescs[gal]['ve_avg']),
+                                               vcut),
                         label='prediction, exp cut @ $v_\mathrm{esc}$')
 
         if show_mao:
@@ -1526,27 +1682,28 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
             axs[i].plot(vs_postfit,
                         fitting.mao(vs_postfit, 
                                     v0_mao,
-                                    vesc_hat,
+                                    vcut,
                                     fit_mao['p']),
                         label='Mao prediction from $v_\mathrm{c}$')
             if show_rms:
                 _, sse_mao_full_add = fitting.calc_rms_err(vs_truth, ps_truth,
                                                            fitting.mao,
                                                            args=[v0_mao,
-                                                                 vesc_hat,
+                                                                 vcut,
                                                                  fit_mao['p']])
                 sse_mao_full += sse_mao_full_add
                                                                  
             axs[i].plot(vs_postfit,
                         fitting.mao(vs_postfit,
-                                    vc, vesc_hat_dict[gal], 
+                                    vc, vcut, 
                                     fit_mao_naive.params['p'].value),
                         label='Mao, $v_0=v_\mathrm{c}$')
         # Make ticks on both sides of the x-axis:
         axs[i].tick_params(axis='x', direction='inout', length=6)
 
         order_of_mag = -3
-        make_sci_y(axs, i, order_of_mag)
+        if scale == 'linear':
+            make_sci_y(axs, i, order_of_mag)
 
         if Ngals == 2:
             # Remove the 0 tick label because of overlap
@@ -1604,6 +1761,9 @@ def plt_universal_prefit(result, gals='discs', ddfrac=None, dhfrac=None,
             axs[i].xaxis.set_major_locator(
                     mpl.ticker.MultipleLocator(base=xtickspace))
             axs[i].xaxis.set_minor_locator(plt.NullLocator())
+
+        if scale != 'linear':
+            axs[i].set_yscale(scale)
 
     label_axes(axs, fig, gals)
     if fig.Nrows == 3:
@@ -1737,25 +1897,32 @@ def plt_mw(tgt_fname=None, dvc=0., dpi=140, show_vcrit=False):
     plt.show()
 
 def plt_halo_integrals(gals, 
+                       dfsource,
                        show_sigmoid_hard=False, show_sigmoid_exp=False,
                        show_max_hard=False, show_max_exp=False,
                        show_mao_prediction=False,
                        show_mao_naive=False,
                        show_vesc=False, show_vcrit=False,
+                       vcut_type='lim_fit',
                        xmax=None,
                        ymin=1.e-6, ymax=9.e-3,
                        xtickspace=None, scale='log',
                        tgt_fname=None, show_rms=False):
+    '''
+    Noteworthy parameters
+    ---------------------
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
+               default 'lim_fit'
+        Specifies how to determine the speed distribution cutoff.
+    '''
     import dm_den
     import fitting
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
-    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
-    #with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
-    #    vesc_hat_dict = pickle.load(f)
-    #with open(paths.data + 'vesc_ideal_v2.pkl', 'rb') as f:
-    #    vesc_hat_dict = pickle.load(f)
-    vesc_hat_dict = dm_den.find_last_v()
+    df = dm_den.load_data(dfsource)
+
+    vcut_dict = dm_den.load_vcuts(vcut_type)
+
     if gals == ['mw']:
         df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc_eilers
         df.loc['mw', 'vc100'] = vc_eilers / 100.
@@ -1793,7 +1960,7 @@ def plt_halo_integrals(gals,
     pbar = ProgressBar()
     for i, gal in enumerate(pbar(gal_names)):
         vc100 = df.loc[gal, 'vc100']
-        vesc_hat = vesc_hat_dict[gal]
+        vesc_hat = vcut_dict[gal]
         vs_truth = pdfs[gal]['vs']
 
         if gal != 'mw':
@@ -1844,7 +2011,7 @@ def plt_halo_integrals(gals,
                                            np.inf, np.inf)
         axs[i].plot(vs_hat,
                     gs_max,
-                    label='std assumption, $v_0=v\mathrm{c}$',
+                    label='std assumption, $v_0=v_\mathrm{c}$',
                     color='C0')
         
         if show_max_exp:
@@ -1947,6 +2114,10 @@ def plt_halo_integrals(gals,
             axs[i].xaxis.set_major_locator(
                     mpl.ticker.MultipleLocator(base=xtickspace))
             axs[i].xaxis.set_minor_locator(plt.NullLocator())
+        axs[i].yaxis.set_major_locator(mpl.ticker.LogLocator(
+            numticks=999))
+        axs[i].yaxis.set_minor_locator(mpl.ticker.LogLocator(
+            numticks=999, subs="auto"))
 
     if xmax is not None or ymin is not None or ymax is not None:
         plt.draw()
@@ -1976,10 +2147,15 @@ def plt_halo_integrals(gals,
     axs[-1].xaxis.set_label_coords(0.5, xlabel_y, transform=fig.transFigure)                       
     handles, labels = axs[-1].get_legend_handles_labels()
     if show_vesc:
+        vcut_labels = {'lim_fit': '$\hat{v}_\mathrm{cut}(v_\mathrm{c})$',
+                       'lim': '$v_\mathrm{cut}$',
+                       'vesc_fit': '$\hat{v}_\mathrm{esc}(v_\mathrm{c})$',
+                       'vesc': '$v_\mathrm{esc}(\Phi)$',
+                       'ideal': '$v_\mathrm{cut, ideal}$'}
         handles.append(mpl.lines.Line2D(
             [0], [0], color='grey', 
             ls='--', alpha=0.5,
-            label='$\hat{v}_\mathrm{esc}(v_\mathrm{c})$'))
+            label=vcut_labels[vcut_type]))
     axs[-1].legend(handles=handles, loc='upper center', 
                    bbox_to_anchor=(.5, legend_y),
                    bbox_transform=fig.transFigure, ncols=legend_ncols)
