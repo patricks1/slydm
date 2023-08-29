@@ -486,6 +486,13 @@ def calc_cut_integral(vmins, vcircs, d, e, h, j, k, l, m, parallel=False):
 
 def fit_second_cut(df_source, limit=None,
                    parallel=False, update_values=False):
+    '''
+    This was an attempt to find a universal way of predicting vcut based on
+    minimizing the sse of the log halo integral. However, it didn't work. It's
+    not possible to do it this way, because it causes some galaxies to be cut
+    so early that the sse gets driven up to the point where the lowest sse
+    happens when there's no cut at all.
+    '''
     import dm_den
     with open(paths.data + '/data_raw.pkl', 'rb') as f:
         speed_dist_params = pickle.load(f)
@@ -535,7 +542,7 @@ def fit_second_cut(df_source, limit=None,
         covar = {'covar': result.covar}
         dict_gfit = {p: result.params[p].value for p in result.params.keys()}
         dict_gfit = dict_gfit | covar
-        with open(paths.data + 'params_vesc_hat_v2.pkl', 'wb') as f:
+        with open(paths.data + 'params_vesc_hat.pkl', 'wb') as f:
             pickle.dump(dict_gfit,
                         f, pickle.HIGHEST_PROTOCOL)
 
