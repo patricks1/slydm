@@ -9,6 +9,7 @@ import copy
 import time
 import grid_eval
 import h5py
+import itertools
 import numpy as np
 import pandas as pd
 import multiprocessing as mp
@@ -38,10 +39,11 @@ for gal in pdfs_v:
     bins = pdfs_v[gal]['bins']
     vs = (bins[1:] + bins[:-1]) / 2.
     pdfs_v[gal]['vs'] = vs
+    # Getting rid of the variable so it doesn't accidentally get used later:
+    del vs 
 
 max_bins_est = 1.e-3
 min_bins_est = -1.e-3
-resids_lim = 0.9
 
 ###############################################################################
 # Speed distributions
@@ -103,7 +105,7 @@ def exp_max(v, v0, vesc):
     Maxwellian with an exponential decline (from Macabe 2010 and Lacroix et al. 
     2020)
     '''
-    fN = fN = np.exp( - v**2. / v0**2. ) - np.exp( - vesc**2. / v0**2. )
+    fN = np.exp( - v**2. / v0**2. ) - np.exp( - vesc**2. / v0**2. )
     pN = fN * 4. * np.pi * v**2.
     N1 = -2./3. * np.pi*vesc * np.exp( - vesc**2. / v0**2. )
     N2 = (3.*v0**2. + 2.*vesc**2.)
@@ -176,6 +178,14 @@ def pN_max_double_exp(v, v0, vdamp, k, vesc):
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         trunc = 1. / (1. + np.exp(-k * (vdamp-v)))
     pN *= trunc
+
+    if isinstance(v, (list, np.ndarray)):
+        isesc = v>=vesc
+        pN[isesc] = 0.
+    else:
+        if v>=vesc:
+            return 0.
+
     return pN
 
 def max_double_exp(v, v0, vdamp, k, vesc):
@@ -674,245 +684,12 @@ def fit_vesc_indv(df_source, limit=1.e-5,
 # Fit and plot speed distributions
 ###############################################################################
 
-def plt_naive(gals='discs', tgt_fname=None, update_vals=False, 
-              show_sigma_vc=True, show_exp=True, show_sigma_meas=True):
-    if update_vals and gals != 'discs':
-        raise ValueError('You should only update values when you\'re plotting '
-                         'all the discs.')
-    import dm_den
-    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
-    if gals == 'discs':
-        df.drop(['m12w', 'm12z'], inplace=True)
-    elif isinstance(gals, (list, np.ndarray)):
-        df = df.loc[gals]
-    else:
-        raise ValueError('Unexpected value provided for gals arg')
-
-    Ngals = len(df)
-    if gals == 'discs':
-        figsize = (19., 12.)
-        Nrows = 3
-        Ncols = 4
-    else:
-        Ncols = min(Ngals, 4)
-        Nrows = math.ceil(len(gals) / Ncols)
-    xfigsize = 4.6 / 2. * Ncols + 1.
-    yfigsize = 1.5 * Nrows + 1. 
-    if Ngals == 2:
-        # Add room for residual plots
-        Nrows += 1
-        yfigsize += 1. 
-        height_ratios = [4,1]
-    else:
-        height_ratios = None
-    fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
-                         sharey='row',
-                         sharex=True, dpi=140, height_ratios=height_ratios)
-    axs=axs.ravel()
-    
-    pbar = ProgressBar()
-
-    # velocities to use when plotting the functional form attempts
-    vs_maxwell = np.linspace(0., 800., 700) 
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
-        # Strength at which to truncate the distribution
-        # I'm probably not going to use this here, though
-        k = pickle.load(f)['k'] 
-
-    rms_dict = {}
-    rms_dict['sigma_vc'] = {}
-    rms_dict['true_sigma'] = {}
-    for i, gal in enumerate(df.index):
-        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
-        with open(paths.data + 'data_raw.pkl', 'rb') as f:
-            results_dict = pickle.load(f)
-        sigma_predicted = 10.**results_dict['logdisp_intercept'] \
-                          * (vc/100.) ** results_dict['disp_slope']
-        sigma_truth = df.loc[gal, 'disp_dm_disc_cyl']
-        vesc = vesc_dict[gal]['ve_avg']
-
-        #######################################################################
-        # Data
-        #######################################################################
-        bins = pdfs_v[gal]['bins']
-        vs_truth = (bins[1:] + bins[:-1]) / 2.
-        ps_truth = pdfs_v[gal]['ps']
-        axs[i].stairs(ps_truth, bins,
-                      color='k', label='data')
-
-        #######################################################################
-        # p(sigma(vc), vs_maxwell)
-        #######################################################################
-        ps_sigma_vc = smooth_step_max(
-                                   vs_maxwell, 
-                                   np.sqrt(2./3.)*sigma_predicted,
-                                   np.inf,
-                                   np.inf)
-        rms_err_sigma_vc, _ = calc_rms_err(vs_truth, ps_truth, smooth_step_max,
-                                           args=(np.sqrt(2./3)*sigma_predicted,
-                                                 np.inf, np.inf))
-        rms_sigma_vc_txt = staudt_utils.mprint(rms_err_sigma_vc, d=1, 
-                                               show=False).replace('$','')
-        rms_dict['sigma_vc'][gal] = rms_err_sigma_vc
-        if show_sigma_vc:
-            axs[i].plot(vs_maxwell, ps_sigma_vc, 
-                        label='$v_0=\sigma_\mathrm{3D}(v_\mathrm{c})$')
-
-        #######################################################################
-        # p(sigma_measured, vs_maxwell)
-        #######################################################################
-        ps_true_sigma = smooth_step_max(vs_maxwell,
-                                        np.sqrt(2./3.) * sigma_truth,
-                                        np.inf,
-                                        np.inf)
-        rms_err_true_sigma, _ = calc_rms_err(vs_truth, ps_truth, smooth_step_max,
-                                             args=(np.sqrt(2./3.)*sigma_truth,
-                                                   np.inf, np.inf))
-        rms_true_sigma_txt= staudt_utils.mprint(rms_err_true_sigma, d=1, 
-                                            show=False).replace('$','')
-        rms_dict['true_sigma'][gal] = rms_err_true_sigma
-        if show_sigma_meas:
-            axs[i].plot(vs_maxwell,
-                        ps_true_sigma,
-                        label = '$v_0=\sqrt{2/3}\sigma_\mathrm{meas}$')
-        
-        #######################################################################
-        # p(vc, vs_maxwell)
-        #######################################################################
-        axs[i].plot(vs_maxwell, 
-                    smooth_step_max(vs_maxwell, vc, np.inf, np.inf),
-                    label = '$v_0=v_\mathrm{c}$')
-
-        #######################################################################
-        # p(vc, vs_maxwell) * [exponentially truncated @ vesc_measured]
-        #######################################################################
-        if show_exp:
-            axs[i].plot(vs_maxwell,
-                        exp_max(vs_maxwell, vc, vesc),
-                        label = '$v_0=v_\mathrm{c}$'
-                                '\nexp trunc @ $v_\mathrm{esc}(\Phi)$')
-                    
-        # Draw vesc line
-        axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
-        trans = mpl.transforms.blended_transform_factory(axs[i].transData,
-                                                         axs[i].transAxes)
-        axs[i].text(vesc, 0.5, '$v_\mathrm{esc}(\Phi)$', transform=trans,
-                    fontsize=15., rotation=90., color='gray', 
-                    horizontalalignment='right')
-
-        axs[i].grid(False)
-        # Make ticks on both sides of the x-axis:
-        axs[i].tick_params(axis='x', direction='inout', length=6)
-        order_of_mag = -3
-        axs[i].ticklabel_format(style='sci', axis='y', 
-                                scilimits=(order_of_mag,
-                                           order_of_mag),
-                                useMathText=True)
-
-        loc=[0.97,0.96]
-        kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
-                      va='top', ha='right', 
-                      bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
-        axs[i].annotate(gal, loc,
-                        **kwargs_txt)
-        '''
-        loc[1] -= 0.12
-        kwargs_txt['fontsize'] = 10.
-        axs[i].annotate('$\mathrm{{RMS}}_{{\sigma'
-                            '(v_\mathrm{{c}})}}={0:s}$'
-                        .format(rms_sigma_vc_txt),
-                        loc, color='C0', **kwargs_txt)
-        loc[1] -= 0.11
-        axs[i].annotate('$\mathrm{{RMS}}_{{'
-                            '\sigma_\mathrm{{meas}}'
-                            '}}={0:s}$'
-                        .format(rms_true_sigma_txt),
-                        loc, color='C1', **kwargs_txt)
-        '''
-        if Ngals == 2:
-            # Draw residual plot
-            vs_resids = copy.deepcopy(vs_truth)
-            vs_extend = np.linspace(vs_resids.max(), vs_maxwell.max(), 20)
-            vs_resids = np.append(vs_resids, vs_extend, axis=0) 
-
-            def calc_resids_vc():
-                ps_sigma = smooth_step_max(
-                        vs_truth,
-                        vc,
-                        np.inf,
-                        np.inf)
-                resids = ps_sigma - ps_truth
-                inrange = (vs_truth > 75.) & (vs_truth < 175.)
-                resids_extend = smooth_step_max(
-                    vs_extend,
-                    vc,
-                    np.inf, np.inf)
-                resids = np.append(resids, 
-                                   resids_extend,
-                                   axis=0)
-                return resids
-            def calc_resids(sigma):
-                ps_sigma = smooth_step_max(
-                        vs_truth,
-                        np.sqrt(2./3.) * sigma,
-                        np.inf,
-                        np.inf)
-                resids = ps_sigma - ps_truth
-                inrange = (vs_truth > 75.) & (vs_truth < 175.)
-                resids_extend = smooth_step_max(
-                    vs_extend,
-                    np.sqrt(2./3.) * sigma,
-                    np.inf, np.inf)
-                resids = np.append(resids, 
-                                   resids_extend,
-                                   axis=0)
-                return resids
-            # Remove the 0 tick label because of overlap
-            y0, y1 = axs[i].get_ylim()
-            visible_ticks = np.array([t for t in axs[i].get_yticks() \
-                                      if t>=y0 and t<=y1])
-            new_ticks = visible_ticks[visible_ticks > 0.]
-            axs[i].set_yticks(new_ticks)
-
-            axs[i+2].grid(False)
-            axs[i+2].set_ylim(-resids_lim, resids_lim)
-
-            if show_sigma_vc:
-                axs[i+2].plot(vs_resids, 
-                              calc_resids(sigma_predicted)/10.**order_of_mag)
-            axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5,
-                             lw=1.)
-            axs[i+2].plot(vs_resids, 
-                          calc_resids_vc()/10.**order_of_mag)
-            axs[i+2].axvline(vesc, ls='--', alpha=0.5, color='grey')
-
-            if i == 0:
-                axs[i+2].set_ylabel('resids')
-    if update_vals:
-        save_rms_errs(rms_dict)
-    fig.tight_layout()
-    fig.subplots_adjust(wspace=0.,hspace=0.)
-    if Nrows == 3:
-        axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, -0.04),
-                      bbox_transform=fig.transFigure, ncol=3)
-    else:
-        trans_legend = mpl.transforms.blended_transform_factory(
-                axs[1].transAxes, fig.transFigure)
-        axs[1].legend(loc='upper center', bbox_to_anchor=(0., -0.04),
-                      bbox_transform=trans_legend, ncol=2)
-    dm_den_viz.label_axes(axs, fig, gals)
-
-    if tgt_fname is not None:
-        plt.savefig(paths.figures+tgt_fname,
-                    bbox_inches='tight',
-                    dpi=250)
-
-    plt.show()
-
-    return None
-
 def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
+    '''
+    Plot a simple Maxwellian with the best-fit v0
+    '''
     import dm_den
+    import dm_den_viz
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     if gals == 'discs':
         df = df.drop(['m12w', 'm12z'])
@@ -921,21 +698,23 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
     else:
         raise ValueError('Unexpected value provided for gals arg')
     
-    if gals == 'discs':
-        figsize = (19., 12.)
-        Nrows = 3
-        Ncols = 4
-    else:
-        Ncols = min(len(gals), 4)
-        Nrows = math.ceil(len(gals) / Ncols)
-    xfigsize = 4.5 * Ncols + 1.
-    yfigsize = 3.7 * Nrows + 1. 
-    fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
-                         sharey='row',
-                         sharex=True, dpi=140)
-    axs=axs.ravel()
-    fig.subplots_adjust(wspace=0.,hspace=0.)
+    #if gals == 'discs':
+    #    figsize = (19., 12.)
+    #    Nrows = 3
+    #    Ncols = 4
+    #else:
+    #    Ncols = min(len(gals), 4)
+    #    Nrows = math.ceil(len(gals) / Ncols)
+    #xfigsize = 4.5 * Ncols + 1.
+    #yfigsize = 3.7 * Nrows + 1. 
+    #fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
+    #                     sharey='row',
+    #                     sharex=True, dpi=140)
+    #axs=axs.ravel()
+    #fig.subplots_adjust(wspace=0.,hspace=0.)
     
+    fig, axs = dm_den_viz.setup_multigal_fig(gals)
+
     pbar = ProgressBar()
     
     def sse_max_v0_vesc(params, vs_truth, ps_truth):
@@ -964,6 +743,8 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
         
     vesc_fits = {}
     
+    vcut_dict = dm_den.load_vcuts('lim_fit', df)
+
     for i, gal in enumerate(pbar(df.index)):
         pdf = pdfs_v[gal]
         bins = pdf['bins']
@@ -971,12 +752,19 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
         vs_postfit = np.linspace(0., 750., 500)
         ps_truth = pdf['ps']
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
-        vesc = vesc_dict[gal]['ve_avg']
+        vesc_Phi = vesc_dict[gal]['ve_avg']
+        i0 = np.argmax(ps_truth)
+        v0_data = vs_truth[i0]
+        axs[i].axvline(v0_data, c='grey', lw=1., alpha=0.5)
+        axs[i].axhline(ps_truth[i0], c='grey', lw=1., alpha=0.5)
     
+        #######################################################################
         p = lmfit.Parameters()
         p.add('v0', value=300., vary=True, min=100., max=400.)
-        p.add('vesc', value=np.inf, vary=False)
-        p.add('k', value=0.0309, vary=False, min=0.0001, max=1.)
+        p.add('vesc', value=vcut_dict[gal], vary=False)
+        p.add('k', value=np.inf, vary=False)
+        #p.add('vesc', value=np.inf, vary=False)
+        #p.add('k', value=0.0309, vary=False, min=0.0001, max=1.)
     
         res_v0_vesc = lmfit.minimize(sse_max_v0_vesc, p, 
                                      method='nelder', 
@@ -993,36 +781,75 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
                 vs_postfit, 
                 res_v0_vesc.params['v0'], 
                 res_v0_vesc.params['vesc'],
-                res_v0_vesc.params['k']))
+                res_v0_vesc.params['k']),
+            label='best fit $v_0$\ncut @ $\hat{v}_\mathrm{lim}(v_\mathrm{c})$',
+            zorder=10)
+        #######################################################################
         
+        #######################################################################
+        # Plot simple Maxwellian with best-fit v0, without a cut
+        #######################################################################
+        p_v0_uncut = lmfit.Parameters()
+        p_v0_uncut.add('v0', value=300., vary=True, min=100., max=400.)
+        p_v0_uncut.add('vesc', value=np.inf, vary=False)
+        p_v0_uncut.add('k', value=np.inf, vary=False)
+        res_v0_uncut = lmfit.minimize(sse_max_v0_vesc, p_v0_uncut, 
+                                      method='nelder', 
+                                      args=(vs_truth, ps_truth),
+                                      nan_policy='omit', 
+                                      #niter=300
+                                     )
+        axs[i].plot(vs_postfit,
+                    smooth_step_max(vs_postfit,
+                                    res_v0_uncut.params['v0'],
+                                    res_v0_uncut.params['vesc'],
+                                    res_v0_uncut.params['k']),
+                    label='best fit $v_0$')
+        #######################################################################
+
+        # Plot the naive Maxwellian
+        axs[i].plot(vs_postfit,
+                    smooth_step_max(vs_postfit, vc, np.inf, np.inf),
+                    label='$v_0=v_\mathrm{c}$')
+
+        # Force v0 to be at the data's peak
+        axs[i].plot(vs_postfit,
+                    smooth_step_max(vs_postfit, v0_data, vcut_dict[gal], 
+                                    np.inf),
+                    label=('correct $v_0$'
+                           '\ncut @ $\hat{v}_\mathrm{lim}(v_\mathrm{c})$'))
+
         if show_exp:
             del(p['k'])
             #p['vesc'].set(value = vesc_dict[gal]['ve_avg'], vary=False)
             res_exp = lmfit.minimize(resids_exp_max, p, method='nelder',
-                                     args=(vs_truth, ps_truth), nan_policy='omit')
+                                     args=(vs_truth, ps_truth), 
+                                     nan_policy='omit')
             axs[i].plot(vs_postfit,
                         exp_max(vs_postfit, 
                                 res_exp.params['v0'],
                                 res_exp.params['vesc']))
+
         axs[i].grid(False)
         
         loc=[0.97,0.96]
-        kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
+        kwargs_txt = dict(fontsize=13., xycoords='axes fraction',
                       va='top', ha='right', 
-                      bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+                      bbox=dict(facecolor='white', alpha=0.8, 
+                                edgecolor='none', pad=0.))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
-        loc[1] -= 0.1
-        kwargs_txt['fontsize'] = 11.
+        loc[1] -= 0.13
+        kwargs_txt['fontsize'] = 8.
         axs[i].annotate(#'$v_\mathrm{{esc}}'
                         #'={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
-                        '$v_\mathrm{{damp}}'
+                        '$\hat{{v}}_\mathrm{{lim}}'
                         '={1:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
-                        '$v_0={3:0.0f}$\n'
+                        '$v_\mathrm{{0,best}}={3:0.0f}$\n'
                         #'$k={6:0.4f}$\n'
                         '$\chi^2={2:0.2e}$\n'
                         #'N$_\mathrm{{eval}}={5:0.0f}$'
-                        .format(vesc, 
+                        .format(vesc_Phi, 
                                 res_v0_vesc.params['vesc'].value,
                                 res_v0_vesc.chisqr, 
                                 res_v0_vesc.params['v0'].value,
@@ -1039,6 +866,10 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
 
     dm_den_viz.label_axes(axs, fig, gals)
 
+    axs[-1].legend(loc='upper center', 
+                   bbox_to_anchor=(.5, -0.02),
+                   bbox_transform=fig.transFigure, ncols=4)
+
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
@@ -1048,8 +879,13 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
 
     return vesc_fits
 
-def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False, 
-              show_mao_free=False, show_rms=False,
+def fit_vdamp(df_source, gals='discs', 
+              vcut_type=None,
+              show_max_fit=False,
+              show_exp=False, 
+              show_mao_fixed=False, 
+              show_mao_free=False, 
+              show_rms=False,
               tgt_fname=None, sigmoid_damped_eqnum=None,
               xtickspace=None):
     '''
@@ -1058,6 +894,8 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
 
     Parameters
     ----------
+    df_source: str
+        File name for the analysis results to use
     gals: str or list-like of str
         Galaxies to plot
     show_exp: bool
@@ -1065,10 +903,13 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
         Lacroix et al. 2020.
     show_mao_fixed: bool
         If True, include the best-fit parameterization from Mao et al. 2013
-        with vesc = vesc(Phi)
+        with vesc = vcut(Phi)
     show_mao_free: bool
         If True, include the best-fit parameterization from Mao et al. 2013
         where we also let vesc be a free parameter
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
+               default None
+        Specifies how to determine the speed distribution cutoff.
     show_rms: bool
         If true, show information about root mean square deviations of the
         distribution models from the data
@@ -1081,9 +922,12 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
     vdamp_fits: dict
         Dictionary keyed by galaxy of the best fit vdamps
     '''
+    if (show_mao_free or show_mao_fixed or show_exp) and vcut_type is None:
+        raise ValueError('You must specify a vcut_type if you want to show'
+                         ' a distribution with a cut.')
     import dm_den
     import dm_den_viz
-    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
+    df = dm_den.load_data(df_source)
     if gals == 'discs':
         df = df.drop(['m12w', 'm12z'])
     elif isinstance(gals, (list, np.ndarray)):
@@ -1094,28 +938,29 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
 
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         results_universal = pickle.load(f)
+    vcut_dict = dm_den.load_vcuts(vcut_type, df)
 
     def sse_max_v0_vesc(params, vs_truth, ps_truth):
         v0 = params['v0'].value
         #print(v0)
-        vesc = params['vdamp'].value
+        vdamp = params['vdamp'].value
         k = params['k'].value
         with np.errstate(divide='ignore'):
             ps_predicted = smooth_step_max(
                                         vs_truth,
                                         v0, 
-                                        vesc,
+                                        vdamp,
                                         k)
         resids = ps_predicted - ps_truth
         return resids
     
     def resids_exp_max(params, vs_truth, ps_truth):
         v0 = params['v0'].value
-        vesc = params['vdamp'].value
+        vcut = params['vcut'].value
         with np.errstate(divide='ignore'):
             ps_predicted = exp_max(vs_truth,
                                    v0,
-                                   vesc)
+                                   vcut)
         resids = ps_predicted - ps_truth
         return resids
         
@@ -1128,7 +973,7 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
     sse = 0. # SSE for the smooth_step_max (our method)
     sse_tail = 0.
     d = 2 # Number of digits to show in the RMS
-    O_rms = 1.e-4 # RMS order of magnitude to show
+    O_rms = 1.e-3 # RMS order of magnitude to show
     N = 0 # Number of datapoints evaluated, for use in aggregate RMS
     N_tail = 0
 
@@ -1143,7 +988,7 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
         vs_postfit = np.linspace(0., 750., 500)
         ps_truth = pdf['ps']
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
-        vesc = vesc_dict[gal]['ve_avg']
+        vcut = vcut_dict[gal]
         sigma_truth = df.loc[gal, 'disp_dm_disc_cyl']
         i0 = np.argmax(ps_truth)
         v0_truth = vs_truth[i0]
@@ -1184,6 +1029,27 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
         rms_txt_sigmoid = staudt_utils.mprint(rms_err/O_rms, d=d, 
                                       show=False).replace('$','')
         
+        # Plot the best-fit simple Maxwellian
+        if show_max_fit:
+            model_max = lmfit.model.Model(smooth_step_max,
+                                          independent_vars=['v', 'vdamp', 'k'])
+            params_max = model_max.make_params()
+            params_max['v0'].set(value=220., vary=True, min=100., max=400.)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                        'ignore', 
+                        category=scipy.integrate.IntegrationWarning)
+                warnings.filterwarnings('ignore', category=RuntimeWarning)
+                result_max = model_max.fit(ps_truth, params_max,
+                                           v=vs_truth, vdamp=vcut, k=np.inf)
+            axs[i].plot(vs_postfit,
+                        smooth_step_max(vs_postfit, result_max.params['v0'],
+                                        vcut, np.inf),
+                        label='fit, Eq. 5, cut @ {0:s}'.format(
+                            dm_den_viz.vcut_labels[vcut_type]), 
+                        c=dm_den_viz.max_fit_color)
+
+        # Plot the data
         axs[i].stairs(ps_truth, bins, color='k', label='data')
 
         # Set label for the line from this work
@@ -1203,29 +1069,31 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
                 res_v0_vesc.params['k']),
                 label=label_this, color='C2')
         if show_exp:
-            del(p['k'])
-            res_exp = lmfit.minimize(resids_exp_max, p, method='nelder',
+            params_exp = lmfit.Parameters()
+            params_exp.add('v0', value=220., vary=True, min=100., max=400.)
+            params_exp.add('vcut', value=470., vary=True, min=250., max=1000.)
+            res_exp = lmfit.minimize(resids_exp_max, params_exp, 
+                                     method='nelder',
                                      args=(vs_truth, ps_truth), 
                                      nan_policy='omit')
             axs[i].plot(vs_postfit,
                         exp_max(vs_postfit, 
                                 res_exp.params['v0'],
-                                res_exp.params['vdamp']),
+                                res_exp.params['vcut']),
                         label='fit, exp trunc')
 
-            p['vdamp'].set(value = vesc_dict[gal]['ve_avg'], vary=False, 
-                           max=np.inf)
-            res_exp_fixed_vesc = lmfit.minimize(
-                                     resids_exp_max, p, method='nelder',
+            params_exp['vcut'].set(value=vcut, 
+                                   vary=False, 
+                                   max=np.inf)
+            res_exp_fixed_vcut = lmfit.minimize(
+                                     resids_exp_max, params_exp, 
+                                     method='nelder',
                                      args=(vs_truth, ps_truth), 
                                      nan_policy='omit')
-            #print('{0:s}: v0 = {1:0.0f}'.format(
-            #    gal, 
-            #    res_exp_fixed_vesc.params['v0'].value))
             axs[i].plot(vs_postfit,
                         exp_max(vs_postfit, 
-                                res_exp_fixed_vesc.params['v0'],
-                                res_exp_fixed_vesc.params['vdamp']),
+                                res_exp_fixed_vcut.params['v0'],
+                                res_exp_fixed_vcut.params['vcut']),
                         label='fit, exp trunc @ $v_\mathrm{esc}(\Phi)$',
                         color='C4')
 
@@ -1234,7 +1102,7 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
             model_mao = lmfit.Model(mao)
             params_mao = model_mao.make_params()
             params_mao['v0'].set(value=vc, vary=True, min=100., max=400.)
-            params_mao['vesc'].set(value=vesc, vary=False, min=vc, max=900.)
+            params_mao['vesc'].set(value=vcut, vary=False, min=vc, max=900.)
             params_mao['p'].set(value=1., vary=True, min=0.)
 
             if show_mao_fixed:
@@ -1319,11 +1187,10 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
         kwargs_txt['fontsize'] = 9.
         if show_rms:
             if sigmoid_damped_eqnum is not None:
-                staudt_rms_txt = '$\mathrm{{RMS_{{{9:0.0f}}}}}={4:s}$\n'
+                staudt_rms_txt = '$\mathrm{{RMS_{{{9:0.0f}}}}}={4:0.2f}$\n'
             else:
-                staudt_rms_txt = '$\mathrm{{RMS_{{Staudt}}}}={4:s}$\n'
-            annotation = (#'$v_\mathrm{{esc}}'
-                          #'={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
+                staudt_rms_txt = '$\mathrm{{RMS_{{Staudt}}}}={4:0.2f}$\n'
+            annotation = (
                           #'$v_\mathrm{{damp}}'
                           #'={1:0.0f}\,\mathrm{{km\,s^{{-1}}}}$\n'
                           #'$v_0={3:0.0f}$\n'
@@ -1336,16 +1203,17 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
                     annotation += ('$\mathrm{{RMS_{{Mao\,fixed}}}}={7:s}$'
                                    '\n$\mathrm{{RMS_{{Mao\,free}}}}={8:s}$')
                 else:
-                    annotation += '$\mathrm{{RMS_{{Mao}}}}={7:s}$'
+                    annotation += '$\mathrm{{RMS_{{Mao}}}}={7:0.2f}$'
             axs[i].annotate(annotation.format(
-                                vesc, 
+                                None, 
                                 res_v0_vesc.params['vdamp'].value,
                                 res_v0_vesc.chisqr, 
                                 res_v0_vesc.params['v0'].value,
-                                rms_txt_sigmoid,
+                                rms_err / O_rms,
                                 res_v0_vesc.nfev,
                                 res_v0_vesc.params['k'].value,
-                                rms_txt_mao_fixed if show_mao_fixed else None,
+                                rms_err_mao_fixed / O_rms if show_mao_fixed \
+                                    else None,
                                 rms_txt_mao_free if show_mao_free else None,
                                 sigmoid_damped_eqnum
                                ),
@@ -1399,7 +1267,7 @@ def fit_vdamp(gals='discs', show_exp=False, show_mao_fixed=False,
 
             axs[i+Ngals].axhline(0., linestyle='--', color='k', alpha=0.5, 
                                  lw=1.)
-            axs[i+Ngals].set_ylim(-resids_lim, resids_lim)
+            axs[i+Ngals].set_ylim(-dm_den_viz.resids_lim, dm_den_viz.resids_lim)
             if i == 0:
                 axs[i+Ngals].set_ylabel('resids')
 
@@ -1622,7 +1490,7 @@ def fit_universal_no_uncert(gals='discs', method='leastsq', update_vals=False,
 
     return result_dehjk
 
-def fit_mao(vcut_type, update_values=True):
+def fit_mao(vcut_type, df_source, update_values=False):
     '''
     Find a universal d, e, and p for the Mao parameterization where
     v0 = d * vc ^ e.
@@ -1637,12 +1505,12 @@ def fit_mao(vcut_type, update_values=True):
     '''
     import dm_den
     import dm_den_viz
-    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
+    df = dm_den.load_data(df_source).drop(['m12w', 'm12z'])
     pdfs = copy.deepcopy(pdfs_v)
     galnames = list(pdfs.keys())
     for gal in ['m12z', 'm12w']:
         galnames.remove(gal)
-    vcut_dict = dm_den.load_vcuts(vcut_type)
+    vcut_dict = dm_den.load_vcuts(vcut_type, df)
     for gal in galnames:
         dict_gal = pdfs[gal]
         bins = dict_gal['bins']
@@ -1685,9 +1553,9 @@ def fit_mao(vcut_type, update_values=True):
                               independent_vars=['vs', 'vcircs', 'vescs'])
     params = model.make_params()
 
-    params['d'].set(value=115., vary=True, min=0.)
-    params['e'].set(value=0.93, vary=True, min=0.)
-    params['p'].set(value=2.5, vary=True, min=0.001, max=15.)
+    params['d'].set(value=50.770942240409525, vary=True, min=0.)
+    params['e'].set(value=2.4522990491102967, vary=False, min=0.)
+    params['p'].set(value=2.3049471166082682, vary=True, min=0.001, max=15.)
 
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', 
@@ -1709,10 +1577,43 @@ def fit_mao(vcut_type, update_values=True):
         data2save = data2save | stderrs | covar #combine dictionaries
         dm_den.save_var_raw(data2save, 'results_mao_' + vcut_type + '.pkl')
 
+        # Save to the LaTeX data file
+        for key in result.params.keys():
+            if result.params[key].vary: 
+                # Save strings to be used in paper.tex
+                y = result.params[key].value
+                stderr = result.params[key].stderr
+                #if key == 'd':
+                #    dy = ddfrac * y
+                #elif key == 'p':
+                #    dy = dpfrac * y
+                if False:
+                    pass
+                else:
+                    #Number of parameters we're estimating
+                    p = result.covar.shape[0] 
+
+                    N = 600 #There's 600 data points (50 bins for each disc) 
+                    z = 1. #Number of std deviations in forecast_sig
+                    P = scipy.special.erf(z / np.sqrt(2)) 
+                    forecast_sig = 1. - P
+
+                    # critical 2-tailed t value  
+                    tc = scipy.stats.t.ppf(q=1.-forecast_sig/2., df=N-p)
+
+                    dy = stderr * tc
+                # y_txt is a string. DY_TXT is an array of strings, or just an
+                # array of just one string. Either way, 
+                # type(DY_TXT) == np.ndarray, which is why we're denoting it in
+                # all caps.
+                y_txt, DY_TXT = staudt_utils.sig_figs(y, dy)
+                dm_den.save_prediction(key + '_mao_' + vcut_type, 
+                                       y_txt,  DY_TXT)
+        
     ###########################################################################
     return result
 
-def fit_mao_naive_aggp(vcut_type):
+def fit_mao_naive_aggp(vcut_type, df_source):
     '''
     Find the best p parameter based on the aggregation of all twelve discs.
     v0 is assumed to be the circular speed.
@@ -1724,10 +1625,10 @@ def fit_mao_naive_aggp(vcut_type):
     '''
     import dm_den
     import dm_den_viz
-    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
+    df = dm_den.load_data(df_source).drop(['m12w', 'm12z'])
     pdfs = copy.deepcopy(pdfs_v)
     galnames = list(pdfs.keys())
-    vcut_dict = dm_den.load_vcuts(vcut_type)
+    vcut_dict = dm_den.load_vcuts(vcut_type, df)
     for gal in ['m12z', 'm12w']:
         galnames.remove(gal)
     for gal in galnames:
@@ -1834,12 +1735,105 @@ def fit_mao_naive_indvp(gal):
                            method='nelder')
     return result.params['p'].value
 
+def fit_universal_sigmoid_exp(update_values=False,
+                              method='leastsq', 
+                              vc100=True, **kwargs):
+    import dm_den
+    import dm_den_viz
+    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
+    pdfs = copy.deepcopy(pdfs_v)
+    pdfs.pop('m12z')
+    pdfs.pop('m12w')
+    vlim_fit_dict = dm_den.load_vcuts('lim_fit', df)
+    for gal in pdfs:
+        dict_gal = pdfs[gal]
+        bins = dict_gal['bins']
+        dict_gal['vcirc'] = np.repeat(
+            df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'],
+            len(dict_gal['ps']))
+        #dict_gal['vesc'] = np.repeat(vesc_dict[gal]['ve_avg'],
+        #                             len(dict_gal['ps']))
+        dict_gal['vlim_fit'] = np.repeat(vlim_fit_dict[gal],
+                                         len(dict_gal['ps']))
+
+    ps_truth = np.array([pdfs[galname]['ps']
+                   for galname in pdfs]).flatten()
+    vs_truth = np.array([pdfs[galname]['vs']
+                   for galname in pdfs]).flatten()
+    
+    N_postfit = 300
+    vs_postfit = np.linspace(0., 700., N_postfit)
+
+    vcircs = np.array([pdfs[galname]['vcirc']
+                         for galname in pdfs]).flatten()
+    #vescs = np.array([pdfs[galname]['vesc']
+    #                     for galname in pdfs]).flatten()
+    vlim_fits = np.concatenate([pdfs[gal]['vlim_fit'] for gal in pdfs])
+
+    ###########################################################################
+    ## Fitting 
+    ###########################################################################
+    def calc_p(vs, vcircs, vlim_fits, d, e, h, j, k):
+        '''
+        Calculate probability density given velocity and circular velocity
+        '''
+        if vc100:
+            vcircs = vcircs.copy()
+            vcircs /= 100.
+        ps = [max_double_exp(v,
+                             d * (vc) ** e,
+                             h * (vc) ** j,
+                             k,
+                             vlim_fit)
+              for v, vc, vlim_fit in zip(vs, vcircs, vlim_fits)]
+        ps = np.array(ps)
+        return ps
+    
+    model = lmfit.model.Model(calc_p,
+                              independent_vars=['vs', 'vcircs', 'vlim_fits'])
+    params = model.make_params()
+
+    if vc100:
+        params['d'].set(value=114.970072, vary=True, min=0.)
+        params['e'].set(value=0.92818194, vary=True, min=0.)
+        params['h'].set(value=388.227498, vary=True, min=0.)
+        params['j'].set(value=0.27035486, vary=True, min=0.)
+        params['k'].set(value=0.03089876, vary=True, min=0.0001, max=1.)
+    else:
+        params['d'].set(value=1.60030613, vary=True, min=0.1, max=4.)
+        params['e'].set(value=0.92819047, vary=True, min=0.1, max=4.)
+        params['h'].set(value=111.783463, vary=True, min=5., max=300.)
+        params['j'].set(value=0.27035357, vary=True, min=0.05, max=4.)
+        params['k'].set(value=0.03089876, vary=False, min=0.0001, max=1.)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 
+                                category=scipy.integrate.IntegrationWarning)
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        result = model.fit(ps_truth, params, vs=vs_truth, 
+                           vcircs=vcircs, vlim_fits=vlim_fits,
+                           method=method, **kwargs)
+
+    if update_values:
+        # Save raw variables to data_raw.pkl
+        data2save = {key: result.params[key].value
+                     for key in result.params.keys()}
+        stderrs = {key+'_stderr': result.params[key].stderr
+                   for key in result.params.keys()}
+        covar = {'covar': result.covar}
+        data2save = data2save | stderrs | covar #combine dictionaries
+        with open(paths.data + 'params_sigmoid_exp.pkl', 'wb') as f:
+            pickle.dump(data2save, f, pickle.HIGHEST_PROTOCOL)
+    ###########################################################################
+
+    return result
+
 def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
                   vc100=True, err_method='sampling', ddfrac=None, dhfrac=None,
                   assume_corr=False,
                   band_alpha=0.4, data_color='grey', band_color='grey',
-                  samples_color=plt.cm.viridis(0.5), ymax=None,
+                  samples_color=plt.cm.viridis(0.5), ymax=None, show_rms=False,
                   **kwargs):
     if (ddfrac is not None or dhfrac is not None or assume_corr) \
         and err_method != 'sampling':
@@ -1944,7 +1938,7 @@ def plt_universal(gals='discs', update_values=False,
 
         p = result.covar.shape[0] #Number of parameters we're estimating
         N = 600 #There's 600 data points (50 bins for each disc) 
-        z = 1. #Number of std deviations in forecast_siga
+        z = 1. #Number of std deviations in forecast_sig
         #Probability of being within z std devs:
         P = scipy.special.erf(z / np.sqrt(2)) 
         forecast_sig = 1. - P
@@ -2002,18 +1996,25 @@ def plt_universal(gals='discs', update_values=False,
         df = df.loc[gals]
 
     rms_dict = {}
+    if show_rms:
+        sse = 0.
+        N_data = 0.
     pbar = ProgressBar()
     for i, gal in enumerate(pbar(df.index)):
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         vcircs_postfit = np.repeat(vc, N_postfit)
         ps_postfit = result.eval(vs=vs_postfit, vcircs=vcircs_postfit)
 
-        rms_err, _ = calc_rms_err(pdfs[gal]['vs'], pdfs[gal]['ps'], 
+        vs_truth = pdfs[gal]['vs']
+        rms_err, sse_add = calc_rms_err(vs_truth, pdfs[gal]['ps'], 
                                   calc_p,  
                                   [np.repeat(vc, len(pdfs[gal]['vs'])), 
                                    *[result.params[key] for key in ['d', 'e', 
                                                                     'h', 'j', 
                                                                     'k']]])
+        if show_rms:
+            sse += sse_add
+            N_data += len(vs_truth)
         rms_dict[gal] = rms_err
         if err_method == 'std_err':
             # Std err of the vcirc mean at vc_gal
@@ -2082,7 +2083,7 @@ def plt_universal(gals='discs', update_values=False,
             resids = np.append(resids, resids_extend, axis=0)
             axs[i+2].plot(vs_resids, resids / 10.**order_of_mag, color='C3')
             axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5, lw=1.)
-            axs[i+2].set_ylim(-resids_lim, resids_lim)
+            axs[i+2].set_ylim(-dm_den_viz.resids_lim, dm_den_viz.resids_lim)
             if i == 0:
                 axs[i+2].set_ylabel('resids')
         loc = [0.97,0.96]
@@ -2132,6 +2133,13 @@ def plt_universal(gals='discs', update_values=False,
         axs[i].set_ylim(bottom=0.)
         axs[i].set_xlim(left=0.)
     plt.show()
+
+    if show_rms:
+        d = 2
+        txt = staudt_utils.mprint(np.sqrt(sse / N_data),
+                                  d=d,
+                                  show=False).replace('$', '')
+        display(Latex('$\mathrm{{RMS}}={0:s}$'.format(txt)))
 
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
@@ -2589,6 +2597,28 @@ def make_samples(N, vs, vc, d, e, h, j, k, covar, ddfrac, dhfrac,
                            for v0, vdamp in zip(V0HAT, VDAMP)])
     return ps_samples
 
+def make_samples_mao(N, vs, vc, vesc, d, e, p, ddfrac, dpfrac, dvc=0.):
+    D_DEVS = np.random.normal(0., d * ddfrac, size=N)
+    P_DEVS = np.random.normal(0., p * dpfrac, size=N)
+    DEVS_UNCORR = np.array([D_DEVS, P_DEVS])
+    MU = np.array([[d], [p]])
+    c = np.identity(MU.shape[0])
+    THETA = np.dot(c, DEVS_UNCORR) + MU 
+
+    if dvc != 0.:
+        # Turning `vc` into a random samples of circular velocities with
+        # a std deviation of dvc.
+        vc = np.random.normal(vc, dvc, size=N)
+
+    D = THETA[0]
+    V0HAT = D * (vc / 100.) ** e
+
+    P = THETA[1]
+
+    ps_samples = np.array([mao(vs, v0, vesc, p) for v0, p in zip(V0HAT, P)])
+
+    return ps_samples
+
 def save_samples(df_source, N=5000):
     import dm_den
     df = dm_den.load_data(df_source)
@@ -2986,6 +3016,54 @@ def count_within_agg(ddfrac, dhfrac, df, assume_corr=False,
         return percent, area, ddfrac, dhfrac
     else:
         return percent, area
+
+def count_within_agg_mao(ddfrac, dpfrac, df, params):
+    import dm_den
+    pdfs = copy.deepcopy(pdfs_v)
+    del pdfs['m12w']
+    del pdfs['m12z']
+
+    N_out = 0.
+    N_tot = 0.
+    area = 0.
+    area_norm = 0.
+ 
+    vcuts_dict = dm_den.load_vcuts('lim_fit', df)
+
+    for gal in pdfs:
+        pdf_gal = pdfs[gal]
+        ps = pdf_gal['ps']
+        vs = pdf_gal['vs']
+        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        vcut = vcuts_dict[gal]
+
+        ps_samples = make_samples_mao(5000, vs, vc, vcut, params['d'],
+                                      params['e'], params['p'], ddfrac, 
+                                      dpfrac, dvc=0.)
+        lowers, uppers = gal_bands_from_samples(vs, ps_samples, 
+                                                samples_color=None, ax=None)
+
+        area += scipy.integrate.simpson(uppers, vs)
+        area -= scipy.integrate.simpson(lowers, vs)
+        # Area under the truth distribution:
+        # (although I just realized this will equal 1 for each galaxy)
+        area_norm += scipy.integrate.simpson(ps, vs)
+
+        is_above = ps > uppers
+        is_below = ps < lowers
+        is_outlier = is_above | is_below 
+        N_out += np.sum(is_outlier)
+        N_tot += len(vs)
+    
+    percent = 1. - N_out / N_tot
+    # Normalize the area cost by the total area under all the truth
+    # distributions so the area cost doesn't dominate the diff-from-68
+    # cost.
+    area /= area_norm
+    # Also need to further reduce the weight of area because we're too far
+    # from 68% otherwise.
+    area /= 10. 
+    return percent, area, ddfrac, dpfrac
 
 def diff_fr68_agg(params, assume_corr=False, incl_area=True,
                   verbose=False):

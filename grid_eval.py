@@ -99,6 +99,11 @@ def identify():
     return ddfrac, dhfrac
 
 if __name__ == '__main__':
+    '''
+    User can provide a system argument.
+    argv[0] is just the script name.
+    argv[1] should be the fname to which the script saves the grid.
+    '''
     start = time.time()
    
     args = sys.argv

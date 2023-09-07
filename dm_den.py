@@ -1594,19 +1594,27 @@ def find_vcrits_fr_halo_int():
                                 & (mid_gs_sigmoid <= mid_gs_max))[0])
         vcrits[gal] = vs[icrit]
 
-    with open('./data/vcrits.pkl', 'wb') as f:
+    with open('./data/vcrits_fr_integral.pkl', 'wb') as f:
         pickle.dump(vcrits, f, pickle.HIGHEST_PROTOCOL)
     
     return vcrits
 
-def find_vcrits_fr_distrib(method='direct', update_values=False):
+def find_vcrits_fr_distrib(df_source, method='direct', update_values=False):
+    '''
+    For each galaxy, find the point at which this work's speed distribution
+    prediction makes its
+    final drop below the
+    standard Maxwellian assumption (v0=vc) with a hard cut at vesc(Phi) on 
+    the
+    standard assumption
+    '''
     import fitting
     import dm_den_viz
 
     if method not in ['direct', 'derivative']:
         raise ValueError('Unexpected argument passed for `method`. \'direct\''
                          'and \'derivative\' are acceptable.')
-    df = load_data('dm_stats_dz1.0_20230626.h5')
+    df = load_data(df_source)
     df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = dm_den_viz.vc_eilers
     df.loc['mw', 'vc100'] = df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] / 100.
     gals = list(df.index)
@@ -1616,8 +1624,8 @@ def find_vcrits_fr_distrib(method='direct', update_values=False):
         params = pickle.load(f)
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs = pickle.load(f)
-    with open('./data/vesc_hat_dict.pkl', 'rb') as f:
-        vescs_hat_dict = pickle.load(f)
+    df.loc['mw', 'vesc'] = dm_den_viz.vesc_mw
+    vescs_dict = load_vcuts('vesc', df)
     vs = np.linspace(200., 650., 500)
 
     vcrits = {} 
@@ -1626,12 +1634,12 @@ def find_vcrits_fr_distrib(method='direct', update_values=False):
         vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
         vc100 = df.loc[gal, 'vc100']
         assert vc100 == vc / 100.
-        vesc_hat = vescs_hat_dict[gal]
+        vesc_hat = vescs_dict[gal]
         v0 = params['d'] * vc100 ** params['e']
         vdamp = params['h'] * vc100 ** params['j']
         ps_sigmoid = fitting.smooth_step_max(vs, v0, vdamp, params['k'])
         ps_max_hard = fitting.smooth_step_max(vs, vc, vesc_hat,
-                                             np.inf)
+                                              np.inf)
         #ps_undamped = fitting.smooth_step_max(vs, v0, np.inf, np.inf)
 
         if method == 'derivative':
@@ -1783,18 +1791,20 @@ def load_data(fname):
         df=pd.read_hdf(fname)
     return df
 
-def load_vcuts(vcut_type):
+def load_vcuts(vcut_type, df):
     '''
     Parameters
     ---------------------
     vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
         Specifies how to determine the speed distribution cutoff.
+    df: pd.DataFrame
+        The DataFrame containing necessary information about each galaxy.
     '''
     if vcut_type == 'lim_fit':
         with open(paths.data + 'vcut_hat_dict.pkl', 'rb') as f:
             vcut_dict = pickle.load(f)
     elif vcut_type == 'lim':
-        vcut_dict = dm_den.find_last_v()
+        vcut_dict = find_last_v()
     elif vcut_type == 'vesc_fit':
         with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
             vcut_dict = pickle.load(f)
