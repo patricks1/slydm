@@ -3039,8 +3039,7 @@ def count_within_agg_mao(ddfrac, dpfrac, df, params):
  
     vcuts_dict = dm_den.load_vcuts('lim_fit', df)
 
-    pbar = ProgressBar()
-    for gal in pbar(pdfs):
+    for gal in pdfs:
         pdf_gal = pdfs[gal]
         ps = pdf_gal['ps']
         vs = pdf_gal['vs']
