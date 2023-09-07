@@ -3053,12 +3053,6 @@ def count_within_agg_mao(ddfrac, dpfrac, df, params):
         lowers, uppers = gal_bands_from_samples(vs, ps_samples, 
                                                 samples_color=None, ax=None)
 
-        area += scipy.integrate.simpson(uppers, vs)
-        area -= scipy.integrate.simpson(lowers, vs)
-        # Area under the truth distribution:
-        # (although I just realized this will equal 1 for each galaxy)
-        area_norm += scipy.integrate.simpson(ps, vs)
-
         is_above = ps > uppers
         is_below = ps < lowers
         is_outlier = is_above | is_below 
@@ -3066,14 +3060,11 @@ def count_within_agg_mao(ddfrac, dpfrac, df, params):
         N_tot += len(vs)
     
     percent = 1. - N_out / N_tot
-    # Normalize the area cost by the total area under all the truth
-    # distributions so the area cost doesn't dominate the diff-from-68
-    # cost.
-    area /= area_norm
-    # Also need to further reduce the weight of area because we're too far
-    # from 68% otherwise.
-    area /= 10. 
-    return percent, area, ddfrac, dpfrac
+
+    # return None in element 1 so the grid_eval code still works. (Element 1
+    # used to be an area calculation, but we don't use it, and it causes
+    # integration issues.)
+    return percent, None, ddfrac, dpfrac
 
 def diff_fr68_agg(params, assume_corr=False, incl_area=True,
                   verbose=False):
