@@ -2153,8 +2153,8 @@ def plt_mao_bands(dfsource):
                                         params['p']))
 
     samples = fitting.make_samples_mao(2000, vs_postfit, vc, vcut, params['d'],
-                                       params['e'], params['p'], ddfrac=0.25,
-                                       dpfrac=0.25,
+                                       params['e'], params['p'], ddfrac=0.5,
+                                       dpfrac=0.5,
                                        dvc=0.)
     lower, uppers = fitting.gal_bands_from_samples(
             vs_postfit, samples,

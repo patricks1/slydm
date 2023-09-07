@@ -65,9 +65,11 @@ def pN_mao(v, v0, vesc, p):
 
 def mao(v, v0, vesc, p):
     with warnings.catch_warnings():
+        #warnings.filterwarnings('ignore', 
+        #                        category=scipy.integrate.IntegrationWarning)
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         N = scipy.integrate.quad(pN_mao, 0., np.inf, 
-                                 (v0, vesc, p), epsabs=0)[0]
+                                 (v0, vesc, p), limit=100)[0]
         p = pN_mao(v, v0, vesc, p) / N
     return p
 
@@ -3037,7 +3039,8 @@ def count_within_agg_mao(ddfrac, dpfrac, df, params):
  
     vcuts_dict = dm_den.load_vcuts('lim_fit', df)
 
-    for gal in pdfs:
+    pbar = ProgressBar()
+    for gal in pbar(pdfs):
         pdf_gal = pdfs[gal]
         ps = pdf_gal['ps']
         vs = pdf_gal['vs']
