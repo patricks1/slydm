@@ -11,6 +11,7 @@ import pickle
 import itertools
 import math
 import grid_eval
+import grid_eval_mao
 import lmfit
 import copy
 import os
@@ -2139,27 +2140,59 @@ def plt_mao_bands(dfsource):
         pdfs = pickle.load(f)
     df = dm_den.load_data(dfsource)
     vcut_dict = dm_den.load_vcuts('lim_fit', df)
+    samples = fitting.load_samples('samples_dz1.0_mao.h5')
 
-    gal = 'm12i'
+    ddfrac, dpfrac = grid_eval_mao.identify('grid_mao.h5')
+    print('using (ddfrac, dpfrac) = ({0:0.3f}, {1:0.3f})'.format(ddfrac, 
+                                                                 dpfrac))
 
-    fig, axs = setup_multigal_fig([gal], False)
-    vc100 = df.loc[gal, 'vc100']
-    vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
-    vcut = vcut_dict[gal]
-    v0 = params['d'] * vc100 ** params['e']
-    vs_postfit = np.linspace(0., 700., 300)
-    axs[0].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='k')
-    axs[0].plot(vs_postfit, fitting.mao(vs_postfit, v0, vcut,
-                                        params['p']))
+    pdfs.pop('m12z')
+    pdfs.pop('m12w')
+    galnames = pdfs.keys() 
+    Ngals = len(galnames)
 
-    samples = fitting.make_samples_mao(2000, vs_postfit, vc, vcut, params['d'],
-                                       params['e'], params['p'], ddfrac=0.5,
-                                       dpfrac=0.5,
-                                       dvc=0.)
-    lower, uppers = fitting.gal_bands_from_samples(
-            vs_postfit, samples,
-            samples_color=plt.cm.viridis(0.5), ax=axs[0])
-    axs[0].set_ylim(0., 0.006)
+    fig, axs = setup_multigal_fig('discs', False)
+    pbar = ProgressBar()
+    for i, gal in enumerate(pbar(galnames)):
+        vc100 = df.loc[gal, 'vc100']
+        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        vcut = vcut_dict[gal]
+        v0 = params['d'] * vc100 ** params['e']
+        vs_postfit = np.linspace(0., 700., 300)
+
+        samples_color = plt.cm.viridis(0.5)
+        lowers, uppers = fitting.gal_bands_from_samples(
+                samples['vs'], samples[gal],
+                samples_color=samples_color, ax=axs[i])
+        axs[i].fill_between(samples['vs'],
+                            lowers, uppers, 
+                            color=plt.cm.viridis(1.), 
+                            alpha=0.9, 
+                            ec=samples_color, zorder=1, 
+                            label='$1\sigma$ band')
+
+        axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='k')
+        axs[i].plot(vs_postfit, fitting.mao(vs_postfit, v0, vcut,
+                                            params['p']),
+                    c=mao_prediction_color)
+
+        axs[i].set_ylim(0., 0.006)
+
+        if Ngals == 12:
+            namefs = 13. #Font size for galaxy name
+            detail_fontsize = 8. #Font size for metrics shown on panels
+            spacing = 0.16
+        else:
+            namefs = 16. #Font size for galaxy name
+            detail_fontsize = 11. #Font size for metrics shown on panels 
+            spacing = 0.12
+        kwargs_txt = dict(fontsize=namefs, xycoords='axes fraction',
+                          va='top', ha='right',
+                          bbox=dict(facecolor='white', alpha=0.8, 
+                                    edgecolor='none', pad=0.))
+        loc = [0.97,0.95]
+        axs[i].annotate(gal, loc,
+                        **kwargs_txt)
 
     plt.show()
     return None

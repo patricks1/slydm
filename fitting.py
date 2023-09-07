@@ -8,6 +8,7 @@ import staudt_utils
 import copy
 import time
 import grid_eval
+import grid_eval_mao
 import h5py
 import itertools
 import numpy as np
@@ -1592,12 +1593,11 @@ def fit_mao(vcut_type, df_source, update_values=False):
                 # Save strings to be used in paper.tex
                 y = result.params[key].value
                 stderr = result.params[key].stderr
-                #if key == 'd':
-                #    dy = ddfrac * y
-                #elif key == 'p':
-                #    dy = dpfrac * y
-                if False:
-                    pass
+                ddfrac, dpfrac = grid_eval_mao.identify('grid_mao.h5')
+                if key == 'd':
+                    dy = ddfrac * y
+                elif key == 'p':
+                    dy = dpfrac * y
                 else:
                     #Number of parameters we're estimating
                     p = result.covar.shape[0] 
@@ -2656,9 +2656,36 @@ def save_samples(df_source, N=5000):
             f.create_dataset(gal, data=samples_dict[gal])
     return samples_dict
 
-def load_samples():
+def save_samples_mao(df_source, N=5000):
+    import dm_den
+    df = dm_den.load_data(df_source)
+    gals = list(df.index)
+    for gal_ in ['m12z', 'm12w']:
+        gals.remove(gal_)
+    with open(paths.data + 'results_mao_lim_fit.pkl', 'rb') as f:
+        params = pickle.load(f)
+    vcut_dict = dm_den.load_vcuts('lim_fit', df)
     samples_dict = {}
-    with h5py.File(paths.data + 'samples_dz1.0_sigmoid_damped.h5', 'r') as f:
+    vs = np.linspace(0., 700., 300)
+    samples_dict['vs'] = vs
+    ddfrac, dpfrac = grid_eval_mao.identify('grid_mao.h5')
+    pbar = ProgressBar()
+    with h5py.File(paths.data + 'samples_dz1.0_mao.h5', 'w') as f:
+        f.create_dataset('vs', data=vs)
+        for gal in pbar(gals):
+            vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+            vcut = vcut_dict[gal]
+            samples_dict[gal] = make_samples_mao(N, vs, vc, vcut, params['d'],
+                                                 params['e'], params['p'], 
+                                                 ddfrac=ddfrac,
+                                                 dpfrac=dpfrac,
+                                                 dvc=0.)
+            f.create_dataset(gal, data=samples_dict[gal])
+    return samples_dict
+
+def load_samples(fname='samples_dz1.0_sigmoid_damped.h5'):
+    samples_dict = {}
+    with h5py.File(paths.data + fname, 'r') as f:
         for key in f.keys():
             samples_dict[key] = f[key][:]
     return samples_dict
