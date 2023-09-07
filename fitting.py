@@ -65,8 +65,8 @@ def pN_mao(v, v0, vesc, p):
 
 def mao(v, v0, vesc, p):
     with warnings.catch_warnings():
-        #warnings.filterwarnings('ignore', 
-        #                        category=scipy.integrate.IntegrationWarning)
+        warnings.filterwarnings('ignore', 
+                                category=scipy.integrate.IntegrationWarning)
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         N = scipy.integrate.quad(pN_mao, 0., np.inf, 
                                  (v0, vesc, p), limit=100)[0]
