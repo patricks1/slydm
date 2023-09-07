@@ -9,13 +9,13 @@ import pandas as pd
 import multiprocessing as mp
 import numpy as np
 
-N = 40 
+N = 25 
 
 ddfrac_min = 0.2
-ddfrac_max = 0.45
+ddfrac_max = 0.35
 
 dpfrac_min = 0.2
-dpfrac_max = 0.45
+dpfrac_max = 0.35
 
 dpfracs = np.linspace(dpfrac_min, dpfrac_max, N)
 
