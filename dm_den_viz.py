@@ -803,7 +803,8 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
                    xtickspace=None, ytickspace=None, label_overrides={},
                    marker_label_size=11,
                    show_formula=True,
-                   update_values=False, tgt_fname=None, verbose=False):
+                   update_values=False, tgt_fname=None, verbose=False,
+                   show_vesc=False):
     import dm_den
     df = dm_den.load_data(dfsource)
 
@@ -866,8 +867,10 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
     fill_ax_new(ax, df, 
                 'v_dot_phihat_disc(T<=1e4)', ycol, 
                 xlabel=vc_label,
-                ylabel='$v_\mathrm{cut}\,/\,'
-                       '\left[\mathrm{km\,s^{-1}}\\right]$',
+                ylabel=('${0:s}\,/\,\left[\mathrm{{km\,s^{{-1}}}}\\right]$'
+                        .format(vcut_labels['lim'].replace('$', '')
+                                                  .replace('{','{{')
+                                                  .replace('}','}}'))),
                 xscale='log', yscale='log',
                 color='masses',
                 labelsize=marker_label_size,
@@ -876,8 +879,9 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
                 showcorr=False, adjust_text_kwargs=adjust_text_kwargs,
                 arrowprops={'arrowstyle': '-'})
     vesc_hat_mw_transform = staudt_utils.log2linear(vesc_hat_mw, dvesc_mw[0]) 
-    plt_forecast(ax, X_forecast * 100., np.array([[vesc_hat_mw_transform[0]]]),
-                 np.array([vesc_hat_mw_transform[1:]]),
+    plt_forecast(ax, X_forecast * 100., 
+                 Yhat=np.array([[vesc_hat_mw_transform[0]]]),
+                 dYhat=np.array([vesc_hat_mw_transform[1:]]),
                  xadjustment=None)
     ax.annotate('Milky Way', (vc_eilers, vesc_hat_mw_transform[0]), 
                 fontsize=labelsize,
@@ -886,8 +890,27 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
                 textcoords='axes fraction',
                 xytext=(0.33, 0.66))
 
+    # Replace the necessary data labels/annotations with their overrides
     override_labels(label_overrides, ax, dm_den.load_data(df_source),
                     ycol, 'v_dot_phihat_disc(T<=1e4)', labelsize )
+
+    if show_vesc:
+        ax.plot(df['v_dot_phihat_disc(T<=1e4)'], df['vesc'], 'bo', ms=3,
+        label=vcut_labels['vesc'])
+        df_vcut = pd.DataFrame.from_dict(vcut_d, orient='index', 
+                                         columns=['vlim'])
+        df = pd.concat([df, df_vcut], axis=1)
+
+        for gal in df.index:
+            ax.annotate('',
+                        xy=(df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'],
+                        df.loc[gal, 'vlim'] + 2.), 
+                        xycoords='data',
+                        xytext =(df.loc[gal, 'v_dot_phihat_disc(T<=1e4)'],
+                         df.loc[gal, 'vesc']),
+                        textcoords = 'data',
+                        arrowprops={'arrowstyle': '-|>', 'ls': 'dashed', 
+                        'color':'blue', 'alpha':0.4}, size=10.)
 
     if show_formula:
         make_formula_appear(show_formula,
@@ -1011,6 +1034,7 @@ def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11,
                 textcoords='axes fraction',
                 xytext=(0.33, 0.66))
 
+    # Replace the necessary data labels/annotations with their overrides
     override_labels(label_overrides, ax, dm_den.load_data(df_source),
                     ycol, 'v_dot_phihat_disc(T<=1e4)', labelsize )
 
@@ -1579,8 +1603,22 @@ def make_sci_y(axs, i, order_of_mag):
                 lambda y, pos: '{0:0.0f}'.format(y / 10.**order_of_mag))
     return None
 
-def plt_naive(gals='discs', tgt_fname=None, update_vals=False, 
+def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False, 
               show_sigma_vc=True, show_exp=True, show_sigma_meas=True):
+    '''
+    Plot the naive, simple Maxwellian, with v0=vc.
+
+    Noteworthy parameters
+    ---------------------
+    gals: {'discs' or list-like}
+        Which glaxies to plot.
+    vcut_type: {'lim_fit', 'lim', 'vesc', 'vesc_fit'}
+        What type of cut speed to use.
+
+    Returns
+    -------
+    None
+    '''
     if update_vals and gals != 'discs':
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
@@ -1588,15 +1626,15 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
     import fitting
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs_v=pickle.load(f)
-    with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
-        vesc_dict = pickle.load(f)
-    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
+    df = dm_den.load_data(df_source)
     if gals == 'discs':
         df.drop(['m12w', 'm12z'], inplace=True)
     elif isinstance(gals, (list, np.ndarray)):
         df = df.loc[gals]
     else:
         raise ValueError('Unexpected value provided for gals arg')
+    vesc_dict = dm_den.load_vcuts('vesc', df)
+    vcut_dict = dm_den.load_vcuts(vcut_type, df)
 
     Ngals = len(df)
     if gals == 'discs':
@@ -1639,7 +1677,7 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
         sigma_predicted = 10.**results_dict['logdisp_intercept'] \
                           * (vc/100.) ** results_dict['disp_slope']
         sigma_truth = df.loc[gal, 'disp_dm_disc_cyl']
-        vesc = vesc_dict[gal]['ve_avg']
+        vcut = vcut_dict[gal]
 
         #######################################################################
         # Data
@@ -1696,19 +1734,31 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
                     label = 'Maxwellian, $v_0=v_\mathrm{c}$')
 
         #######################################################################
-        # p(vc, vs_maxwell) * [exponentially truncated @ vesc_measured]
+        # p(vc, vs_maxwell) * [exponentially truncated @ vcut
         #######################################################################
         if show_exp:
             axs[i].plot(vs_maxwell,
-                        fitting.exp_max(vs_maxwell, vc, vesc),
-                        label = '$v_0=v_\mathrm{c}$'
-                                '\nexp trunc @ $v_\mathrm{esc}(\Phi)$')
+                        fitting.exp_max(vs_maxwell, vc, vcut),
+                        label = '$v_0=v_\mathrm{{c}}$'
+                                '\nexp trunc @ {0:s}$'
+                                .format(vcut_labels[vcut_type]))
                     
         # Draw vesc line
-        axs[i].axvline(vesc, ls='--', alpha=0.5, color='grey')
+        vesc = vesc_dict[gal]
+        axs[i].axvline(vesc, ls='--', alpha=0.8, color='k')
         trans = mpl.transforms.blended_transform_factory(axs[i].transData,
                                                          axs[i].transAxes)
-        axs[i].text(vesc, 0.5, '$v_\mathrm{esc}(\Phi)$', transform=trans,
+        axs[i].text(vesc, 0.5, vcut_labels['vesc'], transform=trans,
+                    fontsize=15., rotation=90., color='gray', 
+                    horizontalalignment='right')
+
+        # Draw vcut line
+        vlim = dm_den.load_vcuts('lim', df)[gal]
+        axs[i].axvline(vlim, ls='--', alpha=0.5, color='C0')
+        axs[i].axvline(vcut, ls='--', alpha=0.5, color='grey')
+        trans = mpl.transforms.blended_transform_factory(axs[i].transData,
+                                                         axs[i].transAxes)
+        axs[i].text(vcut, 0.5, vcut_labels[vcut_type], transform=trans,
                     fontsize=15., rotation=90., color='gray', 
                     horizontalalignment='right')
 
@@ -1782,7 +1832,7 @@ def plt_naive(gals='discs', tgt_fname=None, update_vals=False,
                              lw=1.)
             axs[i+2].plot(vs_resids, 
                           calc_resids_vc()/10.**order_of_mag)
-            axs[i+2].axvline(vesc, ls='--', alpha=0.5, color='grey')
+            axs[i+2].axvline(vcut, ls='--', alpha=0.5, color='grey')
 
             if i == 0:
                 axs[i+2].set_ylabel('resids')
@@ -1891,6 +1941,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
     fig, axs = setup_multigal_fig(gals)
 
     sse_mao_full = 0. # SSE for the fully predictive Mao model
+    sse_mao_naive = 0. # SSE for Mao using v0=vc
     sse_staudt = 0. # SSE for our predictive model
     sse_sigmoid_hard = 0. # SSE for our predictive model with a hard final cut
     N_data = 0. # Number of truth datapoints evaluated, for agg RMS calculation
@@ -1912,9 +1963,10 @@ def plt_universal_prefit(result, df_source, gals='discs',
             vs_truth = pdfs[gal]['vs']
             N_data += len(vs_truth)
             ps_truth = pdfs[gal]['ps']
-            rms_staudt, sse_staudt_add = fitting.calc_rms_err(vs_truth, ps_truth,
-                                                     fitting.smooth_step_max,
-                                                     args=[v0, vdamp, k])
+            rms_staudt, sse_staudt_add = fitting.calc_rms_err(
+                    vs_truth, ps_truth,
+                    fitting.smooth_step_max,
+                    args=[v0, vdamp, k])
             sse_staudt += sse_staudt_add
 
         if show_bands:
@@ -2018,6 +2070,11 @@ def plt_universal_prefit(result, df_source, gals='discs',
                                     vc, std_vcut, 
                                     fit_mao_naive.params['p'].value),
                         label=mao_naive_label, color=mao_naive_color)
+            rms_mao_naive, sse_mao_naive_add = fitting.calc_rms_err(
+                    vs_truth, ps_truth,
+                    fitting.mao,
+                    args=(vc, std_vcut, fit_mao_naive.params['p'].value))
+            sse_mao_naive += sse_mao_naive_add
         # Make ticks on both sides of the x-axis:
         axs[i].tick_params(axis='x', direction='inout', length=6)
 
@@ -2061,15 +2118,19 @@ def plt_universal_prefit(result, df_source, gals='discs',
                                     edgecolor='none', pad=0.))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
-        loc[1] -= spacing
-        kwargs_txt['fontsize'] = detail_fontsize 
-        axs[i].annotate(#'\n$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
-                        'RMS$_{{16}}={1:0.2f}$' 
-                        '\nRMS$_\mathrm{{Mao}}={2:0.2f}$' 
-                        .format(vc, 
-                                rms_staudt / 10. ** O_rms,
-                                rms_mao / 10. ** O_rms),
-                        loc, **kwargs_txt)
+        if show_rms:
+            loc[1] -= spacing
+            kwargs_txt['fontsize'] = detail_fontsize 
+            axs[i].annotate(
+                    #'\n$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                    'RMS$_{{16}}={1:0.2f}$' 
+                    '\nRMS$_\mathrm{{Mao}}={2:0.2f}$' 
+                    '\nRMS$_{{\mathrm{{M}}v_\mathrm{{c}}}}={3:0.2f}$'
+                    .format(vc, 
+                            rms_staudt / 10. ** O_rms,
+                            rms_mao / 10. ** O_rms,
+                            rms_mao_naive / 10. ** O_rms),
+                    loc, **kwargs_txt)
         axs[i].grid(False)
         if ymax is not None:
             axs[i].set_ylim(top=ymax)
@@ -2113,6 +2174,12 @@ def plt_universal_prefit(result, df_source, gals='discs',
                     d=d, 
                     show=False).replace('$','')
             display(Latex('$\mathrm{{RMS_{{Mao, prediction}}}}={0:s}$'
+                          .format(txt)))
+        if show_mao_naive:
+            txt = staudt_utils.mprint(np.sqrt(sse_mao_naive / N_data),
+                                      d=d, show=False).replace('$', '')
+            display(Latex('$\mathrm{{RMS}}_{{\mathrm{{Mao}},v_\mathrm{{c}}}}'
+                          '={0:s}$'
                           .format(txt)))
 
         txt = staudt_utils.mprint(

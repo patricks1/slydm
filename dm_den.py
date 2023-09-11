@@ -724,7 +724,8 @@ def get_vcirc(r_axis,rs,ms):
     is_within = rs<r_axis
     mwithin = np.sum(ms[is_within])
     #Masses are in units of 1e10 M_sun
-    vcirc = np.sqrt(c.G*mwithin*u.M_sun*1.e10 / (r_axis*u.kpc)).to(u.km/u.s).value
+    vcirc = np.sqrt(c.G*mwithin*u.M_sun*1.e10 
+                    / (r_axis*u.kpc)).to(u.km/u.s).value
     return vcirc
 
 def calc_vesc(ms, coords, rvec):
@@ -960,7 +961,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
                                                  disp_dm_cart
 
         df.loc[galname,'f_shell'] = 10.**7./den_shell
-    df.loc[galname,'vcirc'] = get_vcirc(rsolar,rs_all,ms_all)
+    df.loc[galname,'vcirc'] = get_vcirc(rsolar, rs_all, ms_all)
      
     # Commenting the following because of the problems longdoubles cause on
     # MacOS

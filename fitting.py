@@ -1564,7 +1564,7 @@ def fit_mao(vcut_type, df_source, update_values=False):
     params = model.make_params()
 
     params['d'].set(value=50.770942240409525, vary=True, min=0.)
-    params['e'].set(value=2.4522990491102967, vary=False, min=0.)
+    params['e'].set(value=2.4522990491102967, vary=True, min=0.)
     params['p'].set(value=2.3049471166082682, vary=True, min=0.001, max=15.)
 
     with warnings.catch_warnings():
