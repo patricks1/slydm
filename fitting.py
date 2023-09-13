@@ -14,6 +14,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import multiprocessing as mp
+import UCI_tools.tools as uci
 from progressbar import ProgressBar
 from IPython.display import display, Latex
 
@@ -1616,7 +1617,7 @@ def fit_mao(vcut_type, df_source, update_values=False):
                 # type(DY_TXT) == np.ndarray, which is why we're denoting it in
                 # all caps.
                 y_txt, DY_TXT = staudt_utils.sig_figs(y, dy)
-                dm_den.save_prediction(key + '_mao_' + vcut_type, 
+                uci.save_prediction(key + '_mao_' + vcut_type, 
                                        y_txt,  DY_TXT)
         
     ###########################################################################
@@ -1706,7 +1707,7 @@ def fit_mao_naive_aggp(vcut_type, df_source, update_values=False):
         # For now, we're just going to save p with 1 decimal showing to match
         # the 1 decimal that shows when we carry out the full error analysis on
         # our full version of the Mao model
-        dm_den.save_var_latex('p_mao_naive_agg', '{0:0.1f}'.format(y))
+        uci.save_var_latex('p_mao_naive_agg', '{0:0.1f}'.format(y))
 
     return result
 
@@ -1984,19 +1985,19 @@ def plt_universal(gals='discs', update_values=False,
                 # type(DY_TXT) == np.ndarray, which is why we're denoting it in
                 # all caps.
                 y_txt, DY_TXT = staudt_utils.sig_figs(y, dy)
-                dm_den.save_prediction(key, y_txt,  DY_TXT)
+                uci.save_prediction(key, y_txt,  DY_TXT)
         vc_mw = dm_den_viz.vc_eilers 
 
         v0_mw = result.params['d'] * (vc_mw / 100.) ** result.params['e']
         dv0_mw = ddfrac * v0_mw
         v0_mw_txt, DV0_MW_TXT = staudt_utils.sig_figs(v0_mw, dv0_mw)
-        dm_den.save_prediction('v0_mw', v0_mw_txt, DV0_MW_TXT)
+        uci.save_prediction('v0_mw', v0_mw_txt, DV0_MW_TXT)
 
         vdamp_mw = result.params['h'] * (vc_mw / 100.) ** result.params['j']
         dvdamp_mw = dhfrac * vdamp_mw
         vdamp_mw_txt, DVDAMP_MW_TXT = staudt_utils.sig_figs(vdamp_mw, 
                                                             dvdamp_mw)
-        dm_den.save_prediction('vdamp_mw', vdamp_mw_txt, DVDAMP_MW_TXT)
+        uci.save_prediction('vdamp_mw', vdamp_mw_txt, DVDAMP_MW_TXT)
     ###########################################################################
 
     if err_method == 'std_err':
