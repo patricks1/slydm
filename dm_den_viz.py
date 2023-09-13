@@ -16,7 +16,7 @@ import lmfit
 import copy
 import os
 import staudt_fire_utils as utils
-import shared-analysis-tools.tools as sat
+import shared_analysis_tools.tools as sat
 from progressbar import ProgressBar
 
 import scipy
