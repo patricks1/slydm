@@ -16,6 +16,7 @@ import lmfit
 import copy
 import os
 import staudt_fire_utils as utils
+import shared-analysis-tools.tools as sat
 from progressbar import ProgressBar
 
 import scipy
@@ -929,7 +930,7 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
         # Save the MW vesc prediction in the LaTeX data
         vesc_hat_mw_txt, dvesc_mw_txt = staudt_utils.sig_figs(
                 vesc_hat_mw_transform[0], vesc_hat_mw_transform[1:])
-        dm_den.save_prediction('vcut_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
+        sat.save_prediction('vcut_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
 
         # Save the amplitude to the LaTeX data
         dlog_intercept = dbeta[0][0]
@@ -938,11 +939,11 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
         amp = intercept_transform[0]
         damp = intercept_transform[1:]
         amp_str, damp_str = staudt_utils.sig_figs(amp, damp)
-        dm_den.save_prediction('vcuthat_amp', amp_str, damp_str)
+        sat.save_prediction('vcuthat_amp', amp_str, damp_str)
 
         # Save the slope to the LaTeX data
         slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
-        dm_den.save_prediction('vcuthat_slope', slope_str, dslope_str)
+        sat.save_prediction('vcuthat_slope', slope_str, dslope_str)
 
         # Save the vesc(vc) predictions
         df = dm_den.load_data(df_source)
@@ -1048,7 +1049,7 @@ def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11,
         # Save the MW vesc prediction in the LaTeX data
         vesc_hat_mw_txt, dvesc_mw_txt = staudt_utils.sig_figs(
                 vesc_hat_mw_transform[0], vesc_hat_mw_transform[1:])
-        dm_den.save_prediction('vesc_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
+        sat.save_prediction('vesc_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
 
         # Save the amplitude to the LaTeX data
         dlog_intercept = dbeta[0][0]
@@ -1057,11 +1058,11 @@ def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11,
         amp = intercept_transform[0]
         damp = intercept_transform[1:]
         amp_str, damp_str = staudt_utils.sig_figs(amp, damp)
-        dm_den.save_prediction('veschat_amp', amp_str, damp_str)
+        sat.save_prediction('veschat_amp', amp_str, damp_str)
 
         # Save the slope to the LaTeX data
         slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
-        dm_den.save_prediction('veschat_slope', slope_str, dslope_str)
+        sat.save_prediction('veschat_slope', slope_str, dslope_str)
 
         # Save the vesc(vc) predictions
         df = dm_den.load_data(df_source)
@@ -1184,22 +1185,22 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
 
             #y_save, dy_save = staudt_utils.log2linear(*y_flat)
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
-            dm_den.save_prediction('disp', y_save, dy_save)
-            dm_den.save_prediction('disp_slope', slope, dslope_str)
+            sat.save_prediction('disp', y_save, dy_save)
+            sat.save_prediction('disp_slope', slope, dslope_str)
             disp_transform = staudt_utils.log2linear(logy_intercept_raw,
                                                      delta_beta[0][0])
             disp_amp = disp_transform[0]
             ddisp_amp = disp_transform[1:] 
             disp_amp_str, ddisp_amp_str = staudt_utils.sig_figs(disp_amp, 
                                                                 ddisp_amp)
-            dm_den.save_prediction('disp_amp', disp_amp_str, ddisp_amp_str)
+            sat.save_prediction('disp_amp', disp_amp_str, ddisp_amp_str)
         elif ycol=='den_disc':
             data2save = {'den_slope': slope_raw, 
                          'logden_intercept': logy_intercept_raw}
             dm_den.save_var_raw(data2save) 
 
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
-            dm_den.save_prediction('logrho', y_save, dy_save)
+            sat.save_prediction('logrho', y_save, dy_save)
 
             # I expect log2linear to return asymetric errors in the following 
             # line.
@@ -1207,7 +1208,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
             Y_1E7MSUN = Y_MSUN / 1.e7 
             y_1e7msun_txt, DY_1E7MSUN_TXT = staudt_utils.sig_figs(
                     Y_1E7MSUN[0].value, Y_1E7MSUN[1:].value) 
-            dm_den.save_prediction('rho_1e7msun', y_1e7msun_txt, 
+            sat.save_prediction('rho_1e7msun', y_1e7msun_txt, 
                                    DY_1E7MSUN_TXT)
 
             particle_y = (Y_MSUN * c.c**2.).to(u.GeV/u.cm**3.) 
@@ -1218,11 +1219,11 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
             particle_y_save, particle_dy_save = staudt_utils.sig_figs(
                    particle_y[0].value,
                    particle_y[1:].value)
-            dm_den.save_prediction('rho_GeV', particle_y_save, 
+            sat.save_prediction('rho_GeV', particle_y_save, 
                                    particle_dy_save)
             
-            dm_den.save_prediction('den_slope', slope, dslope_str)
-            dm_den.save_prediction('logden_intercept', logy_intercept_str, 
+            sat.save_prediction('den_slope', slope, dslope_str)
+            sat.save_prediction('logden_intercept', logy_intercept_str, 
                                    dlogy_intercept_str)
             RHO0_1E7MSUN = staudt_utils.log2linear(
                     logy_intercept_raw, dlogy_intercept_raw) / 1.e7 
@@ -1232,9 +1233,9 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
                     RHO0_1E7MSUN[0].value, RHO0_1E7MSUN[1:].value)
             rho0_GeV_txt, DRHO0_GEV_TXT = staudt_utils.sig_figs(
                     RHO0_GEV[0].value, RHO0_GEV[1:].value)
-            dm_den.save_prediction('rho0_1e7msun', rho0_1e7msun_txt,
+            sat.save_prediction('rho0_1e7msun', rho0_1e7msun_txt,
                                    DRHO0_1E7MSUN_TXT)
-            dm_den.save_prediction('rho0_GeV', rho0_GeV_txt, DRHO0_GEV_TXT)
+            sat.save_prediction('rho0_GeV', rho0_GeV_txt, DRHO0_GEV_TXT)
 
     display(Latex('$r=8.3\pm{0:0.2f}\,\mathrm{{kpc}}$'
                   .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
@@ -1740,27 +1741,40 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
             axs[i].plot(vs_maxwell,
                         fitting.exp_max(vs_maxwell, vc, vcut),
                         label = '$v_0=v_\mathrm{{c}}$'
-                                '\nexp trunc @ {0:s}$'
+                                '\nexp trunc @ {0:s}'
                                 .format(vcut_labels[vcut_type]))
                     
+        vcut_label_y = 0.4
         # Draw vesc line
         vesc = vesc_dict[gal]
         axs[i].axvline(vesc, ls='--', alpha=0.8, color='k')
         trans = mpl.transforms.blended_transform_factory(axs[i].transData,
                                                          axs[i].transAxes)
-        axs[i].text(vesc, 0.5, vcut_labels['vesc'], transform=trans,
-                    fontsize=15., rotation=90., color='gray', 
-                    horizontalalignment='right')
+        if vesc >= vcut:
+            vesc_adj = 20.
+            vesc_ha = 'left'
+            vcut_adj = 0.
+            vcut_ha = 'right'
+        else:
+            vesc_adj = 0.
+            vesc_ha = 'right'
+            vcut_adj = 20. 
+            vcut_ha = 'left'
+        axs[i].text(vesc + vesc_adj, vcut_label_y, vcut_labels['vesc'], 
+                    transform=trans,
+                    fontsize=15., rotation=90., color='k', 
+                    horizontalalignment=vesc_ha)
 
         # Draw vcut line
-        vlim = dm_den.load_vcuts('lim', df)[gal]
-        axs[i].axvline(vlim, ls='--', alpha=0.5, color='C0')
+        #vlim = dm_den.load_vcuts('lim', df)[gal]
+        #axs[i].axvline(vlim, ls='--', alpha=0.5, color='C0')
         axs[i].axvline(vcut, ls='--', alpha=0.5, color='grey')
         trans = mpl.transforms.blended_transform_factory(axs[i].transData,
                                                          axs[i].transAxes)
-        axs[i].text(vcut, 0.5, vcut_labels[vcut_type], transform=trans,
+        axs[i].text(vcut + vcut_adj, vcut_label_y, vcut_labels[vcut_type], 
+                    transform=trans,
                     fontsize=15., rotation=90., color='gray', 
-                    horizontalalignment='right')
+                    horizontalalignment=vcut_ha)
 
         axs[i].grid(False)
         # Make ticks on both sides of the x-axis:
@@ -1774,7 +1788,8 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         loc=[0.97,0.96]
         kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
                       va='top', ha='right', 
-                      bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+                      bbox=dict(facecolor='white', alpha=0.8, edgecolor='none',
+                                pad=0.))
         axs[i].annotate(gal, loc,
                         **kwargs_txt)
         if Ngals == 2:
@@ -1840,8 +1855,10 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         fitting.save_rms_errs(rms_dict)
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.,hspace=0.)
-    if Nrows == 3:
-        axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, -0.04),
+    if Ncols > 2:
+        # Put the legend in the middle of the figure instead of the middle of
+        # one of the axes.
+        axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, -0.07),
                       bbox_transform=fig.transFigure, ncol=3)
     else:
         trans_legend = mpl.transforms.blended_transform_factory(
@@ -1864,6 +1881,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
                          ymax=None, show_bands=True, 
                          show_sigmoid_hard=False,
                          show_sigmoid_exp=False,
+                         show_max_hard=False,
                          show_mao_prediction=False,
                          show_mao_naive=False,
                          xtickspace=None, show_rms=False,
@@ -1892,10 +1910,10 @@ def plt_universal_prefit(result, df_source, gals='discs',
     if plotting_prediction and prediction_vcut_type is None:
         raise ValueError('You must specify a prediction_vcut_type if you want'
                          ' to show_mao_prediction or show_sigmoid_hard.')
-    if show_mao_naive and std_vcut_type is None:
+    if (show_mao_naive or show_max_hard) and std_vcut_type is None:
         raise ValueError('You must specify a std_vcut_type if you want'
                          ' to show_mao_naive.')
-    if ddfrac is None or dhfrac is None:
+    if show_bands and (ddfrac is None or dhfrac is None):
         grid_results = grid_eval.identify()
         if ddfrac is None:
             ddfrac = grid_results[0]
@@ -1914,6 +1932,10 @@ def plt_universal_prefit(result, df_source, gals='discs',
     if show_mao_prediction:
         with open(paths.data + 'results_mao_' + prediction_vcut_type + '.pkl', 'rb') as f:
             fit_mao = pickle.load(f)
+    if show_mao_naive:
+        #fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
+        with open(paths.data + 'data_raw.pkl', 'rb') as f:
+            p_mao_naive_agg = pickle.load(f)['p_mao_naive_agg']
     pdfs.pop('m12z')
     pdfs.pop('m12w')
     if gals == 'discs':
@@ -1935,8 +1957,6 @@ def plt_universal_prefit(result, df_source, gals='discs',
         raise ValueError('Unexpected data type provided for `params`')
     samples = fitting.load_samples()
 
-    if show_mao_naive:
-        fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
 
     fig, axs = setup_multigal_fig(gals)
 
@@ -1944,6 +1964,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
     sse_mao_naive = 0. # SSE for Mao using v0=vc
     sse_staudt = 0. # SSE for our predictive model
     sse_sigmoid_hard = 0. # SSE for our predictive model with a hard final cut
+    sse_max_hard = 0. # SSE for the maxwellian with a hard card
     N_data = 0. # Number of truth datapoints evaluated, for agg RMS calculation
 
     pbar = ProgressBar()
@@ -1969,8 +1990,8 @@ def plt_universal_prefit(result, df_source, gals='discs',
                     args=[v0, vdamp, k])
             sse_staudt += sse_staudt_add
 
+        # Error bands
         if show_bands:
-            # Error bands
             samples_color = plt.cm.viridis(0.5)
             lowers, uppers = fitting.gal_bands_from_samples(samples['vs'],
                                                             samples[gal],
@@ -2036,13 +2057,26 @@ def plt_universal_prefit(result, df_source, gals='discs',
                         label=('prediction, exp cut @ ' 
                                + vcut_labels['lim_fit']))
 
+        if show_max_hard:
+            axs[i].plot(vs_postfit, 
+                        fitting.smooth_step_max(vs_postfit,
+                                                vc, std_vcut, np.inf),
+                        label=('Maxwellian, $v_0=v_{\\rm c}$, cut @ ' 
+                               + vcut_labels[std_vcut_type]))
+            if show_rms:
+                rms_max, sse_max_hard_add = fitting.calc_rms_err(
+                        vs_truth, ps_truth,
+                        fitting.smooth_step_max,
+                        args=(vc, std_vcut, np.inf))
+                sse_max_hard += sse_max_hard_add
+
         if show_mao_prediction:
             v0_mao = fit_mao['d'] * (vc / 100.) ** fit_mao['e'],
             if mao_eqnum is not None:
                 mao_prediction_label = 'Eqn. {0:0.0f} w/our method' \
                                        .format(mao_eqnum)
             else:
-                mao_prediction_label = 'Mao prediction from $v_\mathrm{{c}}$'
+                mao_prediction_label = 'Mao w/our method'
             axs[i].plot(vs_postfit,
                         fitting.mao(vs_postfit, 
                                     v0_mao,
@@ -2064,16 +2098,16 @@ def plt_universal_prefit(result, df_source, gals='discs',
                 mao_naive_label = 'Eqn. {0:0.0f}, $v_0=v_\mathrm{{c}}$' \
                                   .format(mao_eqnum)
             else:
-                mao_naive_label = 'Mao $v_0=v_\mathrm{c}$'
+                mao_naive_label = 'Mao w/$v_0=v_\mathrm{c}$'
             axs[i].plot(vs_postfit,
                         fitting.mao(vs_postfit,
                                     vc, std_vcut, 
-                                    fit_mao_naive.params['p'].value),
+                                    p_mao_naive_agg),
                         label=mao_naive_label, color=mao_naive_color)
             rms_mao_naive, sse_mao_naive_add = fitting.calc_rms_err(
                     vs_truth, ps_truth,
                     fitting.mao,
-                    args=(vc, std_vcut, fit_mao_naive.params['p'].value))
+                    args=(vc, std_vcut, p_mao_naive_agg))
             sse_mao_naive += sse_mao_naive_add
         # Make ticks on both sides of the x-axis:
         axs[i].tick_params(axis='x', direction='inout', length=6)
@@ -2121,15 +2155,22 @@ def plt_universal_prefit(result, df_source, gals='discs',
         if show_rms:
             loc[1] -= spacing
             kwargs_txt['fontsize'] = detail_fontsize 
-            axs[i].annotate(
-                    #'\n$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
-                    'RMS$_{{16}}={1:0.2f}$' 
-                    '\nRMS$_\mathrm{{Mao}}={2:0.2f}$' 
-                    '\nRMS$_{{\mathrm{{M}}v_\mathrm{{c}}}}={3:0.2f}$'
+            if show_max_hard:
+                rms_txt_max = '\nRMS$_{{\\rm Max}}={4:0.2f}$'
+            else:
+                rms_txt_max = ''
+            txt_rms = (#'\n$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                       'RMS$_{{{5:0.0f}}}={1:0.2f}$' 
+                       '\nRMS$_\mathrm{{Mao}}={2:0.2f}$' 
+                       '\nRMS$_{{\mathrm{{M}}v_\mathrm{{c}}}}={3:0.2f}$'
+                       + rms_txt_max)
+            axs[i].annotate(txt_rms
                     .format(vc, 
                             rms_staudt / 10. ** O_rms,
                             rms_mao / 10. ** O_rms,
-                            rms_mao_naive / 10. ** O_rms),
+                            rms_mao_naive / 10. ** O_rms,
+                            rms_max / 10. ** O_rms if show_max_hard else None,
+                            sigmoid_damped_eqnum),
                     loc, **kwargs_txt)
         axs[i].grid(False)
         if ymax is not None:
@@ -2180,6 +2221,11 @@ def plt_universal_prefit(result, df_source, gals='discs',
                                       d=d, show=False).replace('$', '')
             display(Latex('$\mathrm{{RMS}}_{{\mathrm{{Mao}},v_\mathrm{{c}}}}'
                           '={0:s}$'
+                          .format(txt)))
+        if show_max_hard:
+            txt = staudt_utils.mprint(np.sqrt(sse_max_hard / N_data),
+                                      d=d, show=False).replace('$', '')
+            display(Latex('$\mathrm{{RMS}}_{{\mathrm{{Max}}}}={0:s}$'
                           .format(txt)))
 
         txt = staudt_utils.mprint(

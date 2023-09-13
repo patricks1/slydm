@@ -1622,7 +1622,7 @@ def fit_mao(vcut_type, df_source, update_values=False):
     ###########################################################################
     return result
 
-def fit_mao_naive_aggp(vcut_type, df_source):
+def fit_mao_naive_aggp(vcut_type, df_source, update_values=False):
     '''
     Find the best p parameter based on the aggregation of all twelve discs.
     v0 is assumed to be the circular speed.
@@ -1632,6 +1632,9 @@ def fit_mao_naive_aggp(vcut_type, df_source):
     vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
         Specifies how to determine the speed distribution cutoff.
     '''
+    if vcut_type != 'lim_fit' and update_values:
+        raise ValueError('You should only update values if you\'re using'
+                         ' vcut_type=\'lim_fit\'.')
     import dm_den
     import dm_den_viz
     df = dm_den.load_data(df_source).drop(['m12w', 'm12z'])
@@ -1694,6 +1697,16 @@ def fit_mao_naive_aggp(vcut_type, df_source):
                            vescs=vescs,
                            method='nelder')
     ###########################################################################
+
+    if update_values and vcut_type == 'lim_fit':
+        # Save the best p value to our big raw data file.
+        y = result.params['p'].value
+        dm_den.save_var_raw({'p_mao_naive_agg': y},
+                            'data_raw.pkl')
+        # For now, we're just going to save p with 1 decimal showing to match
+        # the 1 decimal that shows when we carry out the full error analysis on
+        # our full version of the Mao model
+        dm_den.save_var_latex('p_mao_naive_agg', '{0:0.1f}'.format(y))
 
     return result
 
