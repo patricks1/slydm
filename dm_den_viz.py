@@ -16,7 +16,7 @@ import lmfit
 import copy
 import os
 import staudt_fire_utils as utils
-import shared_analysis_tools.tools as sat
+import UCI_tools.tools as uci
 from progressbar import ProgressBar
 
 import scipy
@@ -930,7 +930,7 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
         # Save the MW vesc prediction in the LaTeX data
         vesc_hat_mw_txt, dvesc_mw_txt = staudt_utils.sig_figs(
                 vesc_hat_mw_transform[0], vesc_hat_mw_transform[1:])
-        sat.save_prediction('vcut_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
+        uci.save_prediction('vcut_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
 
         # Save the amplitude to the LaTeX data
         dlog_intercept = dbeta[0][0]
@@ -939,11 +939,11 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
         amp = intercept_transform[0]
         damp = intercept_transform[1:]
         amp_str, damp_str = staudt_utils.sig_figs(amp, damp)
-        sat.save_prediction('vcuthat_amp', amp_str, damp_str)
+        uci.save_prediction('vcuthat_amp', amp_str, damp_str)
 
         # Save the slope to the LaTeX data
         slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
-        sat.save_prediction('vcuthat_slope', slope_str, dslope_str)
+        uci.save_prediction('vcuthat_slope', slope_str, dslope_str)
 
         # Save the vesc(vc) predictions
         df = dm_den.load_data(df_source)
@@ -1049,7 +1049,7 @@ def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11,
         # Save the MW vesc prediction in the LaTeX data
         vesc_hat_mw_txt, dvesc_mw_txt = staudt_utils.sig_figs(
                 vesc_hat_mw_transform[0], vesc_hat_mw_transform[1:])
-        sat.save_prediction('vesc_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
+        uci.save_prediction('vesc_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
 
         # Save the amplitude to the LaTeX data
         dlog_intercept = dbeta[0][0]
@@ -1058,11 +1058,11 @@ def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11,
         amp = intercept_transform[0]
         damp = intercept_transform[1:]
         amp_str, damp_str = staudt_utils.sig_figs(amp, damp)
-        sat.save_prediction('veschat_amp', amp_str, damp_str)
+        uci.save_prediction('veschat_amp', amp_str, damp_str)
 
         # Save the slope to the LaTeX data
         slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
-        sat.save_prediction('veschat_slope', slope_str, dslope_str)
+        uci.save_prediction('veschat_slope', slope_str, dslope_str)
 
         # Save the vesc(vc) predictions
         df = dm_den.load_data(df_source)
@@ -1185,22 +1185,22 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
 
             #y_save, dy_save = staudt_utils.log2linear(*y_flat)
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
-            sat.save_prediction('disp', y_save, dy_save)
-            sat.save_prediction('disp_slope', slope, dslope_str)
+            uci.save_prediction('disp', y_save, dy_save)
+            uci.save_prediction('disp_slope', slope, dslope_str)
             disp_transform = staudt_utils.log2linear(logy_intercept_raw,
                                                      delta_beta[0][0])
             disp_amp = disp_transform[0]
             ddisp_amp = disp_transform[1:] 
             disp_amp_str, ddisp_amp_str = staudt_utils.sig_figs(disp_amp, 
                                                                 ddisp_amp)
-            sat.save_prediction('disp_amp', disp_amp_str, ddisp_amp_str)
+            uci.save_prediction('disp_amp', disp_amp_str, ddisp_amp_str)
         elif ycol=='den_disc':
             data2save = {'den_slope': slope_raw, 
                          'logden_intercept': logy_intercept_raw}
             dm_den.save_var_raw(data2save) 
 
             y_save, dy_save = staudt_utils.sig_figs(*y_flat)
-            sat.save_prediction('logrho', y_save, dy_save)
+            uci.save_prediction('logrho', y_save, dy_save)
 
             # I expect log2linear to return asymetric errors in the following 
             # line.
@@ -1208,7 +1208,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
             Y_1E7MSUN = Y_MSUN / 1.e7 
             y_1e7msun_txt, DY_1E7MSUN_TXT = staudt_utils.sig_figs(
                     Y_1E7MSUN[0].value, Y_1E7MSUN[1:].value) 
-            sat.save_prediction('rho_1e7msun', y_1e7msun_txt, 
+            uci.save_prediction('rho_1e7msun', y_1e7msun_txt, 
                                    DY_1E7MSUN_TXT)
 
             particle_y = (Y_MSUN * c.c**2.).to(u.GeV/u.cm**3.) 
@@ -1219,11 +1219,11 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
             particle_y_save, particle_dy_save = staudt_utils.sig_figs(
                    particle_y[0].value,
                    particle_y[1:].value)
-            sat.save_prediction('rho_GeV', particle_y_save, 
+            uci.save_prediction('rho_GeV', particle_y_save, 
                                    particle_dy_save)
             
-            sat.save_prediction('den_slope', slope, dslope_str)
-            sat.save_prediction('logden_intercept', logy_intercept_str, 
+            uci.save_prediction('den_slope', slope, dslope_str)
+            uci.save_prediction('logden_intercept', logy_intercept_str, 
                                    dlogy_intercept_str)
             RHO0_1E7MSUN = staudt_utils.log2linear(
                     logy_intercept_raw, dlogy_intercept_raw) / 1.e7 
@@ -1233,9 +1233,9 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
                     RHO0_1E7MSUN[0].value, RHO0_1E7MSUN[1:].value)
             rho0_GeV_txt, DRHO0_GEV_TXT = staudt_utils.sig_figs(
                     RHO0_GEV[0].value, RHO0_GEV[1:].value)
-            sat.save_prediction('rho0_1e7msun', rho0_1e7msun_txt,
+            uci.save_prediction('rho0_1e7msun', rho0_1e7msun_txt,
                                    DRHO0_1E7MSUN_TXT)
-            sat.save_prediction('rho0_GeV', rho0_GeV_txt, DRHO0_GEV_TXT)
+            uci.save_prediction('rho0_GeV', rho0_GeV_txt, DRHO0_GEV_TXT)
 
     display(Latex('$r=8.3\pm{0:0.2f}\,\mathrm{{kpc}}$'
                   .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
