@@ -124,11 +124,13 @@ def rotation_matrix_fr_dat(coords_centered, v_vecs, masses, rs):
     return rotation_matrix
 
 def rotate_gal(coords_centered, v_vecs, masses, rs):
-    # numpy array of the coordinates of the stars, with galaxy centered at (0,0,0)
+    # numpy array of the coordinates of the stars, with galaxy centered at 
+    # (0,0,0)
     # preferred shape (number_of_particles,3)
     #coord = np.array()
 
-    # numpy array of the velocities of the stars, with respective to the galaxy center 
+    # numpy array of the velocities of the stars, with respective to the galaxy 
+    # center 
     # preferred shape (number_of_particles,3)
     #v_vecs = np.array()
 

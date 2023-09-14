@@ -109,10 +109,10 @@ def gen_gal_data(galname):
                                                    'InternalEnergy']])
 
         rotation_matrix = rotate_galaxy.rotation_matrix_fr_dat(
-                *[flatten_particle_data(d,data) for data in ['coord_centered',
-                                                             'v_vec_centered',
-                                                             'mass_phys',
-                                                             'r']])
+                *[flatten_particle_data(d, data) for data in ['coord_centered',
+                                                              'v_vec_centered',
+                                                              'mass_phys',
+                                                              'r']])
         for ptcl in d.keys(): #for each particle type
             print('Rotating {0:s}'.format(ptcl))
             d[ptcl]['v_vec_rot'] = rotate_galaxy.rotate(
@@ -204,9 +204,14 @@ def flatten_particle_data(d, data, drop_particles=['PartType2']):
         data: str
             The key corresponding to the data the user wants to
             extract
-        drop_particle: list of str
+        drop_particles: list of str
             The particle types that should not be included in the flattened
             data
+
+            'PartType0' is gas. 'PartType1' is dark matter.
+            'PartType2' is dummy collisionless. 'PartType3' is grains/PIC
+            particles. 'PartType4' is stars. 'PartType5' is black holes / 
+            sinks.
     '''
     
     keys = list(d.keys())
