@@ -2,6 +2,7 @@ import h5py
 import os
 import rotate_galaxy
 import numpy as np
+import UCI_tools.tools as uci
 from progressbar import ProgressBar
 
 def gen_gal_data(galname):
@@ -120,48 +121,8 @@ def gen_gal_data(galname):
             d[ptcl]['coord_rot'] = rotate_galaxy.rotate(
                     d[ptcl]['coord_centered'], rotation_matrix)
 
-            #xy component of velocity
-            d[ptcl]['v_vec_disc'] = d[ptcl]['v_vec_rot'][:,:2] 
-            #xy component of coordinates
-            d[ptcl]['coord_disc'] = d[ptcl]['coord_rot'][:,:2] 
-
-            ###################################################################
-            ## Find the projection of velocity onto the xy vector (i.e. v_r) 
-            ## v_r = v dot r / r^2 * r 
-            ###################################################################
-            vdotrs = np.sum(d[ptcl]['v_vec_disc'] \
-                           * d[ptcl]['coord_disc'], axis=1)
-            rmags = np.linalg.norm(d[ptcl]['coord_disc'], axis=1)
-            d[ptcl]['v_dot_rhat'] = vdotrs / rmags
-
-            #v dot r / r^2
-            vdotrs_r2 = (vdotrs \
-                / np.linalg.norm(d[ptcl]['coord_disc'], axis=1) **2.)
-            #Need to reshape v dot r / r^2 so its shape=(number of particles,1)
-            #so we can mutilpy those scalars by the r vector
-            vdotrs_r2 = vdotrs_r2.reshape(len(d[ptcl]['coord_disc']), 1)
-            d[ptcl]['v_r_vec'] = vdotrs_r2 * d[ptcl]['coord_disc']
-            ###################################################################
-
-            #v_phi is the difference of the xy velocity and v_r
-            d[ptcl]['v_phi_vec'] = d[ptcl]['v_vec_disc'] - d[ptcl]['v_r_vec']
-            d[ptcl]['v_phi_mag'] = np.linalg.norm(d[ptcl]['v_phi_vec'],axis=1)
-
-            ###################################################################
-            ## Finding the vphi in \vec{vphi} = vphi * \hat{vphi} 
-            ## (i.e. v dot phi )
-            ## Note v_phi_mag = |v dot phi|, and we want to determine whether
-            ## v dot phi is positive or negative.
-            ###################################################################
-            rxvs = np.cross(d[ptcl]['coord_disc'], 
-                            d[ptcl]['v_vec_disc']) #r cross v
-            # v dot phi is positive if the z component of r cross v is 
-            # positive,
-            # because this means its angular momentum is in the same direction
-            # as the disc's.
-            signs = rxvs/np.abs(rxvs) 
-            d[ptcl]['v_dot_phihat'] = d[ptcl]['v_phi_mag']*signs
-            ###################################################################
+            d[ptcl] = d[ptcl] | uci.calc_cyl_vels(d[ptcl]['v_vec_rot'],
+                                                  d[ptcl]['coord_rot'])
 
             d[ptcl]['v_dot_zhat'] = d[ptcl]['v_vec_rot'][:,2]
 

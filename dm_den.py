@@ -27,7 +27,7 @@ def build_direcs(suffix, res, mass_class, typ='fire', source='original',
         if source == 'cropped':
             # Using this folder while I make sure I'm not breaking anything by
             # discontinuing the use of float128's
-            typ_char='B_202304'
+            typ_char='B_veltest'
             #print('type_char: {0:s}'.format(typ_char))
         else:
             typ_char='B'
@@ -806,7 +806,7 @@ def get_v_escs(fname=None, rotate=False):
 
 def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
             vcircparts=['PartType0','PartType1','PartType4'],
-            source='original', dz=0.5):
+            source='original', dz=1.):
     
     from cropper import load_data as load_cropped
     from cropper import flatten_particle_data
@@ -1110,7 +1110,7 @@ def init_df(mass_class=12):
 
 def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
              vcircparts=['PartType0','PartType1','PartType4'], 
-             source='original', dz=0.5, freq_save=False):
+             source='original', dz=1., freq_save=False):
     def insert_analysis(df):
         #dat=[]
         for g in df.index:
