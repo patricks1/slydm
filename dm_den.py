@@ -21,13 +21,15 @@ from matplotlib import pyplot as plt
 from SHMpp.SHMpp_gvmin_reconcile import vE as vE_f
 
 def build_direcs(suffix, res, mass_class, typ='fire', source='original',
-                 min_radius=None, max_radius=None):
+                 min_radius=None, max_radius=None, cropped_run=None):
     assert typ in ['fire','dmo']
+    if source == 'cropped' and cropped_run is None:
+        cropped_run = '202304'
     if typ=='fire':
         if source == 'cropped':
             # Using this folder while I make sure I'm not breaking anything by
             # discontinuing the use of float128's
-            typ_char='B_veltest'
+            typ_char = '_'.join(['B', cropped_run])
             #print('type_char: {0:s}'.format(typ_char))
         else:
             typ_char='B'

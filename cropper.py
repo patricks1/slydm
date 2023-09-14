@@ -1,11 +1,12 @@
 import h5py
 import os
 import rotate_galaxy
+import warnings
 import numpy as np
 import UCI_tools.tools as uci
 from progressbar import ProgressBar
 
-def gen_gal_data(galname):
+def gen_gal_data(galname, cropped_run='202304'):
     '''
     Generate cropped data from the original hdf5 files. Data is cropped at a
     certain radius from the center of the galaxy
@@ -29,7 +30,8 @@ def gen_gal_data(galname):
 
     #original directiory result:
     orig_dir_res = dm_den.build_direcs(suffix, res, mass_class, typ,
-                                       source='original')
+                                       source='original', 
+                                       cropped_run=cropped_run)
     halodirec, snapdir_orig, almost_full_path_orig, num_files = orig_dir_res
     #cropped directory result:
     crop_dir_res = dm_den.build_direcs(suffix_cropped, res, mass_class, typ,
@@ -109,21 +111,27 @@ def gen_gal_data(galname):
                                                   ['ElectronAbundance',
                                                    'InternalEnergy']])
 
+        # Get the rotation matrix using only stars.
         rotation_matrix = rotate_galaxy.rotation_matrix_fr_dat(
-                *[flatten_particle_data(d, data) for data in ['coord_centered',
-                                                              'v_vec_centered',
-                                                              'mass_phys',
-                                                              'r']])
+                *[flatten_particle_data(d, data, drop_particles=['PartType0',
+                                                                 'PartType1',
+                                                                 'PartType2',
+                                                                 'PartType3',
+                                                                 'PartType5']) 
+                  for data in ['coord_centered',
+                               'v_vec_centered',
+                               'mass_phys',
+                               'r']])
+
         for ptcl in d.keys(): #for each particle type
             print('Rotating {0:s}'.format(ptcl))
             d[ptcl]['v_vec_rot'] = rotate_galaxy.rotate(
                     d[ptcl]['v_vec_centered'], rotation_matrix)
             d[ptcl]['coord_rot'] = rotate_galaxy.rotate(
                     d[ptcl]['coord_centered'], rotation_matrix)
-
+            # Add v_dot_phihat and other cylindrical velocity information
             d[ptcl] = d[ptcl] | uci.calc_cyl_vels(d[ptcl]['v_vec_rot'],
                                                   d[ptcl]['coord_rot'])
-
             d[ptcl]['v_dot_zhat'] = d[ptcl]['v_vec_rot'][:,2]
 
             l = len(d[ptcl]['mass_phys'])
@@ -181,7 +189,14 @@ def flatten_particle_data(d, data, drop_particles=['PartType2']):
     except:
         pass
     for part in drop_particles:
-        keys.remove(part)
+        if part not in keys:
+            warnings.warn('{0:s} is not in the data, but the user'
+                          ' attempted to exclude it from a calculation. Ensure'
+                          ' there is not a typo in the `drop_particles` list.'
+                          ' Otherwise the code may be including a particle'
+                          ' type that should be excluded.'.format(part))
+        else:
+            keys.remove(part)
     data_flat = np.concatenate([d[parttype][data] for parttype in keys])
 
     return data_flat
