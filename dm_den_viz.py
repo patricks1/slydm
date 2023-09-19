@@ -2949,6 +2949,81 @@ def plt_halo_integrals_dblscale(gals, df_source,
 
     return None
 
+def plt_halo_integral_mw(df_source, ymin=1.e-6, sigmoid_damped_eqnum=None,
+                         xtickspace=None,
+                         dpi=150):
+    import fitting
+    import dm_den
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        params = pickle.load(f)
+    df = dm_den.load_data(df_source)
+
+    Ncols = 2
+    Nrows = 1
+    xfigsize = 4.6 / 2. * Ncols + 1.
+    yfigsize = 1.5 * Nrows + 1. 
+    fig, axs = plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
+                            dpi=dpi)
+    
+    vmins = np.linspace(0., 780., 300)
+    vc100 = vc_eilers / 100.
+    vesc_hat = dm_den.load_vcuts('lim_fit', df)['mw']
+    
+    gs_max = fitting.g_smooth_step_max(vmins, vc_eilers, np.inf, np.inf)
+    gs_max_hard = fitting.g_smooth_step_max(vmins, vc_eilers, vesc_hat, np.inf)
+
+    v0 = params['d'] * vc100 ** params['e']
+    vdamp = params['h'] * vc100 ** params['j']
+    gs_sigmoid_damped = fitting.g_smooth_step_max(vmins, v0, vdamp, 
+                                                  params['k'])
+    gs_sigmoid_damped_hard = fitting.calc_g_general(vmins, 
+                                                    fitting.pN_max_double_hard,
+                                                    args=(v0, vdamp, 
+                                                          params['k'], 
+                                                          vesc_hat))
+
+    for i in [0, 1]:
+        axs[i].plot(vmins, gs_max, label='Maxwellian, $v_0=v_{\\rm c}$')
+        axs[i].plot(vmins, gs_sigmoid_damped, 
+                    label=('$f(v) = {{\\rm Eqn. }}{0:0.0f}$'
+                           .format(sigmoid_damped_eqnum)),
+                    color='C3')
+        if xtickspace is not None:
+            axs[i].xaxis.set_major_locator(
+                    mpl.ticker.MultipleLocator(base=xtickspace))
+            axs[i].xaxis.set_minor_locator(plt.NullLocator())
+    axs[0].plot(vmins, gs_max_hard, '--', color='C0', 
+                label='cut @ $\hat{v}_{\\rm esc}(v_{\\rm c})$')
+    axs[0].plot(vmins, gs_sigmoid_damped_hard, '--', color='C3',
+                label='cut @ $\hat{v}_{\\rm esc}(v_{\\rm c})$')
+
+    axs[1].yaxis.set_major_locator(
+            mpl.ticker.MultipleLocator(base=1.e-3))
+    axs[1].xaxis.set_minor_locator(plt.NullLocator())
+    make_sci_y(axs, 1, -3)
+    axs[1].set_xlim(right=670.)
+
+    axs[1].set_xlabel('$v_\mathrm{min}\ \mathrm{\left[km\,s^{-1}\\right]}$')
+    # Put the x-axis label where we want it:
+    axs[1].xaxis.set_label_coords(0.5, 0., transform=fig.transFigure)                       
+
+    axs[0].set_ylabel('$g(v_{\\rm min})\ \\rm\left[km^{-1}\,s\\right]$')
+    axs[0].set_yscale('log')
+    axs[0].set_ylim(bottom=ymin)
+    axs[1].legend(bbox_to_anchor=(1., 0.), borderaxespad=0.)
+    handles, labels = axs[0].get_legend_handles_labels()
+    #trans = mpl.transforms.blended_transform_factory(axs[1].transAxes,
+    #                                                 fig.transFigure)
+    axs[1].legend(handles=[handles[i] for i in [0, 2, 1, 3]],
+                  bbox_to_anchor=axs[1].transAxes, 
+                  loc='upper right', ncol=2,
+                  bbox_transform=None,
+                  borderaxespad=1.5)
+
+    plt.show()
+
+    return None
+
 def setup_multigal_fig(gals, show_resids=True):
     if gals == 'discs':
         figsize = (19., 12.)
