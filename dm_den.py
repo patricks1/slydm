@@ -634,6 +634,11 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_slices=15,
                                        / np.log10(df.loc[galname,
                                                          'disp_dm_disc_cyl'])
     if tgt_fname:
+        class rich_dict(dict):
+            # Making a dict to which we can assign attributes
+            pass
+        d = rich_dict(d)
+        d.attrs = df.attrs
         direc = paths.data
         fname=direc+tgt_fname
         with open(fname,'wb') as f:
