@@ -1488,6 +1488,9 @@ def plt_disc_diffs(df_source,
 
     plt.show()
     
+    print(np.std(dens))
+    print(np.std(disps))
+
     return None
 
 def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
