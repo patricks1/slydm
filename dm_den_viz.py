@@ -188,19 +188,25 @@ def plt_forecast(ax, X_forecast, Yhat, dYhat, xadjustment):
         this function, it may be necessary for the user to massage their 
         forecast
         float into a 2D vector.
-    dYhat: np.array: shape=(number of datapoints forecasted, 1) if symmetric; 
-                     shape=(number of datapoints forecasted, 2) if asymmetric
+    dYhat: np.array
         Error bars for Y_hat.
+        - shape(number of datapoints forecasted, 1): Symmetric.
+        - shape(number of datapoints forecasted, 2): Asymmetric. Column 0 is
+          dYhat_plus. Column 1 is dYhat_minus
     xadjustment: {None, 'log'}
         Specifies whether the plot is showing log values or unadjusted values.
         In either case, the user should provide an unadjusted feature matrix
         X_forecast. The function will make the adjustment if specified.
+
+    Returns
+    ------
+    eb: list
+        A list of errorbar objects
     '''
     if xadjustment=='log':
         X_forecast = np.log10(X_forecast)
     else:
         X_forecast = np.array(X_forecast)
-    # Returns a list of errorbar objects 
     N = len(X_forecast)
     eb = []
     colors = [plt.cm.cool(i) 
@@ -212,6 +218,8 @@ def plt_forecast(ax, X_forecast, Yhat, dYhat, xadjustment):
         color = next(colors)
         if len(dYhat[i]) == 2:
             # asymmetric error
+            # plt.errorbar's yerr argument is supposed to be (yerr_minus,
+            # yerr_plus), which is the opposite order of our dYhat.
             yerr = np.array([[dYhat[i][1]], [dYhat[i][0]]])
         elif len(dYhat[i]) == 1:
             # symmetric error
@@ -219,13 +227,19 @@ def plt_forecast(ax, X_forecast, Yhat, dYhat, xadjustment):
         else:
             raise ValueError('dYhat[{0:0.0f}] has an unexpected shape.'
                              .format(i))
+        #err_fr_observations = staudt_utils.linear2log(
+        #        10. ** Yhat[i, 0], 
+        #        0.055 * 10. ** Yhat[i, 0])[1:]
+        #
+        #yerr = np.sqrt(yerr**2. + err_fr_observations**2.)
+        #if len(yerr) > 1:
+        #    yerr = yerr.reshape(2, -1)
         eb_add = ax.errorbar(X_forecast.flatten()[i], 
-                     Yhat[i,0],
-                     yerr=yerr,
-                     c=color, capsize=3,
-                     marker='o', ms=8, 
-                     mec=color, mfc=color
-                     )
+                             Yhat[i,0],
+                             yerr=yerr,
+                             c=color, capsize=3,
+                             marker='o', ms=8, 
+                             mec=color, mfc=color)
         eb += [eb_add[0]]
 
     for x, y, error in zip(X_forecast, Yhat, dYhat):
@@ -336,10 +350,19 @@ def ax_slr(ax, fname, xcol, ycol,
            dropgals=None, showGeV=True, show_formula=True,
            x_forecast=None, dX=None, forecast_sig=1.-0.682, verbose=False,
            adjust_text_kwargs={}, legend_txt=None, 
-           return_error=False, show_band=False,
+           return_error=False, show_band=False, linear_dyfrac_data=0.05,
            **kwargs):
-    'Plot a simple linear regression on ax'
+    '''
+    Plot a simple linear regression on ax
 
+    Noteworthy parameters
+    ---------------------
+    linear_dyfrac_data: float, default 0.
+        The fractional uncertainty, in linear units, in the observed values of 
+        the target vector. No matter on what scale we perform the regression,
+        this percentage error applies to the uncertainty in the target vector
+        in *linear* space.
+    '''
 
     #Perform the regression in linear space unless we're plotting log data, as
     #opposed to plotting unadjusted data but on a log scale
@@ -382,7 +405,7 @@ def ax_slr(ax, fname, xcol, ycol,
                          verbose=verbose, return_band=True, 
                          return_coef_errors=True, **kwargs)
     # delta_beta is the fit parameter errors
-    coefs, intercept, r2, Xs, ys, ys_pred, r2a, resids, delta_beta, band \
+    coefs, intercept, r2, Xs, ys, ys_fit, r2a, resids, delta_beta, band \
             = mlr_res[:10]
 
     if show_band:
@@ -397,22 +420,83 @@ def ax_slr(ax, fname, xcol, ycol,
         ax.fill_between(*band_disp[:-1], color='grey', alpha=0.2, lw=0.)
 
     if x_forecast is not None:
-        prediction_y = mlr_res[-1] #[y, y uncertainty] 
-        # ebc is an ErrorbarContainer. I think by telling adjust_texts to avoid
-        # ebc[0], it will avoid the prediction point.
+        prediction_y = mlr_res[-1] #[Y, Y uncertainty] 
         if yadjustment == 'logreg_linaxunits':
             prediction_y = np.array(prediction_y, dtype=object)
-            #if prediction_y.shape[1:] != (1,1):
             Ys = np.zeros(prediction_y.shape[1:])
             dYs = []
             for i, (Y, dY) in enumerate(zip(prediction_y[0], 
-                                          prediction_y[1])):
+                                            prediction_y[1])):
                 conversion = staudt_utils.log2linear(Y[0], dY[0])
                 Ys[i,0] = conversion[0]
-                dYs.append(conversion[1:])
+
+                varY_fr_Ydata = (conversion[0] * linear_dyfrac_data) ** 2.
+
+                # if error is symmetric, dY = np.array([dy])
+                # if error is asymmetric, dY = np.array([dy_plus, 
+                #                                        dy_minus])
+                dYs.append(np.sqrt(conversion[1:] ** 2. +  varY_fr_Ydata))
+        elif yadjustment == 'log':
+            Ys = prediction_y[0]
+            dYs = np.zeros((prediction_y[1].shape[0], 2))
+
+            linear_Y = 10. ** prediction_y[0]
+            # linear-space uncertainty in the target vector predictions sourced
+            # from uncertainty in the target vector observations on which the
+            # model was built:
+            linear_dY_fr_data = linear_dyfrac_data * linear_Y
+
+            for i, (logy, dlogy) in enumerate(zip(prediction_y[0], 
+                                                  prediction_y[1])):
+                # logy is shaped (1,)
+                # dlogy is shaped (1,) (because before doing any 
+                #     transformations, the error is symmetric)
+                conversion = staudt_utils.log2linear(
+                        logy[0], dlogy[0])
+
+                max_linear_y = 10. ** (logy[0] + dlogy[0])
+                min_linear_y = 10. ** (logy[0] - dlogy[0])
+                linear_y = 10. ** logy
+                linear_dy_fr_forecast = np.array([max_linear_y - linear_y[0],
+                                                  linear_y[0] - min_linear_y])
+
+                linear_dY = np.sqrt(linear_dy_fr_forecast ** 2. 
+                                    + linear_dY_fr_data ** 2.)
+
+                max_linear_y = linear_y[0] + linear_dY[i, 0]
+                min_linear_y = linear_y[0] - linear_dY[i, 1]
+                max_log_y = np.log10(max_linear_y)
+                min_log_y = np.log10(min_linear_y)
+
+                dlogy = np.array([max_log_y - logy[0], logy[0] - min_log_y])
+                dYs[i] = dlogy
+
+                # linear_dY is shaped as (1, 1 if symmetric
+                #                            2 if asymmetric)
+                # so we take linear_dY[i] to get at the error values
+                before = staudt_utils.sig_figs(
+                    linear_y[0], linear_dY[i])
+                exponentiated_dlogy = np.array(
+                        [10. ** max_log_y - linear_y[0],
+                         linear_y[0] - 10. ** min_log_y])
+                after = staudt_utils.sig_figs(
+                    linear_y[0], exponentiated_dlogy)
+                for elements in zip(before, after):
+                    if not np.array_equal(*elements):
+                        raise ValueError('The exponentiated (linear-space)'
+                                         ' prediction {0} is significantly'
+                                         ' different from the'
+                                         ' exponentiation of its log {1}.'
+                                         ' This'
+                                         ' will be a problem when we'
+                                         ' exponentiate the log prediction'
+                                         ' to cite the prediction in'
+                                         ' linear space.'.format(before,
+                                                                 after))
         else:
             Ys = prediction_y[0]
-            dYs = prediction_y[1]
+            linear_dY_fr_data = linear_dyfrac_data * Ys
+            dYs = np.sqrt(prediction_y[1] ** 2. + linear_dY_fr_data ** 2.)
         eb = plt_forecast(ax, x_forecast, Ys, dYs, xadjustment)
         adjust_text_kwargs['objects'] = eb
 
@@ -441,17 +525,18 @@ def ax_slr(ax, fname, xcol, ycol,
     ###########################################################################
     
     if yadjustment == 'logreg_linaxunits':
-        ys_pred = 10.**ys_pred
+        ys_fit = 10.**ys_fit
     if xadjustment == 'logreg_linaxunits':
         Xs[0] = 10.**Xs[0]
-    ax.plot(Xs[0], ys_pred, label=legend_txt) #Plot the regression line
+    ax.plot(Xs[0], ys_fit, label=legend_txt) #Plot the regression line
 
     if show_formula:
         make_formula_appear(show_formula,
                             xcol, ycol,
                             intercept, coefs, r2,
                             reg_xscale, reg_yscale,
-                            xadjustment, yadjustment, ax=ax)
+                            xadjustment, yadjustment, ax=ax, 
+                            formula_y=formula_y)
 
     den_cols = ['den_solar','den_disc','den_shell'] 
 
@@ -1084,7 +1169,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
               label_overrides={},
               **kwargs):
     '''
-    Parameters
+    Noteworthy Parameters
     ----------
     ...
     label_overrides: dict
@@ -1168,7 +1253,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
         y_flat = np.array(yhat_vc, dtype=object).flatten()
 
         slope_raw = reg_disc[0][0]
-        dslope_raw = delta_beta[1][0]
+        dslope_raw = delta_beta[1][0] 
         slope, dslope_str = staudt_utils.sig_figs(slope_raw, dslope_raw)
 
         logy_intercept_raw = reg_disc[1]
@@ -1429,7 +1514,7 @@ def plt_disc_diffs(df_source,
                 dm_den.save_var_latex('maxdiff',
                                       '{0:0.2f}\%'.format(percent_diff))
             staudt_utils.print_eq('\min\Delta\log\\rho/\log\overline{\\rho}',
-                     np.min(dens-1))
+                                  np.min(dens-1))
             staudt_utils.print_eq('\max\Delta\log\\rho/\log\overline{\\rho}',
                      np.max(dens-1))
             staudt_utils.print_eq(
@@ -1488,8 +1573,7 @@ def plt_disc_diffs(df_source,
 
     plt.show()
     
-    print(np.std(dens))
-    print(np.std(disps))
+    print(dens.min(), dens.max(), np.std(dens))
 
     return None
 
@@ -1572,6 +1656,9 @@ def plt_particle_counts(df_source):
         zs = gal['PartType1']['coord_rot'][:,2]
         inshell = (rs<rmax) & (rs>rmin)
         indisc = np.abs(zs) < dz/2.
+        if galname == 'm12f':
+            print('m12f N_particles = {0:0.0f}'
+                  .format(np.sum(inshell & indisc)))
         counts += [np.sum(inshell & indisc)]
 
     for split in [1,15,30,100]:

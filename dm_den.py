@@ -503,6 +503,12 @@ def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
     This works correctly (3D disp)
     The function doesn't use v_mags, but I'm keeping it in for now so nothing
     breaks.
+
+    Noteworthy Parameters
+    ---------------------
+    phi_bin: list-like, shape=(2,)
+        Edges of the phi slice. The function will isolate particles where
+        phi >= phi_bin[0] and phi < phi_bin[1]
     '''
     rmax=r+dr/2.
     rmin=r-dr/2.
@@ -581,6 +587,8 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_slices=15,
     d = {} #initialize dictionary
     phi_slices = np.linspace(0., 2.*np.pi, N_slices+1)
     for k, galname in enumerate(pbar(df.index)):
+        if verbose:
+            print('\n' + galname)
         gal = cropper.load_data(galname, getparts=['PartType1'], verbose=False)
         phis = np.array([atan(y,x) \
                          for x,y in gal['PartType1']['coord_rot'][:,:2]])
@@ -1353,11 +1361,14 @@ def make_x_pdfs(bins=50, r=8.3, dr=1.5, fname=None,
 
 def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         prediction_x=None, dX=None, fore_sig=1.-0.682, beta_sig=0.05,
-        verbose=False, return_band=False, return_coef_errors=False, **kwargs):
+        verbose=False, return_band=False, return_coef_errors=False, 
+        **kwargs):
     '''
     Multi-linear regression
 
-    dropgals: list
+    Noteworthy parameters
+    ---------------------
+    dropgals: list, default None
     '''
     assert isinstance(xcols,(list,tuple,np.ndarray))
     df=load_data(fsource)
@@ -1468,6 +1479,16 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         '''
         Return both the prediction and the margin of
         error on that prediction
+
+        Parameters
+        ----------
+        prediction_x: array-like, shape(N forecasts to make,
+                                        N features)
+            The feature matrix for which we want to make a forecast
+        dX: array-like, shape(N forecasts to make, N features)
+            The uncertainties in the feature matrix
+        verbose: bool
+            Whether to print information about the forecasts made
         '''
         prediction_x = np.array(prediction_x)
         W = np.concatenate((np.ones((prediction_x.shape[0],1),dtype=float), 
@@ -1479,7 +1500,9 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         s_forecast = np.sqrt(var_f) #std error of forecast
         # critical 2-tailed t value  
         tc_f = scipy.stats.t.ppf(q=1.-fore_sig/2., df=N-p)
-        delta_f = tc_f*s_forecast #uncertainty in the forecast
+        dY_hat = tc_f*s_forecast #uncertainty in the forecast
+
+        Y_hat = W @ beta_hat
 
         varY_fr_X = np.empty((len(prediction_x),len(xcols)))
         # determine variance in the forecast imparted by the uncertainty in
@@ -1490,9 +1513,8 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         elif scale == 'linear':
             varY_fr_X = beta_hat[1:]**2. * dX**2.
 
-        delta_f = np.sqrt(delta_f**2. + np.sum(varY_fr_X,axis=1,
-                          keepdims=True))
-        Y_hat = W @ beta_hat
+        dY_hat = np.sqrt(dY_hat**2. + np.sum(varY_fr_X, axis=1,
+                                             keepdims=True))
 
         if verbose:
             table3 = np.concatenate((W.T, beta_hat), axis=1)
@@ -1505,7 +1527,7 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
                        s_forecast.flatten(), 
                        (tc_f*s_forecast).flatten(), 
                        *np.sqrt(varY_fr_X),
-                       delta_f.flatten()])]
+                       dY_hat.flatten()])]
             header4 = [['yhat','t_c','std err of forecast', 't_c * std err',
                         *['dY/dX{0:d} * err(X{0:d})'.format(i+1) \
                           for i in range(k)],
@@ -1516,7 +1538,7 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
             print('(t-test type: 2 tailed, {0:0.0f}% significance)\n' \
                   .format(fore_sig*100.))
          
-        return Y_hat, delta_f
+        return Y_hat, dY_hat
 
     ###########################################################################
     results = [coefs, intercept, r2, Xs, ys, ys_pred, r2a, residuals]
@@ -1550,8 +1572,8 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
         W = np.concatenate((np.ones((prediction_x.shape[0],1),dtype=float), 
                             prediction_x),
                            axis=1)
-        Y_hat, delta_f = calc_forecast(prediction_x, dX, verbose)
-        prediction_y = [Y_hat, delta_f]
+        Y_hat, dforecast = calc_forecast(prediction_x, dX, verbose)
+        prediction_y = [Y_hat, dforecast]
         #######################################################################
         results.append(prediction_y) 
         #######################################################################

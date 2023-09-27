@@ -212,6 +212,12 @@ def load_data(galname, getparts='all', verbose=True):
         The galaxy name string corresponding to an index in df.
     getparts: list of str: {'PartType0' : 'PartType4'}
         Specifies the particle types to extract
+        'PartType0' is gas. 
+        'PartType1' is dark matter.
+        'PartType2' is dummy collisionless. 
+        'PartType3' is grains/PIC particles. 
+        'PartType4' is stars. 
+        'PartType5' is black holes / sinks.
     v: bool
         If True, the function prints which galaxy its pulling with a progress
         bar.
@@ -233,7 +239,6 @@ def load_data(galname, getparts='all', verbose=True):
 
     df = init_df()
 
-    print(galname)
     suffix=df.loc[galname,'fsuffix']
     suffix_cropped = df.loc[galname, 'fsuffix_cropped']
     res=df.loc[galname,'res']
