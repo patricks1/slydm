@@ -350,7 +350,7 @@ def ax_slr(ax, fname, xcol, ycol,
            dropgals=None, showGeV=True, show_formula=True,
            x_forecast=None, dX=None, forecast_sig=1.-0.682, verbose=False,
            adjust_text_kwargs={}, legend_txt=None, 
-           return_error=False, show_band=False, linear_dyfrac_data=0.05,
+           return_error=False, show_band=False, linear_dyfrac_data=0.,
            **kwargs):
     '''
     Plot a simple linear regression on ax
@@ -424,18 +424,19 @@ def ax_slr(ax, fname, xcol, ycol,
         if yadjustment == 'logreg_linaxunits':
             prediction_y = np.array(prediction_y, dtype=object)
             Ys = np.zeros(prediction_y.shape[1:])
-            dYs = []
+            dYs = np.zeros((prediction_y[1].shape[0], 2))
             for i, (Y, dY) in enumerate(zip(prediction_y[0], 
                                             prediction_y[1])):
-                conversion = staudt_utils.log2linear(Y[0], dY[0])
+                conversion = staudt_utils.log2linear(Y[0], dY[0],
+                                                     check_symmetry=False)
                 Ys[i,0] = conversion[0]
 
                 varY_fr_Ydata = (conversion[0] * linear_dyfrac_data) ** 2.
 
-                # if error is symmetric, dY = np.array([dy])
-                # if error is asymmetric, dY = np.array([dy_plus, 
-                #                                        dy_minus])
-                dYs.append(np.sqrt(conversion[1:] ** 2. +  varY_fr_Ydata))
+                # We set check_symmetry=False, so 
+                # dYs[i] = np.array([dy_plus, 
+                #                    dy_minus])
+                dYs[i] = np.sqrt(conversion[1:] ** 2. +  varY_fr_Ydata)
         elif yadjustment == 'log':
             Ys = prediction_y[0]
             dYs = np.zeros((prediction_y[1].shape[0], 2))
@@ -494,6 +495,7 @@ def ax_slr(ax, fname, xcol, ycol,
                                          ' linear space.'.format(before,
                                                                  after))
         else:
+            # If everything, including the regression, is linear:
             Ys = prediction_y[0]
             linear_dY_fr_data = linear_dyfrac_data * Ys
             dYs = np.sqrt(prediction_y[1] ** 2. + linear_dY_fr_data ** 2.)
@@ -687,6 +689,7 @@ def fill_ax_new(ax, df, xcol, ycol,
         pass
     else:
         raise ValueError
+
     if color=='masses':
         c = dm_den.load_data('dm_stats_stellar_20221110.h5') \
                   .loc[df.index,['mvir_stellar']].values
@@ -1166,7 +1169,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
               verbose=False, 
               adjust_text_kwargs={}, show_formula='outside',
               figsize=(10,5), labelsize=14., vc=vc_eilers, dvc=dvc_eilers,
-              label_overrides={},
+              label_overrides={}, linear_dyfrac_data=0.,
               **kwargs):
     '''
     Noteworthy Parameters
@@ -1186,7 +1189,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
     vc /= 100.
     dvc /= 100.
 
-    df = dm_den.load_data(source_fname)
+    df = dm_den.load_data(source_fname).drop(['m12z', 'm12w'])
     textxy = (0.04, 0.96)
     fontsize = 14
     formula_y = -0.4
@@ -1214,13 +1217,13 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
     x_forecast = [[vc]]
     dX = [[dvc]]
     reg_disc = ax_slr(ax,source_fname,
-                      #'v_dot_phihat_disc(T<=1e4)',
                       'vc100',
                       ycol,
                       xlabel=vc_label,
                       ylabel=ylabel,
                       xadjustment='logreg_linaxunits', yadjustment=yadjustment,
                       xscale='log', yscale=yscale,
+                      linear_dyfrac_data=linear_dyfrac_data,
                       formula_y=formula_y, dropgals=['m12w','m12z'],
                       arrowprops={'arrowstyle':'-'}, 
                       show_formula=show_formula,
@@ -1237,6 +1240,19 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
     # The [Ys, dYs] from the y prediction made at x_forecast:
     yhat_vc = reg_disc[-1] 
 
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        data_raw = pickle.load(f)
+    if ycol == 'den_disc':
+        errors = np.array(
+                [[np.abs(np.log10(1. - data_raw['stdev_linear_dendiff']))],
+                 [np.log10(1. + data_raw['stdev_linear_dendiff'])]]) 
+        errors = errors.repeat(len(df), axis=1)
+        ax.errorbar(df['vc100'], np.log10(df[ycol]), errors, marker='', ls='', zorder=0, c='k')
+    elif ycol == 'disp_dm_disc_cyl':
+        ax.errorbar(df['vc100'], df[ycol],
+                    df[ycol] * data_raw['stdev_linear_dispdiff'],
+                    marker='', ls='', zorder=0, c='k')
+
     # Set the pos of the MW label
     if ycol == 'disp_dm_disc_cyl':
         mw_text_kwargs = {'xytext':(0.33, 0.66)} 
@@ -1250,7 +1266,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
                           **mw_text_kwargs)
 
     if update_val:
-        y_flat = np.array(yhat_vc, dtype=object).flatten()
+        y_flat = np.concatenate(yhat_vc, axis=1).flatten()
 
         slope_raw = reg_disc[0][0]
         dslope_raw = delta_beta[1][0] 
@@ -1269,7 +1285,8 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
             dm_den.save_var_raw(data2save) 
 
             #y_save, dy_save = staudt_utils.log2linear(*y_flat)
-            y_save, dy_save = staudt_utils.sig_figs(*y_flat)
+            y_save, dy_save = staudt_utils.sig_figs(yhat_vc[0][0, 0],
+                                                    yhat_vc[1][0])
             uci.save_prediction('disp', y_save, dy_save)
             uci.save_prediction('disp_slope', slope, dslope_str)
             disp_transform = staudt_utils.log2linear(logy_intercept_raw,
@@ -1284,7 +1301,8 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
                          'logden_intercept': logy_intercept_raw}
             dm_den.save_var_raw(data2save) 
 
-            y_save, dy_save = staudt_utils.sig_figs(*y_flat)
+            y_save, dy_save = staudt_utils.sig_figs(yhat_vc[0][0, 0],
+                                                    yhat_vc[1][0])
             uci.save_prediction('logrho', y_save, dy_save)
 
             # I expect log2linear to return asymetric errors in the following 
@@ -1483,8 +1501,27 @@ def plt_disc_diffs(df_source,
                              for galname in galnames]).flatten()
             disps = np.array([den_disp_dict[galname]['disps/avg'] \
                               for galname in galnames]).flatten()
+            den_percent_diff = staudt_utils.round_up(
+                100.*np.max(np.abs(1.-dens)),
+                3)
+            disp_percent_diff = staudt_utils.round_up(
+                100.*np.max(np.abs(1.-disps)),
+                3)
+            print('{0:0.2f}% max den diff'.format(den_percent_diff))
+            print('{0:0.2f}% max disp diff'.format(disp_percent_diff))
+            std_dens = np.std(1. - dens)
+            std_disps = np.std(1. - disps)
+            display(Latex(
+                    '$\\rm{{st\,dev}}'
+                    '{{\left(\\rho(\phi)/\overline{{\\rho}}\\right)}}'
+                    '={0:0.1f}\%$'.format(std_dens * 100.)))
+            display(Latex(
+                    '$\\rm{{st\,dev}}'
+                    '{{\left(\sigma(\phi)/\overline{{\sigma}}\\right)}}'
+                    '={0:0.1f}\%$'.format(std_disps * 100.)))
             if update_val:
-                raise ValueError('We only save our result in log.')
+                dm_den.save_var_raw({'stdev_linear_dendiff': std_dens,
+                                     'stdev_linear_dispdiff': std_disps})
         else:
             denlabel = '$\log\\rho(\phi)\,/\,\log\overline{\\rho}$'
             displabel = '$\log\sigma_\mathrm{3D}(\phi)' \
@@ -1503,8 +1540,8 @@ def plt_disc_diffs(df_source,
             percent_diff = staudt_utils.round_up(
                 100.*np.max(np.abs(1.-np.array([dens,disps]))),
                 3)
-            print('{0:0.2f}% max den diff'.format(den_percent_diff))
-            print('{0:0.2f}% max disp diff'.format(disp_percent_diff))
+            print('{0:0.2f}% max log den diff'.format(den_percent_diff))
+            print('{0:0.2f}% max log disp diff'.format(disp_percent_diff))
             if update_val:
                 #update the value in data.dat for the paper
                 dm_den.save_var_latex('maxdendiff',
@@ -1563,8 +1600,8 @@ def plt_disc_diffs(df_source,
         axs[i].set_xlabel(displabel)
 
     # Set the x tick labels to be 3 decimals
-    axs[-2].xaxis.set_major_formatter(lambda x, pos: '{0:0.3f}'.format(x))
-    axs[-1].xaxis.set_major_formatter(lambda x, pos: '{0:0.3f}'.format(x))
+    #axs[-2].xaxis.set_major_formatter(lambda x, pos: '{0:0.3f}'.format(x))
+    #axs[-1].xaxis.set_major_formatter(lambda x, pos: '{0:0.3f}'.format(x))
 
     if tgt_fname:
         plt.savefig(paths.figures+tgt_fname,
@@ -1573,8 +1610,6 @@ def plt_disc_diffs(df_source,
 
     plt.show()
     
-    print(dens.min(), dens.max(), np.std(dens))
-
     return None
 
 def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
