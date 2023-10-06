@@ -1169,7 +1169,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
               verbose=False, 
               adjust_text_kwargs={}, show_formula='outside',
               figsize=(10,5), labelsize=14., vc=vc_eilers, dvc=dvc_eilers,
-              label_overrides={}, linear_dyfrac_data=0.,
+              label_overrides={}, linear_dyfrac_data=0., show_marker_errs=None,
               **kwargs):
     '''
     Noteworthy Parameters
@@ -1180,7 +1180,17 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
             {galname: (annx, anny, draw_arrow)}
         If draw_arrow is True (False), an arrow will (will not) link the data
             point with its label.
+    show_marker_errs: bool, default True if ycol=='den_disc'
+                                    False if ycol=='disp_dm_disc_cyl'
+        Whether to show error bars on the markers. The error values come from 
+        linear_y_data * linear_dyfrac_data.
     '''
+    if show_marker_errs is None:
+        if ycol == 'den_disc':
+            show_marker_errs = True
+        elif ycol == 'disp_dm_disc_cyl':
+            show_marker_errs = False
+    
     if len(label_overrides) > 0:
         for gal in label_overrides:
             if len(label_overrides[gal]) != 3:
@@ -1240,18 +1250,21 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
     # The [Ys, dYs] from the y prediction made at x_forecast:
     yhat_vc = reg_disc[-1] 
 
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
-        data_raw = pickle.load(f)
-    if ycol == 'den_disc':
-        errors = np.array(
-                [[np.abs(np.log10(1. - data_raw['stdev_linear_dendiff']))],
-                 [np.log10(1. + data_raw['stdev_linear_dendiff'])]]) 
-        errors = errors.repeat(len(df), axis=1)
-        ax.errorbar(df['vc100'], np.log10(df[ycol]), errors, marker='', ls='', zorder=0, c='k')
-    elif ycol == 'disp_dm_disc_cyl':
-        ax.errorbar(df['vc100'], df[ycol],
-                    df[ycol] * data_raw['stdev_linear_dispdiff'],
-                    marker='', ls='', zorder=0, c='k')
+    if show_marker_errs:
+        if ycol == 'den_disc':
+            # log(max_y) = log(y + y * linear_dyfrac_data)
+            # log(min_y) = log(y - y * linear_dyfrac_data)
+            errors = np.array(
+                    [[np.abs(np.log10(1. - linear_dyfrac_data))],
+                     [np.log10(1. + linear_dyfrac_data)]]) 
+            errors = errors.repeat(len(df), axis=1)
+            ax.errorbar(df['vc100'], np.log10(df[ycol]), errors, marker='', 
+                        ls='', 
+                        zorder=0, c='k')
+        elif ycol == 'disp_dm_disc_cyl':
+            ax.errorbar(df['vc100'], df[ycol],
+                        df[ycol] * linear_dyfrac_data,
+                        marker='', ls='', zorder=0, c='k')
 
     # Set the pos of the MW label
     if ycol == 'disp_dm_disc_cyl':
@@ -1507,6 +1520,9 @@ def plt_disc_diffs(df_source,
             disp_percent_diff = staudt_utils.round_up(
                 100.*np.max(np.abs(1.-disps)),
                 3)
+            percent_diff = staudt_utils.round_up(
+                100.*np.max(np.abs(1.-np.array([dens,disps]))),
+                3)
             print('{0:0.2f}% max den diff'.format(den_percent_diff))
             print('{0:0.2f}% max disp diff'.format(disp_percent_diff))
             std_dens = np.std(1. - dens)
@@ -1522,6 +1538,18 @@ def plt_disc_diffs(df_source,
             if update_val:
                 dm_den.save_var_raw({'stdev_linear_dendiff': std_dens,
                                      'stdev_linear_dispdiff': std_disps})
+
+                #update the value in data.txt for the paper
+                uci.save_var_latex('maxdendiff',
+                                      '{0:0.1f}\%'.format(den_percent_diff))
+                uci.save_var_latex('maxdispdiff',
+                                      '{0:0.1f}\%'.format(disp_percent_diff))
+                uci.save_var_latex('maxdiff',
+                                      '{0:0.1f}\%'.format(percent_diff))
+                uci.save_var_latex('stdev_linear_dendiff',
+                                      '{0:0.1f}\%'.format(std_dens * 100.))
+                uci.save_var_latex('stdev_linear_dispdiff',
+                                      '{0:0.1f}\%'.format(std_disps * 100.))
         else:
             denlabel = '$\log\\rho(\phi)\,/\,\log\overline{\\rho}$'
             displabel = '$\log\sigma_\mathrm{3D}(\phi)' \
@@ -1542,14 +1570,6 @@ def plt_disc_diffs(df_source,
                 3)
             print('{0:0.2f}% max log den diff'.format(den_percent_diff))
             print('{0:0.2f}% max log disp diff'.format(disp_percent_diff))
-            if update_val:
-                #update the value in data.dat for the paper
-                dm_den.save_var_latex('maxdendiff',
-                                      '{0:0.2f}\%'.format(den_percent_diff))
-                dm_den.save_var_latex('maxdispdiff',
-                                      '{0:0.2f}\%'.format(disp_percent_diff))
-                dm_den.save_var_latex('maxdiff',
-                                      '{0:0.2f}\%'.format(percent_diff))
             staudt_utils.print_eq('\min\Delta\log\\rho/\log\overline{\\rho}',
                                   np.min(dens-1))
             staudt_utils.print_eq('\max\Delta\log\\rho/\log\overline{\\rho}',
@@ -1695,7 +1715,8 @@ def plt_particle_counts(df_source):
             print('m12f N_particles = {0:0.0f}'
                   .format(np.sum(inshell & indisc)))
         counts += [np.sum(inshell & indisc)]
-
+    counts = np.array(counts)
+    print('median solar ring particles: {0:0.0f}'.format(counts.median()))
     for split in [1,15,30,100]:
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -2241,7 +2262,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
         if scale == 'linear':
             make_sci_y(axs, i, order_of_mag)
 
-        if Ngals == 2:
+        if Ngals < 5:
             # Remove the 0 tick label because of overlap
             y0, y1 = axs[i].get_ylim()
             visible_ticks = np.array([t for t in axs[i].get_yticks() \
@@ -2257,9 +2278,11 @@ def plt_universal_prefit(result, df_source, gals='discs',
             resids = ps_hat - pdfs[gal]['ps']
             resids_extend = fitting.smooth_step_max(vs_extend, v0, vdamp, k)
             resids = np.append(resids, resids_extend, axis=0)
-            axs[i+2].plot(vs_resids, resids / 10.**order_of_mag, color='C3')
-            axs[i+2].axhline(0., linestyle='--', color='k', alpha=0.5, lw=1.)
-            axs[i+2].set_ylim(-fitting.resids_lim, fitting.resids_lim)
+            axs[i + Ngals].plot(vs_resids, resids / 10.**order_of_mag, 
+                                color='C3')
+            axs[i + Ngals].axhline(0., linestyle='--', color='k', alpha=0.5, 
+                                   lw=1.)
+            axs[i + Ngals].set_ylim(-resids_lim, resids_lim)
             if i == 0:
                 axs[i+2].set_ylabel('resids')
         loc = [0.97,0.95]
