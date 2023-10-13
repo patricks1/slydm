@@ -2053,11 +2053,11 @@ def plt_universal_prefit(result, df_source, gals='discs',
     Noteworthy parameters
     ---------------------
     prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
-               default: None
+               default None
         Specifies how to determine the speed distribution cutoff for
         prediction distributions
     std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
-               default: None
+               default None
         Specifies how to determine the speed distribution cutoff for standard-
         assumption distributions
     '''
@@ -2471,12 +2471,13 @@ def plt_mao_bands(dfsource):
     plt.show()
     return None
 
-def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False):
+def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
+           sigmoid_damped_eqnum=None, show_vc=False):
     '''
     Parameters
     ----------
     vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
-               default: 'lim_fit'
+               default 'lim_fit'
         Specifies how to determine the speed distribution cutoff.
     tgt_fname: str
         File name of the plot image to save.
@@ -2488,6 +2489,10 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False):
         Whether to show a vertical line where we determine this work's speed
         distribution prediction makes its final drop below the standard
         assumption (with a hard cut at vesc_hat(vc)).
+    sigmoid_damped_equm: int, default None
+        The equation number of our final model in the LaTeX paper
+    show_vc: bool, default False
+        Whether to annotate the circular velocity under the "Milky Way" title
 
     Returns
     -------
@@ -2511,7 +2516,11 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False):
         v0 = results['d'] * (vc / 100.) ** results['e']
         vdamp = results['h'] * (vc / 100.) ** results['j']
         ps = fitting.smooth_step_max(vs, v0, vdamp, results['k'])
-        ax.plot(vs, ps, label='prediction from $v_\mathrm{c}$',
+        if sigmoid_damped_eqnum is not None:
+            label = 'Eqn. {0:0.0f}'.format(sigmoid_damped_eqnum)
+        else:
+            label = 'prediction from $v_\mathrm{c}$'
+        ax.plot(vs, ps, label=label,
                 **kwargs)
         lowers, uppers = fitting.gal_bands('mw', vs, df, results, ddfrac, 
                                            dhfrac, 
@@ -2534,7 +2543,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False):
     vesc_hat_dict = dm_den.load_vcuts(vcut_type, df)
     ax.plot(vs, fitting.smooth_step_max(vs, vc, vesc_hat_dict['mw'], np.inf),
             ls='--',
-            label='std assumption, $v_0=v_\mathrm{c}$')
+            label='Maxwellian, $v_0=v_\mathrm{c}$')
     #ax.plot(vs, fitting.exp_max(vs, vc, vesc_hat_dict['mw']))
     if show_vcrit:
         with open(paths.data + 'vcrits_fr_distrib.pkl', 'rb') as f:
@@ -2551,17 +2560,18 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False):
     ax.annotate('Milky Way', loc,
                 **kwargs_txt)
     loc[1] -= 0.15
-    if dvc == 0.:
-        kwargs_txt['fontsize'] = 11.
-        ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
-                    .format(vc),
-                    loc, **kwargs_txt)
-    else:
-        kwargs_txt['fontsize'] = 9.
-        ax.annotate('$v_\mathrm{{c}}={0:0.0f}\pm{1:0.0f}'
-                    '\,\mathrm{{km\,s^{{-1}}}}$'
-                    .format(vc, dvc),
-                    loc, **kwargs_txt)
+    if show_vc:
+        if dvc == 0.:
+            kwargs_txt['fontsize'] = 11.
+            ax.annotate('$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                        .format(vc),
+                        loc, **kwargs_txt)
+        else:
+            kwargs_txt['fontsize'] = 9.
+            ax.annotate('$v_\mathrm{{c}}={0:0.0f}\pm{1:0.0f}'
+                        '\,\mathrm{{km\,s^{{-1}}}}$'
+                        .format(vc, dvc),
+                        loc, **kwargs_txt)
 
     # Put y-axis in scientific notation
     order_of_mag = -3
@@ -3110,7 +3120,8 @@ def plt_halo_integrals_dblscale(gals, df_source,
 
     return None
 
-def plt_halo_integral_mw(df_source, ymin=1.e-6, sigmoid_damped_eqnum=None,
+def plt_halo_integral_mw(df_source, 
+                         tgt_fname=None, ymin=1.e-6, sigmoid_damped_eqnum=None,
                          xtickspace=None,
                          dpi=150):
     import fitting
@@ -3173,14 +3184,18 @@ def plt_halo_integral_mw(df_source, ymin=1.e-6, sigmoid_damped_eqnum=None,
     axs[0].set_ylim(bottom=ymin)
     axs[1].legend(bbox_to_anchor=(1., 0.), borderaxespad=0.)
     handles, labels = axs[0].get_legend_handles_labels()
-    #trans = mpl.transforms.blended_transform_factory(axs[1].transAxes,
-    #                                                 fig.transFigure)
+    trans = mpl.transforms.blended_transform_factory(axs[0].transAxes,
+                                                     fig.transFigure)
     axs[1].legend(handles=[handles[i] for i in [0, 2, 1, 3]],
-                  bbox_to_anchor=axs[1].transAxes, 
-                  loc='upper right', ncol=2,
-                  bbox_transform=None,
+                  bbox_to_anchor=(1., 0.), 
+                  loc='upper center', ncol=2,
+                  bbox_transform=trans,
                   borderaxespad=1.5)
 
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=250)
     plt.show()
 
     return None
