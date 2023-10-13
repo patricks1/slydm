@@ -1693,10 +1693,12 @@ def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
 
     return None
 
-def plt_particle_counts(df_source):
+def plt_particle_counts(df_source, dropgals=None):
     import cropper
 
     df = dm_den.load_data(df_source)
+    if dropgals is not None:
+        df.drop(dropgals, inplace=True)
     dz = df.attrs['dz']
     r0 = 8.3
     dr = df.attrs['drsolar']
@@ -1711,12 +1713,11 @@ def plt_particle_counts(df_source):
         zs = gal['PartType1']['coord_rot'][:,2]
         inshell = (rs<rmax) & (rs>rmin)
         indisc = np.abs(zs) < dz/2.
-        if galname == 'm12f':
-            print('m12f N_particles = {0:0.0f}'
-                  .format(np.sum(inshell & indisc)))
         counts += [np.sum(inshell & indisc)]
     counts = np.array(counts)
-    print('median solar ring particles: {0:0.0f}'.format(counts.median()))
+    imin = np.argmin(counts)
+    imax = np.argmax(counts)
+    imed = np.argpartition(counts, len(counts) // 2)[len(counts) // 2]
     for split in [1,15,30,100]:
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -1729,7 +1730,19 @@ def plt_particle_counts(df_source):
         ax.set_xlabel('$N_\mathrm{DM}$ per slice')
         ax.set_title('{0:0.0f} slices'.format(split))
         plt.show()
-
+        
+        Nmin = counts.min() / split
+        Nmax = counts.max() / split
+        Nmed = counts[imed] / split
+        print('{0:s} has the least particles: {1:0.0f}'
+              .format(df.index[imin], Nmin))
+        print('shot noise = {0:0.1f}%'.format(100. / np.sqrt(Nmin)))
+        print('{0:s} has the most particles: {1:0.0f}'
+              .format(df.index[imax], counts.max() / split))
+        print('shot noise = {0:0.1f}%'.format(100. / np.sqrt(Nmax)))
+        print('{0:s} has the median number of particles: {1:0.0f}'
+              .format(df.index[imed], counts[imed] / split))
+        print('shot noise = {0:0.1f}%'.format(100. / np.sqrt(Nmed)))
     return None
 
 def make_sci_y(axs, i, order_of_mag):
