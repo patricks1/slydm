@@ -105,9 +105,9 @@ gmr_label = '$\sqrt{Gm/R_0}\,/\,'\
 vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
 
 vcut_labels = {'lim_fit': '$\hat{v}_\mathrm{lim}(v_\mathrm{c})$',
-               'lim': '$v_\mathrm{lim}$',
+               'lim': '$v_\mathrm{esc}$',
                'vesc_fit': '$\hat{v}_\mathrm{esc}(v_\mathrm{c})$',
-               'vesc': '$v_\mathrm{esc}(\Phi)$',
+               'vesc': '$\hat{v}_\mathrm{esc}(\Phi)$',
                'ideal': '$v_\mathrm{cut, ideal}$'}
 
 # Y-axis limit for all residual plots
@@ -2932,7 +2932,7 @@ def plt_halo_integrals(gals,
                    bbox_transform=fig.transFigure, ncols=legend_ncols)
 
     if tgt_fname is not None:
-        plt.savefig(paths.figures+tgt_fname,
+        plt.savefig(paths.figures + tgt_fname,
                     bbox_inches='tight',
                     dpi=350)
     plt.show()
@@ -3132,8 +3132,8 @@ def plt_halo_integral_mw(df_source,
 
     Ncols = 2
     Nrows = 1
-    xfigsize = 4.6 / 2. * Ncols + 1.
-    yfigsize = 1.5 * Nrows + 1. 
+    xfigsize = 4. 
+    yfigsize = 2. 
     fig, axs = plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
                             dpi=dpi)
     
@@ -3180,15 +3180,22 @@ def plt_halo_integral_mw(df_source,
     axs[1].xaxis.set_label_coords(0.5, 0., transform=fig.transFigure)                       
 
     axs[0].set_ylabel('$g(v_{\\rm min})\ \\rm\left[km^{-1}\,s\\right]$')
+
     axs[0].set_yscale('log')
     axs[0].set_ylim(bottom=ymin)
+    # Make minor log ticks
+    axs[0].yaxis.set_major_locator(mpl.ticker.LogLocator(
+        numticks=999))
+    axs[0].yaxis.set_minor_locator(mpl.ticker.LogLocator(
+        numticks=999, subs="auto"))
+
     axs[1].legend(bbox_to_anchor=(1., 0.), borderaxespad=0.)
     handles, labels = axs[0].get_legend_handles_labels()
     trans = mpl.transforms.blended_transform_factory(axs[0].transAxes,
                                                      fig.transFigure)
     axs[1].legend(handles=[handles[i] for i in [0, 2, 1, 3]],
                   bbox_to_anchor=(1., 0.), 
-                  loc='upper center', ncol=2,
+                  loc='upper center', ncol=1,
                   bbox_transform=trans,
                   borderaxespad=1.5)
 
