@@ -100,7 +100,7 @@ rho_label='$\\rho(R_\mathrm{vir})\;[\,\mathrm{M}_\odot\mathrm{kpc}^{-3}\,]$'
 den_label = '$\\rho\,/\,\\left[\mathrm{M_\odot kpc^{-3}}\\right]$'
 disp_label = '$\\sigma_\mathrm{3D}\,/\,'\
              '\\left[\mathrm{km\,s^{-1}}\\right]$'
-gmr_label = '$\sqrt{Gm/R_0}\,/\,'\
+gmr_label = '$\sqrt{GM/R_0}\,/\,'\
               '\\left[\mathrm{km\,s^{-1}}\\right]$'
 vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
 
@@ -1046,11 +1046,14 @@ def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
 
     return None
 
-def plt_vesc_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11, 
+def plt_vesc_pot_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11, 
                    adjust_text_kwargs={}, formula_y=-0.3, dpi_show=120,
                    xtickspace=None, ytickspace=None, label_overrides={},
                    marker_label_size=11,
                    update_values=False, tgt_fname=None, verbose=False):
+    '''
+    \hat{v}_esc(Phi) vs vc
+    '''
     ycol = 'vesc'
     xcol = 'vc100'
     df = dm_den.load_data(df_source)
@@ -1651,15 +1654,6 @@ def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
 
     fig = plt.figure(figsize=figsize, dpi=110)
     ax = fig.add_subplot(111)
-    #ax_slr(ax, df_source, 
-    #       xcol, ycol, 
-    #       xlabel=vc_label, ylabel=gmr_label, 
-    #       xadjustment=None,
-    #       yadjustment=None,
-    #       show_formula='outside', dropgals=['m12z','m12w'],
-    #       labelsize=labelsize, arrowprops={'arrowstyle':'-'},
-    #       legend_txt='best fit',
-    #       adjust_text_kwargs=adjust_text_kwargs)
     
     #Plot 1:1 line
     xs = (df[xcol])
