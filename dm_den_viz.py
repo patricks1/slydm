@@ -887,7 +887,7 @@ def draw_shades(ax, ycol, vc, dvc, xmult=1.):
     draw_xshade(ax, vc, dvc, xmult)
     return None
 
-def plt_vcut_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11, 
+def plt_vesc_vc_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11, 
                    adjust_text_kwargs={}, formula_y=-0.3, dpi_show=120,
                    xtickspace=None, ytickspace=None, label_overrides={},
                    marker_label_size=11,
