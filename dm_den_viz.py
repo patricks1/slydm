@@ -1018,7 +1018,7 @@ def plt_vesc_vc_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
         # Save the MW vesc prediction in the LaTeX data
         vesc_hat_mw_txt, dvesc_mw_txt = staudt_utils.sig_figs(
                 vesc_hat_mw_transform[0], vesc_hat_mw_transform[1:])
-        uci.save_prediction('vcut_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
+        uci.save_prediction('vesc_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
 
         # Save the amplitude to the LaTeX data
         dlog_intercept = dbeta[0][0]
@@ -1027,11 +1027,11 @@ def plt_vesc_vc_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
         amp = intercept_transform[0]
         damp = intercept_transform[1:]
         amp_str, damp_str = staudt_utils.sig_figs(amp, damp)
-        uci.save_prediction('vcuthat_amp', amp_str, damp_str)
+        uci.save_prediction('veschat_amp', amp_str, damp_str)
 
         # Save the slope to the LaTeX data
         slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
-        uci.save_prediction('vcuthat_slope', slope_str, dslope_str)
+        uci.save_prediction('veschat_slope', slope_str, dslope_str)
 
         # Save the vesc(vc) predictions
         df = dm_den.load_data(df_source)
@@ -1052,7 +1052,7 @@ def plt_vesc_pot_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11,
                    marker_label_size=11,
                    update_values=False, tgt_fname=None, verbose=False):
     '''
-    \hat{v}_esc(Phi) vs vc
+    \hat{vesc}(Phi) vs vc
     '''
     ycol = 'vesc'
     xcol = 'vc100'
@@ -1137,25 +1137,7 @@ def plt_vesc_pot_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11,
     plt.show()
 
     if update_values:
-        # Save the MW vesc prediction in the LaTeX data
-        vesc_hat_mw_txt, dvesc_mw_txt = staudt_utils.sig_figs(
-                vesc_hat_mw_transform[0], vesc_hat_mw_transform[1:])
-        uci.save_prediction('vesc_mw(vc)', vesc_hat_mw_txt, dvesc_mw_txt)
-
-        # Save the amplitude to the LaTeX data
-        dlog_intercept = dbeta[0][0]
-        intercept_transform = staudt_utils.log2linear(log_intercept, 
-                                                      dbeta[0][0])
-        amp = intercept_transform[0]
-        damp = intercept_transform[1:]
-        amp_str, damp_str = staudt_utils.sig_figs(amp, damp)
-        uci.save_prediction('veschat_amp', amp_str, damp_str)
-
-        # Save the slope to the LaTeX data
-        slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
-        uci.save_prediction('veschat_slope', slope_str, dslope_str)
-
-        # Save the vesc(vc) predictions
+        # Save the vesc(Phi)-->\hat{vesc}(vc) predictions
         df = dm_den.load_data(df_source)
         if xadjustment in ['logreg_linaxunits', 'log'] \
            and yadjustment in ['logreg_linaxunits', 'log']:
