@@ -104,10 +104,11 @@ gmr_label = '$\sqrt{GM/R_0}\,/\,'\
               '\\left[\mathrm{km\,s^{-1}}\\right]$'
 vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
 
-vcut_labels = {'lim_fit': '$\hat{v}_\mathrm{lim}(v_\mathrm{c})$',
+vcut_labels = {'lim_fit': '$\hat{v}_\mathrm{esc}(v_\mathrm{c})$',
                'lim': '$v_\mathrm{esc}$',
-               'vesc_fit': '$\hat{v}_\mathrm{esc}(v_\mathrm{c})$',
-               'vesc': '$\hat{v}_\mathrm{esc}(\Phi)$',
+               'vesc_fit': ('$\hat{v}_{\\rm esc}(\Phi'
+                            '\\rightarrow v_\mathrm{c})$'),
+               'vhatphi': '$\hat{v}_\mathrm{esc}(\Phi)$',
                'ideal': '$v_\mathrm{cut, ideal}$'}
 
 # Y-axis limit for all residual plots
@@ -985,7 +986,7 @@ def plt_vesc_vc_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
 
     if show_vesc:
         ax.plot(df['v_dot_phihat_disc(T<=1e4)'], df['vesc'], 'bo', ms=3,
-        label=vcut_labels['vesc'])
+        label=vcut_labels['vhatphi'])
         df_vcut = pd.DataFrame.from_dict(vcut_d, orient='index', 
                                          columns=['vlim'])
         df = pd.concat([df, df_vcut], axis=1)
@@ -1748,7 +1749,7 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
     ---------------------
     gals: {'discs' or list-like}
         Which glaxies to plot.
-    vcut_type: {'lim_fit', 'lim', 'vesc', 'vesc_fit'}
+    vcut_type: {'lim_fit', 'lim', 'vhatphi', 'vesc_fit'}
         What type of cut speed to use.
 
     Returns
@@ -1762,24 +1763,26 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
     import fitting
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs_v=pickle.load(f)
+    islist = isinstance(gals, (list, np.ndarray, 
+                               pd.core.indexes.base.Index))
     df = dm_den.load_data(df_source)
-    if gals == 'discs':
-        df.drop(['m12w', 'm12z'], inplace=True)
-    elif isinstance(gals, (list, np.ndarray)):
+    if islist:
         df = df.loc[gals]
+    elif gals == 'discs':
+        df.drop(['m12w', 'm12z'], inplace=True)
     else:
         raise ValueError('Unexpected value provided for gals arg')
-    vesc_dict = dm_den.load_vcuts('vesc', df)
+    vesc_dict = dm_den.load_vcuts('vhatphi', df)
     vcut_dict = dm_den.load_vcuts(vcut_type, df)
 
     Ngals = len(df)
-    if gals == 'discs':
+    if islist:
+        Ncols = min(Ngals, 4)
+        Nrows = math.ceil(len(gals) / Ncols)
+    elif gals == 'discs':
         figsize = (19., 12.)
         Nrows = 3
         Ncols = 4
-    else:
-        Ncols = min(Ngals, 4)
-        Nrows = math.ceil(len(gals) / Ncols)
     xfigsize = 4.6 / 2. * Ncols + 1.
     yfigsize = 1.5 * Nrows + 1. 
     if Ngals == 2:
@@ -1879,7 +1882,6 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
                                 '\nexp trunc @ {0:s}'
                                 .format(vcut_labels[vcut_type]))
                     
-        vcut_label_y = 0.4
         # Draw vesc line
         vesc = vesc_dict[gal]
         axs[i].axvline(vesc, ls='--', alpha=0.8, color='k')
@@ -1895,10 +1897,19 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
             vesc_ha = 'right'
             vcut_adj = 20. 
             vcut_ha = 'left'
-        axs[i].text(vesc + vesc_adj, vcut_label_y, vcut_labels['vesc'], 
+        if vcut_type == 'vesc_fit':
+            veschatphi_label_y = 0.4
+            veschatphi_va = 'baseline'
+            vcut_label_y = 0.9
+            vcut_va = 'top'
+        else:
+            vcut_label_y = 0.4
+            va = 'baseline'
+        axs[i].text(vesc + vesc_adj, 0.8, vcut_labels['vhatphi'], 
                     transform=trans,
                     fontsize=15., rotation=90., color='k', 
-                    horizontalalignment=vesc_ha)
+                    horizontalalignment=vesc_ha,
+                    verticalalignment='top')
 
         # Draw vcut line
         #vlim = dm_den.load_vcuts('lim', df)[gal]
@@ -1909,7 +1920,7 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         axs[i].text(vcut + vcut_adj, vcut_label_y, vcut_labels[vcut_type], 
                     transform=trans,
                     fontsize=15., rotation=90., color='gray', 
-                    horizontalalignment=vcut_ha)
+                    horizontalalignment=vcut_ha, verticalalignment=va)
 
         axs[i].grid(False)
         # Make ticks on both sides of the x-axis:
@@ -2028,18 +2039,20 @@ def plt_universal_prefit(result, df_source, gals='discs',
     '''
     Noteworthy parameters
     ---------------------
-    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
+    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
                default None
         Specifies how to determine the speed distribution cutoff for
         prediction distributions
-    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
+    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
                default None
         Specifies how to determine the speed distribution cutoff for standard-
         assumption distributions
     '''
     import dm_den
     import fitting
-    if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
+    islist = isinstance(gals, (list, np.ndarray, 
+                               pd.core.indexes.base.Index))
+    if not islist and gals != 'discs':
         raise ValueError('Unexpected value provided for gals arg')
     plotting_prediction = (show_mao_prediction or show_sigmoid_hard)
     if plotting_prediction and prediction_vcut_type is None:
@@ -2056,7 +2069,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
         if dhfrac is None:
             dhfrac = grid_results[1]
             print('Using dhfrac = {0:0.5f}'.format(dhfrac))
-    df = dm_den.load_data(df_source).drop(['m12w', 'm12z'])
+    df = dm_den.load_data(df_source)
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs=pickle.load(f)
     if prediction_vcut_type is not None or std_vcut_type is not None:
@@ -2071,12 +2084,12 @@ def plt_universal_prefit(result, df_source, gals='discs',
         #fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
         with open(paths.data + 'data_raw.pkl', 'rb') as f:
             p_mao_naive_agg = pickle.load(f)['p_mao_naive_agg']
-    pdfs.pop('m12z')
-    pdfs.pop('m12w')
-    if gals == 'discs':
-        galnames = pdfs.keys() 
-    elif isinstance(gals, (list, np.ndarray, pd.core.indexes.base.Index)):
+    if islist:
         galnames = copy.deepcopy(gals)
+    elif gals == 'discs':
+        pdfs.pop('m12z')
+        pdfs.pop('m12w')
+        galnames = pdfs.keys() 
     Ngals = len(galnames) 
     N_postfit = 300
     vs_postfit = np.linspace(0., 700., N_postfit)
@@ -2452,7 +2465,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
     '''
     Parameters
     ----------
-    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
                default 'lim_fit'
         Specifies how to determine the speed distribution cutoff.
     tgt_fname: str
@@ -2599,13 +2612,13 @@ def plt_halo_integrals(gals,
         Whether to draw a vertical line where this work's prediction for the
         speed distribution (not the halo integral) makes its final drop beneath
         the standard Maxwellian assumption (v0=vc, cut @ vesc_hat(vc))
-    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
+    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
                    default: None
         Specifies how to determine the speed distribution cutoff for standard
         assumption distributions like the standard Maxwellian and the naive 
         Mao,
         where v0=vc for both.
-    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
+    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
                           default: None
         Specifies how to determine the speed distribution cutoff for prediction
         distributions like the universally fit damped sigmoid and Mao.
@@ -2637,7 +2650,7 @@ def plt_halo_integrals(gals,
 
     if std_vcut_type is not None:
         std_vcut_dict = dm_den.load_vcuts(std_vcut_type, df)
-        if std_vcut_type == 'vesc':
+        if std_vcut_type == 'vhatphi':
             std_vcut_dict['mw'] = vesc_mw
     if prediction_vcut_type is not None:
         prediction_vcut_dict = dm_den.load_vcuts(prediction_vcut_type, df)
@@ -3184,15 +3197,17 @@ def plt_halo_integral_mw(df_source,
     return None
 
 def setup_multigal_fig(gals, show_resids=True):
-    if gals == 'discs':
+    islist = isinstance(gals, (list, np.ndarray, 
+                               pd.core.indexes.base.Index))
+    if islist:
+        Ncols = min(len(gals), 4)
+        Nrows = math.ceil(len(gals) / Ncols)
+        Ngals = len(gals)
+    elif gals == 'discs':
         figsize = (19., 12.)
         Nrows = 3
         Ncols = 4
         Ngals = 12
-    else:
-        Ncols = min(len(gals), 4)
-        Nrows = math.ceil(len(gals) / Ncols)
-        Ngals = len(gals)
     xfigsize = 4.6 / 2. * Ncols + 1.
     yfigsize = 1.5 * Nrows + 1. 
     if Ngals <= 4 and show_resids:
@@ -3224,6 +3239,8 @@ def label_axes(axs, fig, gals):
     elif len(gals) < 4:
         axs[0].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
         xlabel_yloc = 0.02
+    else:
+        xlabel_yloc = 0.04
     axs[0].set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
     axs[0].xaxis.set_label_coords(0.5, xlabel_yloc, transform=fig.transFigure)
     return None

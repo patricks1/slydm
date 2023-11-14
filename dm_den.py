@@ -1661,7 +1661,7 @@ def find_vcrits_fr_distrib(df_source, method='direct', update_values=False):
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs = pickle.load(f)
     df.loc['mw', 'vesc'] = dm_den_viz.vesc_mw
-    vescs_dict = load_vcuts('vesc', df)
+    vescs_dict = load_vcuts('vhatphi', df)
     vs = np.linspace(200., 650., 500)
 
     vcrits = {} 
@@ -1831,7 +1831,7 @@ def load_vcuts(vcut_type, df):
     '''
     Parameters
     ---------------------
-    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'} 
         Specifies how to determine the speed distribution cutoff.
     df: pd.DataFrame
         The DataFrame containing necessary information about each galaxy.
@@ -1844,7 +1844,7 @@ def load_vcuts(vcut_type, df):
     elif vcut_type == 'vesc_fit':
         with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
             vcut_dict = pickle.load(f)
-    elif vcut_type == 'vesc':
+    elif vcut_type == 'vhatphi':
         vcut_dict = dict(df['vesc'])
     elif vcut_type == 'ideal':
         with open(paths.data + 'vesc_ideal.pkl', 'rb') as f:
