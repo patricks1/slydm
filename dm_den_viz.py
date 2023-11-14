@@ -1898,18 +1898,21 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
             vcut_adj = 20. 
             vcut_ha = 'left'
         if vcut_type == 'vesc_fit':
-            veschatphi_label_y = 0.4
-            veschatphi_va = 'baseline'
-            vcut_label_y = 0.9
+            veschatphi_label_y = 0.8
+            veschatphi_va = 'top'
+            vcut_label_y = 0.8
             vcut_va = 'top'
         else:
+            veschatphi_label_y = 0.4
+            veschatphi_va = 'baseline'
             vcut_label_y = 0.4
-            va = 'baseline'
-        axs[i].text(vesc + vesc_adj, 0.8, vcut_labels['veschatphi'], 
+            vcut_va = 'baseline'
+        axs[i].text(vesc + vesc_adj, veschatphi_label_y, 
+                    vcut_labels['veschatphi'], 
                     transform=trans,
                     fontsize=15., rotation=90., color='k', 
                     horizontalalignment=vesc_ha,
-                    verticalalignment='top')
+                    verticalalignment=veschatphi_va)
 
         # Draw vcut line
         #vlim = dm_den.load_vcuts('lim', df)[gal]
@@ -1920,7 +1923,7 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         axs[i].text(vcut + vcut_adj, vcut_label_y, vcut_labels[vcut_type], 
                     transform=trans,
                     fontsize=15., rotation=90., color='gray', 
-                    horizontalalignment=vcut_ha, verticalalignment=va)
+                    horizontalalignment=vcut_ha, verticalalignment=vcut_va)
 
         axs[i].grid(False)
         # Make ticks on both sides of the x-axis:
