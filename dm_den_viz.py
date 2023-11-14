@@ -108,7 +108,7 @@ vcut_labels = {'lim_fit': '$\hat{v}_\mathrm{esc}(v_\mathrm{c})$',
                'lim': '$v_\mathrm{esc}$',
                'vesc_fit': ('$\hat{v}_{\\rm esc}(\Phi'
                             '\\rightarrow v_\mathrm{c})$'),
-               'vhatphi': '$\hat{v}_\mathrm{esc}(\Phi)$',
+               'veschatphi': '$\hat{v}_\mathrm{esc}(\Phi)$',
                'ideal': '$v_\mathrm{cut, ideal}$'}
 
 # Y-axis limit for all residual plots
@@ -986,7 +986,7 @@ def plt_vesc_vc_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
 
     if show_vesc:
         ax.plot(df['v_dot_phihat_disc(T<=1e4)'], df['vesc'], 'bo', ms=3,
-        label=vcut_labels['vhatphi'])
+        label=vcut_labels['veschatphi'])
         df_vcut = pd.DataFrame.from_dict(vcut_d, orient='index', 
                                          columns=['vlim'])
         df = pd.concat([df, df_vcut], axis=1)
@@ -1749,7 +1749,7 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
     ---------------------
     gals: {'discs' or list-like}
         Which glaxies to plot.
-    vcut_type: {'lim_fit', 'lim', 'vhatphi', 'vesc_fit'}
+    vcut_type: {'lim_fit', 'lim', 'veschatphi', 'vesc_fit'}
         What type of cut speed to use.
 
     Returns
@@ -1772,7 +1772,7 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         df.drop(['m12w', 'm12z'], inplace=True)
     else:
         raise ValueError('Unexpected value provided for gals arg')
-    vesc_dict = dm_den.load_vcuts('vhatphi', df)
+    vesc_dict = dm_den.load_vcuts('veschatphi', df)
     vcut_dict = dm_den.load_vcuts(vcut_type, df)
 
     Ngals = len(df)
@@ -1905,7 +1905,7 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         else:
             vcut_label_y = 0.4
             va = 'baseline'
-        axs[i].text(vesc + vesc_adj, 0.8, vcut_labels['vhatphi'], 
+        axs[i].text(vesc + vesc_adj, 0.8, vcut_labels['veschatphi'], 
                     transform=trans,
                     fontsize=15., rotation=90., color='k', 
                     horizontalalignment=vesc_ha,
@@ -2039,11 +2039,11 @@ def plt_universal_prefit(result, df_source, gals='discs',
     '''
     Noteworthy parameters
     ---------------------
-    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
+    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                default None
         Specifies how to determine the speed distribution cutoff for
         prediction distributions
-    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
+    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                default None
         Specifies how to determine the speed distribution cutoff for standard-
         assumption distributions
@@ -2465,7 +2465,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
     '''
     Parameters
     ----------
-    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                default 'lim_fit'
         Specifies how to determine the speed distribution cutoff.
     tgt_fname: str
@@ -2612,13 +2612,13 @@ def plt_halo_integrals(gals,
         Whether to draw a vertical line where this work's prediction for the
         speed distribution (not the halo integral) makes its final drop beneath
         the standard Maxwellian assumption (v0=vc, cut @ vesc_hat(vc))
-    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
+    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                    default: None
         Specifies how to determine the speed distribution cutoff for standard
         assumption distributions like the standard Maxwellian and the naive 
         Mao,
         where v0=vc for both.
-    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vhatphi', 'ideal'},
+    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                           default: None
         Specifies how to determine the speed distribution cutoff for prediction
         distributions like the universally fit damped sigmoid and Mao.
@@ -2650,7 +2650,7 @@ def plt_halo_integrals(gals,
 
     if std_vcut_type is not None:
         std_vcut_dict = dm_den.load_vcuts(std_vcut_type, df)
-        if std_vcut_type == 'vhatphi':
+        if std_vcut_type == 'veschatphi':
             std_vcut_dict['mw'] = vesc_mw
     if prediction_vcut_type is not None:
         prediction_vcut_dict = dm_den.load_vcuts(prediction_vcut_type, df)
