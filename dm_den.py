@@ -146,6 +146,12 @@ def unpack_new(df, galname, dr=1.5, drsolar=None, typ='fire',
         Specifies whether to pull FIRE or DMO data
     getparts: list of str: {'PartType0' : 'PartType4'}
         Specifies the particle types to extract
+        'PartType0' is gas. 
+        'PartType1' is dark matter.
+        'PartType2' is dummy collisionless. 
+        'PartType3' is grains/PIC particles. 
+        'PartType4' is stars. 
+        'PartType5' is black holes / sinks.
 
     Returns
     -------
