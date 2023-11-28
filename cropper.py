@@ -4,6 +4,7 @@ import rotate_galaxy
 import warnings
 import numpy as np
 import UCI_tools.tools as uci
+from UCI_tools import staudt_tools
 from progressbar import ProgressBar
 
 def gen_gal_data(galname, cropped_run='202304'):
@@ -19,7 +20,7 @@ def gen_gal_data(galname, cropped_run='202304'):
     min_radius = 0. #kpc
     max_radius = 10. #kpc
 
-    df = dm_den.init_df()
+    df = staudt_tools.init_df()
 
     suffix=df.loc[galname,'fsuffix']
     suffix_cropped = df.loc[galname, 'fsuffix_cropped']
@@ -152,9 +153,7 @@ def gen_gal_data(galname, cropped_run='202304'):
     return d 
 
 def gen_all_gals_data():
-    from dm_den import init_df
-    
-    df = init_df()
+    df = staudt_tools.init_df()
     for gal in df.index:
         gen_gal_data(gal) 
     
@@ -231,13 +230,12 @@ def load_data(galname, getparts='all', verbose=True):
     if verbose:
         print('Loading {0:s}'.format(galname))
 
-    from dm_den import init_df as init_df
     from dm_den import build_direcs 
 
     min_radius = 0. #kpc
     max_radius = 10. #kpc
 
-    df = init_df()
+    df = staudt_tools.init_df()
 
     suffix=df.loc[galname,'fsuffix']
     suffix_cropped = df.loc[galname, 'fsuffix_cropped']

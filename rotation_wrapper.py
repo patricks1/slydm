@@ -5,6 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 from astropy import units as u, constants as c
+from UCI_tools import staudt_tools
 
 path = '/data17/grenache/staudt/dm_den/'
 
@@ -118,7 +119,7 @@ def calc_vphimagcool(df, galname):
 
 def gen_vphimagcool_data(fname):
     d = {}
-    df = dm_den.init_df()
+    df = staudt_tools.init_df()
     for galname in df.index:
         print('Processing '+galname)
         d[galname]=calc_vphimagcool(df, galname)

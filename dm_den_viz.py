@@ -17,6 +17,7 @@ import copy
 import os
 import staudt_fire_utils as utils
 import UCI_tools.tools as uci
+from UCI_tools import staudt_tools
 from progressbar import ProgressBar
 
 import scipy
@@ -2477,7 +2478,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
     import grid_eval
     import dm_den
     import fitting
-    df = dm_den.init_df()
+    df = staudt_tools.init_df()
     df.loc['mw', 'vesc'] = vesc_mw
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         results = pickle.load(f)
