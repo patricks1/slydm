@@ -147,6 +147,12 @@ def unpack_new(df, galname, dr=1.5, drsolar=None, typ='fire',
         Specifies whether to pull FIRE or DMO data
     getparts: list of str: {'PartType0' : 'PartType4'}
         Specifies the particle types to extract
+        'PartType0' is gas. 
+        'PartType1' is dark matter.
+        'PartType2' is dummy collisionless. 
+        'PartType3' is grains/PIC particles. 
+        'PartType4' is stars. 
+        'PartType5' is black holes / sinks.
 
     Returns
     -------
@@ -1548,7 +1554,7 @@ def find_vcrits_fr_distrib(df_source, method='direct', update_values=False):
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs = pickle.load(f)
     df.loc['mw', 'vesc'] = dm_den_viz.vesc_mw
-    vescs_dict = load_vcuts('vesc', df)
+    vescs_dict = load_vcuts('veschatphi', df)
     vs = np.linspace(200., 650., 500)
 
     vcrits = {} 
@@ -1718,7 +1724,7 @@ def load_vcuts(vcut_type, df):
     '''
     Parameters
     ---------------------
-    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'} 
         Specifies how to determine the speed distribution cutoff.
     df: pd.DataFrame
         The DataFrame containing necessary information about each galaxy.
@@ -1731,7 +1737,7 @@ def load_vcuts(vcut_type, df):
     elif vcut_type == 'vesc_fit':
         with open(paths.data + 'vesc_hat_dict.pkl', 'rb') as f:
             vcut_dict = pickle.load(f)
-    elif vcut_type == 'vesc':
+    elif vcut_type == 'veschatphi':
         vcut_dict = dict(df['vesc'])
     elif vcut_type == 'ideal':
         with open(paths.data + 'vesc_ideal.pkl', 'rb') as f:
