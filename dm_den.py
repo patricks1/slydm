@@ -12,6 +12,7 @@ import paths
 import copy
 import numpy as np
 import pandas as pd
+import UCI_tools.tools as uci
 from staudt_fire_utils import get_data, show
 from sklearn.linear_model import LinearRegression
 from progressbar import ProgressBar
@@ -131,7 +132,7 @@ def unpack_new(df, galname, dr=1.5, drsolar=None, typ='fire',
     ----------
     df: pd.DataFrame
         The DataFrame containing necessary information about each galaxy.
-        df_init() can generate a DataFrame with the correct information to
+        init_df() can generate a DataFrame with the correct information to
         make the pull.
     galname: str
         The galaxy name string corresponding to an index in df.
@@ -188,7 +189,7 @@ def unpack_new(df, galname, dr=1.5, drsolar=None, typ='fire',
     #Need to input N in the following line
     #even though we're just grabbing h, because if there are >1
     #files, the file name convention will reflect that.
-    h=get_data(almost_full_path,N,'Header','HubbleParam')
+    h=uci.get_data(almost_full_path,N,'Header','HubbleParam')
 
     # Getting host halo info 
     p, rvir, v, mvir = get_halo_info(halodirec, suffix, typ, host_key, 
@@ -249,7 +250,7 @@ def unpack_gas(df, galname, typ='fire'):
     #Need to input N in the following line
     #even though we're just grabbing h, because if there are >1
     #files, the file name convention will reflect that.
-    h=get_data(sdir,N,'Header','HubbleParam')
+    h=uci.get_data(sdir,N,'Header','HubbleParam')
 
     # Getting host halo info
     p, rvir, v, mvir = get_halo_info(halodirec, suffix, typ, host_key, 
@@ -328,7 +329,7 @@ def unpack(df, galname, dr=1.5, drsolar=None, typ='fire',
     #Need to input N in the following line
     #even though we're just grabbing h, because if there are >1
     #files, the file name convention will reflect that.
-    h=get_data(sdir,N,'Header','HubbleParam')
+    h=uci.get_data(sdir,N,'Header','HubbleParam')
 
     coords=[]
     ms=[]
@@ -337,16 +338,16 @@ def unpack(df, galname, dr=1.5, drsolar=None, typ='fire',
 
     for t in getparts:
         print('Unpacking {0:s} data'.format(t))
-        coords_add=get_data(sdir,N,t,'Coordinates')
+        coords_add=uci.get_data(sdir,N,t,'Coordinates')
         coords_add/=h
         coords.extend(coords_add)
-        ms_add=get_data(sdir,N,t,'Masses') #in units of 1e10 M_sun / h
+        ms_add=uci.get_data(sdir,N,t,'Masses') #in units of 1e10 M_sun / h
         ms_add/=h #now in units of 1e10 M_sun
         # Commenting the following because of the problems longdoubles cause on
         # MacOS
         #ms_add=ms_add.astype(np.longdouble)
         ms.extend(ms_add)
-        v_vecs_add=get_data(sdir,N,t,'Velocities')
+        v_vecs_add=uci.get_data(sdir,N,t,'Velocities')
         v_vecs.extend(v_vecs_add)
         parttypes_add=np.repeat(t,len(coords_add))
         parttypes.extend(parttypes_add)
@@ -398,7 +399,7 @@ def unpack_4pot(df, galname, typ='fire'):
     #Need to input N in the following line
     #even though we're just grabbing h, because if there are >1
     #files, the file name convention will reflect that.
-    h=get_data(sdir,N,'Header','HubbleParam')
+    h=uci.get_data(sdir,N,'Header','HubbleParam')
 
     # Getting host halo info
     p, rvir, v, mvir = get_halo_info(halodirec, suffix, typ, 
