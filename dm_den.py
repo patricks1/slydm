@@ -309,15 +309,6 @@ def unpack_gas(df, galname, typ='fire'):
     return ms, mvir, rs, rvir, v_mags, v_vecs, parttypes, coords, energy,\
            e_abundance, he_frac
 
-def calc_temps(he_fracs, e_abundances, energies):
-    y_hes = he_fracs / (4.*(1.-he_fracs))
-    mus = (1.+4.*y_hes) / (1+y_hes+e_abundances)
-    mean_molecular_weights = mus * c.m_p
-    gamma = 5./3. #adiabatic constant
-    Ts = mean_molecular_weights.si * (gamma-1.) * energies*u.km**2./u.s**2. \
-         / c.k_B
-    return Ts.to(u.K)
-
 def unpack(df, galname, dr=1.5, drsolar=None, typ='fire', 
            getparts=['PartType1']):
     suffix=df.loc[galname,'fsuffix']
@@ -1726,6 +1717,17 @@ def load_vcuts(vcut_type, df):
     ---------------------
     vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'} 
         Specifies how to determine the speed distribution cutoff.
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
     df: pd.DataFrame
         The DataFrame containing necessary information about each galaxy.
     '''

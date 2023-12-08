@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from astropy import units as u, constants as c
 from UCI_tools import staudt_tools
+from UCI_tools import tools as uci
 
 path = '/data17/grenache/staudt/dm_den/'
 
@@ -58,7 +59,7 @@ def get_rotated_gal(df, galname):
             print('failed on '+key)
 
     isgas = d['parttype']=='PartType0'
-    Ts = dm_den.calc_temps(*[d[data][isgas] for data in ['he_frac',
+    Ts = uci.calc_temps(*[d[data][isgas] for data in ['he_frac',
                                                          'e_abundance',
                                                          'energy']])
     d['T'] = np.append(Ts, np.repeat(np.nan,len(dm_stars[0])))

@@ -3,7 +3,7 @@ import os
 import rotate_galaxy
 import warnings
 import numpy as np
-import UCI_tools.tools as uci
+from UCI_tools import tools as uci
 from UCI_tools import staudt_tools
 from progressbar import ProgressBar
 
@@ -106,7 +106,7 @@ def gen_gal_data(galname, cropped_run='202304'):
         
         #calculate temperatures
         he_fracs = d['PartType0']['Metallicity'][:,1]
-        d['PartType0']['T'] = dm_den.calc_temps(he_fracs,
+        d['PartType0']['T'] = uci.calc_temps(he_fracs,
                                                 *[d['PartType0'][key] \
                                                   for key in \
                                                   ['ElectronAbundance',

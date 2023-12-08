@@ -709,7 +709,7 @@ def fill_ax_new(ax, df, xcol, ycol,
                           location='bottom')
         cb.ax.tick_params(labelsize=12)
         cb.set_label(size=12,
-                     label='$\log M_\mathrm{\star,vir}\,/\,\mathrm{M_\odot}$')
+                     label='$\log M_\mathrm{\star}\,/\,\mathrm{M_\odot}$')
     else:
         ax.plot(xs,ys,'o',color=color,alpha=alpha,label=legend_txt)
     ax.set_xlabel(xlabel)
