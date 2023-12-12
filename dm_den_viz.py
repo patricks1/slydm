@@ -44,6 +44,7 @@ rcParams['legend.frameon'] = True
 rcParams['legend.facecolor']='white'
 rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
+max_naive_color = 'C0'
 max_fit_color = '#a903fc' 
 mao_prediction_color = 'c'
 mao_naive_color = '#8d8d8d'
@@ -2031,6 +2032,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
                          ymax=None, show_bands=True, 
                          show_sigmoid_hard=False,
                          show_sigmoid_exp=False,
+                         show_max=False,
                          show_max_hard=False,
                          show_mao_prediction=False,
                          show_mao_naive=False,
@@ -2044,11 +2046,11 @@ def plt_universal_prefit(result, df_source, gals='discs',
     Noteworthy parameters
     ---------------------
     prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
-               default None
+               default: None
         Specifies how to determine the speed distribution cutoff for
         prediction distributions
     std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
-               default None
+               default: None
         Specifies how to determine the speed distribution cutoff for standard-
         assumption distributions
     '''
@@ -2209,6 +2211,18 @@ def plt_universal_prefit(result, df_source, gals='discs',
                         label=('prediction, exp cut @ ' 
                                + vcut_labels['lim_fit']))
 
+        if show_max:
+            axs[i].plot(
+                vs_postfit,
+                fitting.smooth_step_max(
+                    vs_postfit,
+                    vc,
+                    np.inf,
+                    np.inf
+                ),
+                label='Maxwellian, $v_0=v_{\\rm c}$', color=max_naive_color
+            )
+
         if show_max_hard:
             axs[i].plot(vs_postfit, 
                         fitting.smooth_step_max(vs_postfit,
@@ -2290,7 +2304,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
                                    lw=1.)
             axs[i + Ngals].set_ylim(-resids_lim, resids_lim)
             if i == 0:
-                axs[i+2].set_ylabel('resids')
+                axs[i + Ngals].set_ylabel('resids')
         loc = [0.97,0.95]
         if Ngals == 12:
             namefs = 13. #Font size for galaxy name
@@ -2313,19 +2327,30 @@ def plt_universal_prefit(result, df_source, gals='discs',
                 rms_txt_max = '\nRMS$_{{\\rm Max}}={4:0.2f}$'
             else:
                 rms_txt_max = ''
+            if show_mao_naive:
+                rms_txt_mao_naive = '\nRMS$_{{\mathrm{{M}}v_\mathrm{{c}}}}' \
+                                    '={3:0.2f}$'
+            else:
+                rms_txt_mao_naive = ''
+            if show_mao_prediction:
+                rms_txt_mao = '\nRMS$_\mathrm{{Mao}}={2:0.2f}$' 
+            else:
+                rms_txt_mao = ''
             txt_rms = (#'\n$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
                        'RMS$_{{{5:0.0f}}}={1:0.2f}$' 
-                       '\nRMS$_\mathrm{{Mao}}={2:0.2f}$' 
-                       '\nRMS$_{{\mathrm{{M}}v_\mathrm{{c}}}}={3:0.2f}$'
+                       + rms_txt_mao
+                       + rms_txt_mao_naive
                        + rms_txt_max)
-            axs[i].annotate(txt_rms
-                    .format(vc, 
-                            rms_staudt / 10. ** O_rms,
-                            rms_mao / 10. ** O_rms,
-                            rms_mao_naive / 10. ** O_rms,
-                            rms_max / 10. ** O_rms if show_max_hard else None,
-                            sigmoid_damped_eqnum),
-                    loc, **kwargs_txt)
+            axs[i].annotate(
+                txt_rms.format(
+                    vc, 
+                    rms_staudt / 10. ** O_rms,
+                    rms_mao / 10. ** O_rms if show_mao_prediction else None,
+                    rms_mao_naive / 10. ** O_rms if show_mao_naive else None,
+                    rms_max / 10. ** O_rms if show_max_hard else None,
+                    sigmoid_damped_eqnum
+                ),
+                loc, **kwargs_txt)
         axs[i].grid(False)
         if ymax is not None:
             axs[i].set_ylim(top=ymax)
@@ -3199,6 +3224,60 @@ def plt_halo_integral_mw(df_source,
     plt.show()
 
     return None
+
+def plt_anisotropy(df_source, only_discs=True, savefig=False):
+    df_copy = dm_den.load_data(df_source)
+    if only_discs:
+        df_copy.drop(['m12z', 'm12w'], inplace=True)
+    df_copy['$\sigma_z/\sigma_r$'] = df_copy['std(v_dot_zhat_disc(dm))']\
+                                   /df_copy['std(v_dot_rhat_disc(dm))']
+    df_copy['$\sigma_\phi/\sigma_r$'] = df_copy['std(v_dot_phihat_disc(dm))']\
+                                      /df_copy['std(v_dot_rhat_disc(dm))']
+    df_copy['$\sigma_z/\sigma_\phi$'] = df_copy['std(v_dot_zhat_disc(dm))'] \
+                                      / df_copy['std(v_dot_phihat_disc(dm))']
+    df_copy['$\\beta$'] = 1. - (df_copy['std(v_dot_phihat_disc(dm))']**2. \
+                              + df_copy['std(v_dot_zhat_disc(dm))']**2.) \
+                             / (2.*df_copy['std(v_dot_rhat_disc(dm))']**2.)
+    df_copy['$\\beta_\phi$'] = 1. - df_copy['std(v_dot_phihat_disc(dm))']**2. \
+                             / df_copy['std(v_dot_rhat_disc(dm))']**2.
+    df_copy['$\\beta_z$'] = 1. - df_copy['std(v_dot_zhat_disc(dm))']**2. \
+                             / df_copy['std(v_dot_rhat_disc(dm))']**2.
+
+
+    fig = plt.figure(figsize=(12,3), dpi=130)
+    ax1 = fig.add_subplot(121)
+    fig.subplots_adjust(wspace=0.15)
+
+    df_copy[['$\sigma_\phi/\sigma_r$', 
+           '$\sigma_z/\sigma_r$',
+           '$\sigma_z/\sigma_\phi$']].plot.bar(ax=ax1, color=['#17becf','#ff7f0e',
+                                                             '#9467bd'],
+                                               width=0.6)
+
+    legend_y = -0.25
+    ax1.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
+    ax1.set_ylim(0.75,None)
+    ax1.xaxis.grid(False)
+    ax1.set_axisbelow(True)
+
+    ax2 = fig.add_subplot(122)
+    df_copy[['$\\beta$', 
+           '$\\beta_\phi$',
+           '$\\beta_z$']].plot.bar(ax=ax2, color=['k','#17becf','#ff7f0e'])
+    ax2.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
+    #ax2.set_ylim(0.75,None)
+    ax2.xaxis.grid(False)
+    ax2.set_axisbelow(True)
+
+    for ax in [ax1,ax2]:
+        labels = ax1.xaxis.get_majorticklabels()
+        ax.set_xticklabels(labels, rotation=30, ha='right', rotation_mode='anchor')
+
+    if savefig:
+        plt.savefig(paths.figures+'anisotropy.png',
+                    bbox_inches='tight')
+    plt.show()
+
 
 def setup_multigal_fig(gals, show_resids=True):
     islist = isinstance(gals, (list, np.ndarray, 

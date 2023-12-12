@@ -892,11 +892,14 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
 
 def fit_vdamp(df_source, gals='discs', 
               vcut_type=None,
+              show_max=False,
               show_max_fit=False,
               show_exp=False, 
               show_mao_fixed=False, 
               show_mao_free=False, 
               show_rms=False,
+              show_resids=True,
+              show_vescs=True,
               tgt_fname=None, sigmoid_damped_eqnum=None,
               xtickspace=None):
     '''
@@ -909,6 +912,10 @@ def fit_vdamp(df_source, gals='discs',
         File name for the analysis results to use
     gals: str or list-like of str
         Galaxies to plot
+    show_max: bool
+        If True, include the naive Maxwellian with v0=vc
+    show_max_fit: bool
+        If True, include the Maxwellian with the best fit v0, cut at vcut_type
     show_exp: bool
         If True, include the exponentially cutoff form from Macabe 2010 and 
         Lacroix et al. 2020.
@@ -988,7 +995,10 @@ def fit_vdamp(df_source, gals='discs',
     N = 0 # Number of datapoints evaluated, for use in aggregate RMS
     N_tail = 0
 
-    fig, axs = dm_den_viz.setup_multigal_fig(gals)
+    fig, axs = dm_den_viz.setup_multigal_fig(gals, show_resids=show_resids)
+
+    # vesc's estimated from gravitational potential
+    vescphi_dict = dm_den.load_vcuts('veschatphi', df)
 
     pbar = ProgressBar()
     for i, gal in enumerate(pbar(df.index)):
@@ -1040,6 +1050,20 @@ def fit_vdamp(df_source, gals='discs',
         rms_txt_sigmoid = staudt_utils.mprint(rms_err/O_rms, d=d, 
                                       show=False).replace('$','')
         
+        # Plot the naive Maxwellian
+        if show_max:
+            axs[i].plot(
+                vs_postfit,
+                smooth_step_max(
+                    vs_postfit,
+                    vc,
+                    np.inf,
+                    np.inf
+                ),
+                label='Maxwellian, $v_0=v_{\\rm c}$', 
+                c=dm_den_viz.max_naive_color
+            )
+
         # Plot the best-fit simple Maxwellian
         if show_max_fit:
             model_max = lmfit.model.Model(smooth_step_max,
@@ -1175,6 +1199,51 @@ def fit_vdamp(df_source, gals='discs',
                         rms_err_mao_free/O_rms, d=d, 
                         show=False).replace('$','')
 
+        if show_vescs:
+            # Draw vesc line
+            vesc = vescphi_dict[gal]
+            axs[i].axvline(vesc, ls='--', alpha=0.8, color='k')
+            trans = mpl.transforms.blended_transform_factory(axs[i].transData,
+                                                             axs[i].transAxes)
+            if vesc >= vcut:
+                vesc_adj = 20.
+                vesc_ha = 'left'
+                vcut_adj = 0.
+                vcut_ha = 'right'
+            else:
+                vesc_adj = 0.
+                vesc_ha = 'right'
+                vcut_adj = 20. 
+                vcut_ha = 'left'
+            if vcut_type == 'vesc_fit':
+                veschatphi_label_y = 0.8
+                veschatphi_va = 'top'
+                vcut_label_y = 0.8
+                vcut_va = 'top'
+            else:
+                veschatphi_label_y = 0.4
+                veschatphi_va = 'baseline'
+                vcut_label_y = 0.4
+                vcut_va = 'baseline'
+            axs[i].text(vesc + vesc_adj, veschatphi_label_y, 
+                        dm_den_viz.vcut_labels['veschatphi'], 
+                        transform=trans,
+                        fontsize=15., rotation=90., color='k', 
+                        horizontalalignment=vesc_ha,
+                        verticalalignment=veschatphi_va)
+
+            # Draw vcut line
+            #vlim = dm_den.load_vcuts('lim', df)[gal]
+            #axs[i].axvline(vlim, ls='--', alpha=0.5, color='C0')
+            axs[i].axvline(vcut, ls='--', alpha=0.5, color='grey')
+            trans = mpl.transforms.blended_transform_factory(axs[i].transData,
+                                                             axs[i].transAxes)
+            axs[i].text(vcut + vcut_adj, vcut_label_y, 
+                        dm_den_viz.vcut_labels[vcut_type], 
+                        transform=trans,
+                        fontsize=15., rotation=90., color='gray', 
+                        horizontalalignment=vcut_ha, verticalalignment=vcut_va)
+
         axs[i].grid(False)
 
         # Make ticks on both sides of the x-axis:
@@ -1236,7 +1305,7 @@ def fit_vdamp(df_source, gals='discs',
                             .format(res_exp.chisqr),
             loc, **kwargs_txt)
         '''
-        if Ngals <= 3:
+        if Ngals <= 3 and show_resids:
             # Remove the 0 tick label because of overlap
             y0, y1 = axs[i].get_ylim()
             visible_ticks = np.array([t for t in axs[i].get_yticks() \

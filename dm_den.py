@@ -873,8 +873,8 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         v_vecs_dm = d['PartType1']['v_vec_centered']
         #velocity vectors in cylindrical coordinates
         v_vecs_dm_cyl = np.array([d['PartType1']['v_dot_rhat'],
-                               d['PartType1']['v_dot_phihat'],
-                               d['PartType1']['v_dot_zhat']]).transpose(1,0)
+                                  d['PartType1']['v_dot_phihat'],
+                                  d['PartType1']['v_dot_zhat']]).transpose(1,0)
         v_mags_dm = np.linalg.norm(v_vecs_dm, axis=1)
         zs = d['PartType1']['coord_rot'][:,2]
 
@@ -940,6 +940,8 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
                                                          & inshell])
         #######################################################################
 
+        # Gas
+        # 3D dispersion
         df.loc[galname,
                'disp_gas_disc(T<1e4)'] = get_den_disp(
                                               rsolar, 
@@ -950,16 +952,27 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
                                               v_vecs=v_vecs_cyl_gas[cooler1e4],
                                               zs=zs_gas[cooler1e4], 
                                               dz=dz, verbose=False)[1]
-        df.loc[galname,
-                'std(v_dot_phihat_disc(T<=1e4))'] = np.std(v_vecs_cyl_gas[:,1]\
-                                                                [inshell
-                                                                 & indisc
-                                                                 & cooler1e4])
-        df.loc[galname,
-                'std(v_dot_phihat_shell(T<=1e4))'] = np.std(
-                                                           v_vecs_cyl_gas[:,1]\
-                                                                [inshell
-                                                                 & cooler1e4])
+        # phi component dispersion
+        df.loc[galname, 'std(v_dot_phihat_disc(T<=1e4))'] = np.std(
+            v_vecs_cyl_gas[:,1][inshell & indisc & cooler1e4]
+        )
+        df.loc[galname, 'std(v_dot_phihat_shell(T<=1e4))'] = np.std(
+            v_vecs_cyl_gas[:,1][inshell & cooler1e4]
+        )
+
+        # Dark matter component dispersions
+        dm = d['PartType1']
+        dm_inshell = np.abs(dm['r'] - rsolar) <= dr/2.
+        dm_indisc = np.abs(dm['coord_rot'][:,2]) <= dz/2.
+        df.loc[galname, 'std(v_dot_phihat_disc(dm))'] = np.std(
+            dm['v_dot_phihat'][dm_inshell & dm_indisc]
+        )
+        df.loc[galname, 'std(v_dot_zhat_disc(dm))'] = np.std(
+            dm['v_dot_zhat'][dm_inshell & dm_indisc]
+        )
+        df.loc[galname, 'std(v_dot_rhat_disc(dm))'] = np.std(
+            dm['v_dot_rhat'][dm_inshell & dm_indisc]
+        )
 
     else:
         raise ValueError('source should be \'original\' or \'cropped\'')
@@ -1622,7 +1635,7 @@ def test_gen_data(df_new=None, test_fname=None):
     if df_new is not None and test_fname is not None:
         raise Exception('You can only specify one of `df_new`'
                         ' or `test_fname`.')
-    df_old = load_data('dm_stats_dz1.0_20230616.h5')
+    df_old = load_data('dm_stats_dz1.0_20230724.h5')
     if test_fname is not None:
         df_new = load_data(test_fname)
     elif df_new is not None:
@@ -1798,6 +1811,3 @@ def save_v0s(initial_fname, new_fname):
         df.loc[gal,'v0'] = get_v0(gal) 
     save_data(df, new_fname)
     return None 
-    
-if __name__=='__main__':
-    gen_data(fname='dm_den_20210623_2.h5')
