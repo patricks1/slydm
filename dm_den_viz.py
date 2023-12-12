@@ -3249,10 +3249,12 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False):
     fig.subplots_adjust(wspace=0.15)
 
     df_copy[['$\sigma_\phi/\sigma_r$', 
-           '$\sigma_z/\sigma_r$',
-           '$\sigma_z/\sigma_\phi$']].plot.bar(ax=ax1, color=['#17becf','#ff7f0e',
-                                                             '#9467bd'],
-                                               width=0.6)
+             '$\sigma_z/\sigma_r$',
+             '$\sigma_z/\sigma_\phi$']].plot.bar(ax=ax1, 
+                                                 color=['#17becf',
+                                                        '#ff7f0e',
+                                                        '#9467bd'],
+                                                 width=0.6)
 
     legend_y = -0.25
     ax1.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
@@ -3271,7 +3273,8 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False):
 
     for ax in [ax1,ax2]:
         labels = ax1.xaxis.get_majorticklabels()
-        ax.set_xticklabels(labels, rotation=30, ha='right', rotation_mode='anchor')
+        ax.set_xticklabels(labels, rotation=30, ha='right', 
+                           rotation_mode='anchor')
 
     if savefig:
         plt.savefig(paths.figures+'anisotropy.png',
