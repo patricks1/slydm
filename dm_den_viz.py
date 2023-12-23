@@ -608,9 +608,9 @@ def showGeV_y(ax, yadjustment):
         raise ValueError('Adjustment should be \'log\' or None')
     lim_GeV = lim_msun_kpc.to(u.GeV/cds.c**2./u.cm**3.)
     labs = np.array([t for t in np.arange(lim_GeV[0].value - 0.1, 
-                                                   lim_GeV[1].value + 0.1,
-                                                   0.04) \
-                              if t>=lim_GeV[0].value and t<=lim_GeV[1].value])
+                                          lim_GeV[1].value + 0.1,
+                                          0.04) \
+                         if t>=lim_GeV[0].value and t<=lim_GeV[1].value])
 
     labs *= u.GeV/cds.c**2./u.cm**3.
     visible_ticks = labs.to(u.M_sun/u.kpc**3.)
@@ -3183,9 +3183,9 @@ def plt_halo_integral_mw(df_source,
                     mpl.ticker.MultipleLocator(base=xtickspace))
             axs[i].xaxis.set_minor_locator(plt.NullLocator())
     axs[0].plot(vmins, gs_max_hard, '--', color='C0', 
-                label='cut @ $\hat{v}_{\\rm esc}(v_{\\rm c})$')
+                label='cut @ $v_{\\rm esc}(v_{\\rm c})$')
     axs[0].plot(vmins, gs_sigmoid_damped_hard, '--', color='C3',
-                label='cut @ $\hat{v}_{\\rm esc}(v_{\\rm c})$')
+                label='cut @ $v_{\\rm esc}(v_{\\rm c})$')
 
     axs[1].yaxis.set_major_locator(
             mpl.ticker.MultipleLocator(base=1.e-3))
@@ -3225,7 +3225,7 @@ def plt_halo_integral_mw(df_source,
 
     return None
 
-def plt_anisotropy(df_source, only_discs=True, savefig=False):
+def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False):
     df_copy = dm_den.load_data(df_source)
     if only_discs:
         df_copy.drop(['m12z', 'm12w'], inplace=True)
@@ -3242,11 +3242,22 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False):
                              / df_copy['std(v_dot_rhat_disc(dm))']**2.
     df_copy['$\\beta_z$'] = 1. - df_copy['std(v_dot_zhat_disc(dm))']**2. \
                              / df_copy['std(v_dot_rhat_disc(dm))']**2.
+    display(df_copy)
+    print((df_copy['$\\beta$'] < 0.25).sum() / len(df_copy))
 
 
-    fig = plt.figure(figsize=(12,3), dpi=130)
-    ax1 = fig.add_subplot(121)
-    fig.subplots_adjust(wspace=0.15)
+    if vertical:
+        shape = (4.5, 8)
+        position1 = 212
+        position2 = 211
+    else:
+        shape = (12,3)
+        position1 = 122
+        position2 = 121
+        
+    fig = plt.figure(figsize=shape, dpi=130)
+    ax1 = fig.add_subplot(position1)
+    fig.subplots_adjust(wspace=0.15, hspace=0.3)
 
     df_copy[['$\sigma_\phi/\sigma_r$', 
              '$\sigma_z/\sigma_r$',
@@ -3255,21 +3266,34 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False):
                                                         '#ff7f0e',
                                                         '#9467bd'],
                                                  width=0.6)
-
-    legend_y = -0.25
-    ax1.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
-    ax1.set_ylim(0.75,None)
-    ax1.xaxis.grid(False)
-    ax1.set_axisbelow(True)
-
-    ax2 = fig.add_subplot(122)
+    ax2 = fig.add_subplot(position2)
     df_copy[['$\\beta$', 
-           '$\\beta_\phi$',
-           '$\\beta_z$']].plot.bar(ax=ax2, color=['k','#17becf','#ff7f0e'])
-    ax2.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
-    #ax2.set_ylim(0.75,None)
-    ax2.xaxis.grid(False)
+             '$\\beta_\phi$',
+             '$\\beta_z$']].plot.bar(ax=ax2, color=['k','#17becf','#ff7f0e'])
+    ax2.axhline(0., color='grey', lw=0.5, ls=(0, (5, 6)))
+
+    if vertical:
+        legend_kwargs = dict(
+            bbox_to_anchor=(0., 1.), loc='upper left', 
+            ncol=3, borderpad=0.2, handlelength=1.3,
+            columnspacing=1., handletextpad=0.5,
+            borderaxespad=0.4
+        )
+        
+        ax1.set_ylim(0.75, 1.12)
+        ax2.set_ylim(None, 0.48)
+        ax1.legend(**legend_kwargs)
+        ax2.legend(**legend_kwargs)
+        #ax2.set_ylim(0.75,None)
+    else:
+        legend_y = -0.25
+        ax1.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
+        ax2.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
+        #ax2.set_ylim(0.75,None)
+    ax1.set_axisbelow(True)
+    ax1.xaxis.grid(False)
     ax2.set_axisbelow(True)
+    ax2.xaxis.grid(False)
 
     for ax in [ax1,ax2]:
         labels = ax1.xaxis.get_majorticklabels()
@@ -3278,9 +3302,8 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False):
 
     if savefig:
         plt.savefig(paths.figures+'anisotropy.png',
-                    bbox_inches='tight')
+                    bbox_inches='tight', dpi=140)
     plt.show()
-
 
 def setup_multigal_fig(gals, show_resids=True):
     islist = isinstance(gals, (list, np.ndarray, 
