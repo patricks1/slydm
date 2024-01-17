@@ -21,6 +21,12 @@ from astropy import constants as c
 from matplotlib import pyplot as plt
 from SHMpp.SHMpp_gvmin_reconcile import vE as vE_f
 
+class rich_dict(dict):
+    '''
+    Making a dictionary to which we can assign attributes
+    '''
+    pass
+
 def build_direcs(suffix, res, mass_class, typ='fire', source='original',
                  min_radius=None, max_radius=None, cropped_run=None):
     assert typ in ['fire','dmo']
@@ -640,9 +646,6 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_slices=15,
                                        / np.log10(df.loc[galname,
                                                          'disp_dm_disc_cyl'])
     if tgt_fname:
-        class rich_dict(dict):
-            # Making a dict to which we can assign attributes
-            pass
         d = rich_dict(d)
         d.attrs = df.attrs
         direc = paths.data
@@ -651,6 +654,64 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_slices=15,
             pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
 
     return d
+
+def shot_noise_fraction(df_source):
+    '''
+    Generate a dictionary of the min and max of shot noise / standard dev
+    of fractional deviations from the mean of
+    density and dispersion across all galaxies' phi slices when splitting each
+    solar ring into 15, 30, 45, 60, 75, and 100 phi slices.
+    '''
+    import cropper
+
+    df = load_data(df_source)
+
+    dz = df.attrs['dz']
+    r0 = 8.3
+    dr = df.attrs['drsolar']
+    rmax = r0+dr/2.
+    rmin = r0-dr/2.
+    pbar = ProgressBar()
+    print('Loading particle counts')
+    galnames = df.drop(['m12z', 'm12w']).index
+    for galname in pbar(galnames):
+        gal = cropper.load_data(galname, getparts=['PartType1'], 
+                                verbose=False) 
+        rs = gal['PartType1']['r']
+        zs = gal['PartType1']['coord_rot'][:,2]
+        inshell = (rs<rmax) & (rs>rmin)
+        indisc = np.abs(zs) < dz/2.
+        df.loc[galname, 'count'] = np.sum(inshell & indisc)
+
+    frac_dict = rich_dict() 
+    frac_dict.attrs = df.attrs
+    dates = ['20230707'] * 2 + ['20240117'] * 4 + ['20240116'] * 4
+    for N_slices, date in zip([15, 30, 31, 32, 33, 36, 45, 60, 75, 100],
+                               dates):
+        frac_dict[N_slices] = {}
+        fname = 'den_disp_dict_N{0:0.0f}_dz1.0_{1:s}.pkl'.format(N_slices, 
+                                                                 date)
+        with open(paths.data + fname, 'rb') as f:
+            den_disp_dict = pickle.load(f)
+        dens = np.concatenate([den_disp_dict[galname]['dens/avg'] 
+                              for galname in galnames])
+        disps = np.concatenate([den_disp_dict[galname]['disps/avg'] 
+                               for galname in galnames])
+        std_den = np.std(1. - dens)
+        std_disp = np.std(1. - disps)
+
+        shot_noise_max = 1. / (np.sqrt(df['count'].min() / N_slices))
+        shot_noise_min = 1. / (np.sqrt(df['count'].max() / N_slices))
+
+        frac_dict[N_slices]['std_den'] = std_den
+        frac_dict[N_slices]['min_frac_den'] = shot_noise_min / std_den
+        frac_dict[N_slices]['max_frac_den'] = shot_noise_max / std_den
+        frac_dict[N_slices]['std_disp'] = std_disp
+        frac_dict[N_slices]['min_frac_disp'] = shot_noise_min / std_disp
+        frac_dict[N_slices]['max_frac_disp'] = shot_noise_max / std_disp
+
+    return frac_dict
+
 
 def get_disp_btwn(rmin,rmax,rs,v_mags):
     # This is isometric (i.e. wrong). Consider deleting it. 
