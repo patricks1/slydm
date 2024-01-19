@@ -1,6 +1,7 @@
 import h5py
 import os
 import csv
+import datetime
 import time
 import pickle
 import logging
@@ -578,15 +579,23 @@ def atan(y,x):
         atan_val += 2.*np.pi
     return atan_val
 
-def den_disp_phi_bins(source_fname, tgt_fname=None, N_slices=15, 
+def den_disp_phi_bins(source_fname, save=False, N_slices=15, 
                       verbose=False):
     '''
     Generate a dictionary of density and dispersion in phi slices, split up by
     galaxy
     '''
+    if not isinstance(save, bool):
+        raise ValueError('`save` must be a boolean.')
     import cropper
 
     df = load_data(source_fname)
+    dz = df.attrs['dz']
+    today = datetime.datetime.today().strftime('%Y%m%d')
+    tgt_fname = 'den_disp_dict_N{0:0.0f}_dz{1:0.1f}_{2:s}.pkl'.format(N_slices,
+                                                                      dz,
+                                                                      today)
+
     pbar = ProgressBar()
     d = {} #initialize dictionary
     phi_slices = np.linspace(0., 2.*np.pi, N_slices+1)
@@ -645,7 +654,7 @@ def den_disp_phi_bins(source_fname, tgt_fname=None, N_slices=15,
         d[galname]['log(disps)/log(avg)'] = np.log10(disps) \
                                        / np.log10(df.loc[galname,
                                                          'disp_dm_disc_cyl'])
-    if tgt_fname:
+    if save:
         d = rich_dict(d)
         d.attrs = df.attrs
         direc = paths.data
@@ -685,8 +694,22 @@ def shot_noise_fraction(df_source):
 
     frac_dict = rich_dict() 
     frac_dict.attrs = df.attrs
-    dates = ['20230707'] * 2 + ['20240117'] * 4 + ['20240116'] * 4
-    for N_slices, date in zip([15, 30, 31, 32, 33, 36, 45, 60, 75, 100],
+    dates = (['20230707'] + ['20240117'] * 2 
+             #+ ['20230707']
+             + ['20240117']
+             + ['20240117'] * 3
+             + ['20240119']
+             + ['20240117']
+             + ['20240119']
+             + ['20240116'] * 4)
+    for N_slices, date in zip([15, 
+                               28, 29, 
+                               30, 
+                               31, 32, 33, 
+                               35,
+                               36, 
+                               40,
+                               45, 60, 75, 100],
                                dates):
         frac_dict[N_slices] = {}
         fname = 'den_disp_dict_N{0:0.0f}_dz1.0_{1:s}.pkl'.format(N_slices, 
