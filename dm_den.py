@@ -1112,7 +1112,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
 
 def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
              vcircparts=['PartType0','PartType1','PartType4'], 
-             source='original', dz=1., freq_save=False):
+             source='original', dz=1., freq_save=False, include_vesc=True):
     def insert_analysis(df):
         #dat=[]
         for g in df.index:
@@ -1128,11 +1128,12 @@ def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
     #df = df[df.index=='m12b']
     df = insert_analysis(df)
 
-    with open(paths.data + 'vescs_rot_20230514.pkl', 'rb') as f:
-        vescs = pickle.load(f)
+    if include_vesc:
+        with open(paths.data + 'vescs_rot_20230514.pkl', 'rb') as f:
+            vescs = pickle.load(f)
 
-    for gal in df.index:
-        df.loc[gal, 'vesc'] = vescs[gal]['ve_avg']
+        for gal in df.index:
+            df.loc[gal, 'vesc'] = vescs[gal]['ve_avg']
 
     df.attrs = {}
     df.attrs['dr'] = dr
