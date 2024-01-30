@@ -701,7 +701,8 @@ def shot_noise_fraction(df_source):
              + ['20240119']
              + ['20240117']
              + ['20240119']
-             + ['20240116'] * 4)
+             + ['20240116'] * 4
+             + ['20240125'])
     for N_slices, date in zip([15, 
                                28, 29, 
                                30, 
@@ -709,7 +710,8 @@ def shot_noise_fraction(df_source):
                                35,
                                36, 
                                40,
-                               45, 60, 75, 100],
+                               45, 60, 75, 100,
+                               200],
                                dates):
         frac_dict[N_slices] = {}
         fname = 'den_disp_dict_N{0:0.0f}_dz1.0_{1:s}.pkl'.format(N_slices, 
@@ -723,8 +725,11 @@ def shot_noise_fraction(df_source):
         std_den = np.std(1. - dens)
         std_disp = np.std(1. - disps)
 
-        shot_noise_max = 1. / (np.sqrt(df['count'].min() / N_slices))
-        shot_noise_min = 1. / (np.sqrt(df['count'].max() / N_slices))
+        count_per_slice_min = df['count'].min() / N_slices
+        count_per_slice_max = df['count'].max() / N_slices
+
+        shot_noise_max = 1. / np.sqrt(count_per_slice_min)
+        shot_noise_min = 1. / np.sqrt(count_per_slice_max)
 
         frac_dict[N_slices]['std_den'] = std_den
         frac_dict[N_slices]['min_frac_den'] = shot_noise_min / std_den

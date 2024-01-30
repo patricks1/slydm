@@ -1266,80 +1266,98 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
                           textcoords='axes fraction',
                           **mw_text_kwargs)
 
-    if update_val:
-        y_flat = np.concatenate(yhat_vc, axis=1).flatten()
+    ###########################################################################
+    y_flat = np.concatenate(yhat_vc, axis=1).flatten()
 
-        slope_raw = reg_disc[0][0]
-        dslope_raw = delta_beta[1][0] 
-        slope, dslope_str = staudt_utils.sig_figs(slope_raw, dslope_raw)
+    slope_raw = reg_disc[0][0]
+    dslope_raw = delta_beta[1][0] 
+    slope, dslope_str = staudt_utils.sig_figs(slope_raw, dslope_raw)
 
-        logy_intercept_raw = reg_disc[1]
-        dlogy_intercept_raw = delta_beta[0][0]
-        logy_intercept_str, dlogy_intercept_str = \
-                staudt_utils.sig_figs(logy_intercept_raw, dlogy_intercept_raw)
+    logy_intercept_raw = reg_disc[1]
+    dlogy_intercept_raw = delta_beta[0][0]
+    logy_intercept_str, dlogy_intercept_str = \
+            staudt_utils.sig_figs(logy_intercept_raw, dlogy_intercept_raw)
 
-        if ycol=='disp_dm_disc_cyl':
-            data2save = {'disp_slope': slope_raw, 
-                         'ddisp_slope': dslope_raw,
-                         'logdisp_intercept': logy_intercept_raw,
-                         'dlogdisp_intercept': dlogy_intercept_raw}
-            dm_den.save_var_raw(data2save) 
+    if ycol=='disp_dm_disc_cyl':
+        data2save = {'disp_slope': slope_raw, 
+                     'ddisp_slope': dslope_raw,
+                     'logdisp_intercept': logy_intercept_raw,
+                     'dlogdisp_intercept': dlogy_intercept_raw}
+        dm_den.save_var_raw(data2save) 
 
-            #y_save, dy_save = staudt_utils.log2linear(*y_flat)
-            y_save, dy_save = staudt_utils.sig_figs(yhat_vc[0][0, 0],
-                                                    yhat_vc[1][0])
+        #y_save, dy_save = staudt_utils.log2linear(*y_flat)
+        y_save, dy_save = staudt_utils.sig_figs(yhat_vc[0][0, 0],
+                                                yhat_vc[1][0])
+        disp_transform = staudt_utils.log2linear(logy_intercept_raw,
+                                                 delta_beta[0][0])
+        disp_amp = disp_transform[0]
+        ddisp_amp = disp_transform[1:] 
+        disp_amp_str, ddisp_amp_str = staudt_utils.sig_figs(disp_amp, 
+                                                            ddisp_amp)
+        if update_val:
             uci.save_prediction('disp', y_save, dy_save)
             uci.save_prediction('disp_slope', slope, dslope_str)
-            disp_transform = staudt_utils.log2linear(logy_intercept_raw,
-                                                     delta_beta[0][0])
-            disp_amp = disp_transform[0]
-            ddisp_amp = disp_transform[1:] 
-            disp_amp_str, ddisp_amp_str = staudt_utils.sig_figs(disp_amp, 
-                                                                ddisp_amp)
             uci.save_prediction('disp_amp', disp_amp_str, ddisp_amp_str)
-        elif ycol=='den_disc':
-            data2save = {'den_slope': slope_raw, 
-                         'logden_intercept': logy_intercept_raw}
-            dm_den.save_var_raw(data2save) 
+    elif ycol=='den_disc':
+        data2save = {'den_slope': slope_raw, 
+                     'logden_intercept': logy_intercept_raw}
+        dm_den.save_var_raw(data2save) 
 
-            y_save, dy_save = staudt_utils.sig_figs(yhat_vc[0][0, 0],
-                                                    yhat_vc[1][0])
-            uci.save_prediction('logrho', y_save, dy_save)
+        y_save, dy_save = staudt_utils.sig_figs(yhat_vc[0][0, 0],
+                                                yhat_vc[1][0])
 
-            # I expect log2linear to return asymetric errors in the following 
-            # line.
-            Y_MSUN = staudt_utils.log2linear(*y_flat) * u.M_sun/u.kpc**3.
-            Y_1E7MSUN = Y_MSUN / 1.e7 
-            y_1e7msun_txt, DY_1E7MSUN_TXT = staudt_utils.sig_figs(
-                    Y_1E7MSUN[0].value, Y_1E7MSUN[1:].value) 
-            uci.save_prediction('rho_1e7msun', y_1e7msun_txt, 
-                                   DY_1E7MSUN_TXT)
+        # I expect log2linear to return asymetric errors in the following 
+        # line.
+        Y_MSUN = staudt_utils.log2linear(*y_flat) * u.M_sun/u.kpc**3.
+        Y_1E7MSUN = Y_MSUN / 1.e7 
+        y_1e7msun_txt, DY_1E7MSUN_TXT = staudt_utils.sig_figs(
+                Y_1E7MSUN[0].value, Y_1E7MSUN[1:].value) 
 
-            particle_y = (Y_MSUN * c.c**2.).to(u.GeV/u.cm**3.) 
-            # The following variable assignment is written in such a way that 
-            # it will work 
-            # no matter whether
-            # the errors are symmetric or asymetric (with the [1:])
-            particle_y_save, particle_dy_save = staudt_utils.sig_figs(
-                   particle_y[0].value,
-                   particle_y[1:].value)
-            uci.save_prediction('rho_GeV', particle_y_save, 
-                                   particle_dy_save)
-            
+        particle_y = (Y_MSUN * c.c**2.).to(u.GeV/u.cm**3.) 
+        if len(particle_y) == 3:
+            display(Latex('$\\rho_{{\\rm MW}}'
+                          '={0:0.3f}^{{+{1:0.3f}}}_{{-{2:0.3f}}}'
+                          '\\rm GeV\,cm^{{-3}}$'
+                          .format(*particle_y.value)))
+        elif len(particle_y) == 2:
+            display(Latex('$\\rho_{{\\rm MW}}'
+                          '={0:0.3f}\pm{1:0.3f}\\rm GeV\,cm^{{-3}}$'
+                          .format(*particle_y.value)))
+        else:
+            raise ValueError('Unexpected number of elements in `particle_y`.')
+        # The following variable assignment is written in such a way that 
+        # it will work 
+        # no matter whether
+        # the errors are symmetric or asymetric (with the [1:])
+        particle_y_save, particle_dy_save = staudt_utils.sig_figs(
+               particle_y[0].value,
+               particle_y[1:].value)
+        
+        RHO0_1E7MSUN = staudt_utils.log2linear(
+                logy_intercept_raw, dlogy_intercept_raw) / 1.e7 
+        RHO0_1E7MSUN *= u.M_sun / u.kpc**3.
+        RHO0_GEV = (RHO0_1E7MSUN * 1.e7 * c.c**2.).to(u.GeV / u.cm**3.) 
+        rho0_1e7msun_txt, DRHO0_1E7MSUN_TXT = staudt_utils.sig_figs(
+                RHO0_1E7MSUN[0].value, RHO0_1E7MSUN[1:].value)
+        rho0_GeV_txt, DRHO0_GEV_TXT = staudt_utils.sig_figs(
+                RHO0_GEV[0].value, RHO0_GEV[1:].value)
+
+        if update_val:
+            # Save regression info 
             uci.save_prediction('den_slope', slope, dslope_str)
             uci.save_prediction('logden_intercept', logy_intercept_str, 
                                    dlogy_intercept_str)
-            RHO0_1E7MSUN = staudt_utils.log2linear(
-                    logy_intercept_raw, dlogy_intercept_raw) / 1.e7 
-            RHO0_1E7MSUN *= u.M_sun / u.kpc**3.
-            RHO0_GEV = (RHO0_1E7MSUN * 1.e7 * c.c**2.).to(u.GeV / u.cm**3.) 
-            rho0_1e7msun_txt, DRHO0_1E7MSUN_TXT = staudt_utils.sig_figs(
-                    RHO0_1E7MSUN[0].value, RHO0_1E7MSUN[1:].value)
-            rho0_GeV_txt, DRHO0_GEV_TXT = staudt_utils.sig_figs(
-                    RHO0_GEV[0].value, RHO0_GEV[1:].value)
             uci.save_prediction('rho0_1e7msun', rho0_1e7msun_txt,
-                                   DRHO0_1E7MSUN_TXT)
+                                DRHO0_1E7MSUN_TXT)
+
+            # Save MW results
+            uci.save_prediction('logrho', y_save, dy_save)
+            uci.save_prediction('rho_GeV', particle_y_save, 
+                                   particle_dy_save)
+            uci.save_prediction('rho_1e7msun', y_1e7msun_txt, 
+                                DY_1E7MSUN_TXT)
             uci.save_prediction('rho0_GeV', rho0_GeV_txt, DRHO0_GEV_TXT)
+    ###########################################################################
 
     display(Latex('$r=8.3\pm{0:0.2f}\,\mathrm{{kpc}}$'
                   .format(df.attrs['dr']/2., df.attrs['dz']/2.)))
