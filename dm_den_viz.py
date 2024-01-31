@@ -1638,9 +1638,10 @@ def plt_disc_diffs(df_source,
     
     return None
 
-def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
+def plt_gmr_vs_vc(df_source, tgt_fname=None,
                   figsize=(8,4),
-                  labelsize=11., adjust_text_kwargs={}, label_overrides={}):
+                  labelsize=11., adjust_text_kwargs={}, label_overrides={},
+                  only_disks=True):
     '''
     Parameters
     ----------
@@ -1651,7 +1652,9 @@ def plt_gmr_vs_vc(df_source='dm_stats_dz1.0_20230626.h5', tgt_fname=None,
         If draw_arrow is True (False), an arrow will (will not) link the data
             point with its label.
     '''
-    df = dm_den.load_data(df_source).drop(['m12z','m12w'])
+    df = dm_den.load_data(df_source)
+    if only_disks:
+        df.drop(['m12z', 'm12w'], inplace=True)
     xcol = 'v_dot_phihat_disc(T<=1e4)'
     ycol = 'vcirc'
 
