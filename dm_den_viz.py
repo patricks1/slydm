@@ -696,6 +696,17 @@ def fill_ax_new(ax, df, xcol, ycol,
     if color=='masses':
         c = dm_den.load_data('dm_stats_stellar_20221110.h5') \
                   .loc[df.index,['mvir_stellar']].values
+        #######################################################################
+        #import cropper
+        #for galname in df.index:
+        #    gal_data = cropper.load_data(galname, getparts=['PartType4'])
+        #    M0 = dm_den.get_mwithin(8.3, 
+        #                            gal_data['PartType4']['r'],
+        #                            gal_data['PartType4']['mass_phys'])
+        #    df.loc[galname, 'M0_stellar'] = M0
+        #
+        #c = df['M0_stellar'].values
+        #######################################################################
         c = np.log10(c)
         cmap = cmr.get_sub_cmap('viridis', 0., 0.9)
         sc = ax.scatter(xs,ys,marker='o',c=c,alpha=alpha,label=legend_txt,
@@ -711,6 +722,11 @@ def fill_ax_new(ax, df, xcol, ycol,
         cb.ax.tick_params(labelsize=12)
         cb.set_label(size=12,
                      label='$\log M_\mathrm{\star}\,/\,\mathrm{M_\odot}$')
+        #######################################################################
+        #cb.set_label(
+        #     size=12,
+        #     label='$\log M(r<R_0)_\mathrm{\star}\,/\,\mathrm{M_\odot}$')
+        #######################################################################
     else:
         ax.plot(xs,ys,'o',color=color,alpha=alpha,label=legend_txt)
     ax.set_xlabel(xlabel)
@@ -1667,11 +1683,14 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
     ax.plot([xs.min(), xs.max()], [xs.min(), xs.max()], color='gray', 
             ls='--', label='1:1')
     errors = (ys-xs).values
+    frac_errors = errors / ys.values
+    frac_std = np.sqrt((frac_errors**2.).sum() / (len(frac_errors) - 2.))
     sse = errors.T @ errors
     diffs = ys-np.mean(ys)
     tss = diffs.T @ diffs
     r2_1to1 = 1.-sse/tss
     display(Latex('$r^2_\mathrm{{1:1}}={0:0.2f}$'.format(r2_1to1)))
+    display(Latex('std dev = {0:0.1f}%'.format(frac_std * 100.)))
 
     fill_ax_new(ax, df, xcol, ycol, 
                 xlabel=vc_label, ylabel=gmr_label,
