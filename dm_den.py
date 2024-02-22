@@ -835,6 +835,22 @@ def calc_vesc(ms, coords, rvec):
     Calculate escape velocity at rvec, given masses and the 
     coordinate locations of
     those masses
+
+    Parameters
+    ----------
+    ms: np.array
+        Masses for the particles in the galaxy in question, in units of 
+        10^10 M_sun.
+    coords: np.array
+        3-D coordinates for the particles, in kpc.
+    rvec: np.array
+        The vector pointing to the location at which the user wants the escape
+        speed.
+
+    Returns
+    -------
+    v_esc: float or np.array
+        The escape speed calculated.
     '''
     d_pos = rvec - coords
     rs = np.linalg.norm(d_pos, axis=1)
@@ -1693,18 +1709,57 @@ def find_vcrits_fr_distrib(df_source, method='direct', update_values=False):
     return vcrits
 
 def find_last_v():
+    '''
+    Identify the fastest dark matter particle in the Solar ring of each galaxy
+    (excluding m12z and m12w) by checking the
+    last bin in the speed pdf. I checked and found that this matches the
+    results from find_max_v().
+
+    Returns
+    -------
+    vesc_dict: dict
+        Dictionary of the fastest DM particle, keyed by galaxy name
+    '''
+    vesc_dict = {}
+                     
     with open(paths.data + 'v_pdfs_disc_dz1.0.pkl', 'rb') as f:
         pdfs = pickle.load(f)
     for gal in ['m12z', 'm12w']:
         pdfs.pop(gal)
-    vesc_dict = {}
     for gal in pdfs:
         vesc_dict[gal] = pdfs[gal]['bins'][-1]
     return vesc_dict
 
-def find_max_v(dfsource, r=8.3, dr=1.5, dz=1.):
+def find_max_v(dfsource, r=8.3, bootstrap=False, tgt_fname=None):
+    '''
+    Identify the fastest dark matter particle in the Solar ring of each galaxy
+    by loading all the DM particles in the solar ring
+
+    Parameters
+    ----------
+    dfsource: str
+        File name of the analysis results DataFrame to reference.
+    r: float, default 8.3
+        Assumption for distance of the Sun from the center of the galaxy in 
+        kpc.
+    boostrap: bool, default False
+        If True, sample only 1/10 of the particles ten times.
+    tgt_fname: str, default None
+        If provided, the file name into which to save the results. 
+
+    Returns
+    -------
+    speeds_dict: dict
+        Escape speed dictionary keyed by galaxy name. If bootstrap is False 
+        by default, each dictionary value will be a single float. If bootstrap 
+        is True, each value will be a np.ndarray of shape (10,) corresponding
+        to the escape speed found on each of ten iterations
+    '''
     import cropper
-    df = load_data('dm_stats_dz1.0_20230724.h5').drop(['m12w', 'm12z'])
+    df = load_data(dfsource).drop(['m12w', 'm12z'])
+    r = 8.3 # Assumed Solar distance from the center of the galaxy, kpc
+    dr = df.attrs['dr']
+    dz = df.attrs['dz']
     speeds_dict = {}
     for gal in df.index:
         data = cropper.load_data(gal, getparts=['PartType1'])
@@ -1713,9 +1768,66 @@ def find_max_v(dfsource, r=8.3, dr=1.5, dz=1.):
         zs = data['PartType1']['coord_rot'][:, 2]
         in_ring = (rs <= r + dr/2.) & (rs >= r - dr/2.)
         in_disc = np.abs(zs) <= dz/2.
-        speeds_dict[gal] = speeds[in_ring & in_disc].max() 
+        speeds = speeds[in_ring & in_disc] 
+        N_particles = speeds.shape[0]
+        N_sample = int(round(0.1 * N_particles, 0))
+
+        # Default random number generator from numpy:
+        rng = np.random.default_rng() 
+
+        if bootstrap:
+            max_speeds =  np.array([rng.choice(speeds, N_sample).max() 
+                                    for i in range(10)])
+            speeds_dict[gal] = max_speeds
+        else:
+            speeds_dict[gal] = speeds.max() 
+
+    if tgt_fname is not None:
+        with open(paths.data + tgt_fname, 'wb') as f:
+            pickle.dump(speeds_dict, f, pickle.HIGHEST_PROTOCOL)
+
     return speeds_dict 
 
+def determine_vesc_sensitivity():
+    '''
+    Determine sensitivity to particle count / resolution for each galaxy by
+    1) loading 
+       `paths.data` + 'vesc_lim_bootstrap_dict.pkl',
+       the ten runs per galaxy that randomly sampled 10% of all DM particles to 
+       make 
+       coarse vesc(N-->0) (i.e. vlim) estimates, 
+    2) calculating the std of the ten runs for each galaxy, and
+    3) taking the ratio of std / [vesc_N-->0]_{using all particles} 
+
+    The function saves the results using uci.save_var_latex, which looks to
+    paths.paper.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    '''
+    with open(paths.data + 'vesc_lim_bootstrap_dict.pkl', 'rb') as f:
+        bootstrap = pickle.load(f)
+    vescs = load_vcuts('lim', 'dm_stats_dz1.0_20231211.h5')
+    stds = {}
+    min_frac = np.inf 
+    max_frac = 0.
+    for galname in bootstrap:
+        std = np.std(bootstrap[galname])
+        fraction = std / vescs[galname]
+        min_frac = min(min_frac, fraction)
+        max_frac = max(max_frac, fraction)
+        stds[galname] = np.array([std, fraction])
+    display(stds)
+    uci.save_var_latex('vesc_min_std', 
+                       '{0:0.0f}\%'.format(min_frac * 100.))
+    uci.save_var_latex('vesc_max_std',
+                       '{0:0.0f}\%'.format(math.ceil(max_frac * 100.)))
+    return None
 
 ###############################################################################
 # Saving functions
@@ -1817,7 +1929,7 @@ def load_data(fname):
 def load_vcuts(vcut_type, df):
     '''
     Parameters
-    ---------------------
+    ----------
     vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'} 
         Specifies how to determine the speed distribution cutoff.
             lim: The true escape speed v_esc -- The speed of the fastest DM 
