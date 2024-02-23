@@ -590,7 +590,7 @@ def showGeV_x(ax, xadjustment):
     ax2.set_xticks(visible_ticks)
     ax2.set_xticklabels(['{:,.2f}'.format(lab.value) for lab in labs], 
                         fontsize=12.)
-    ax2.set_xlabel('$\mathrm{GeV}\,c^{-2}\,\mathrm{cm^{-3}}$', 
+    ax2.set_xlabel('$\\rho\,/\,\left[\mathrm{GeV}\,\mathrm{cm^{-3}}\\right]$',
                    fontsize=12.)
     ax2.grid(False)
     return None
@@ -623,7 +623,7 @@ def showGeV_y(ax, yadjustment):
     ax2.set_yticks(visible_ticks)
     ax2.set_yticklabels(['{:,.2f}'.format(lab.value) for lab in labs], 
                         fontsize=12.)
-    ax2.set_ylabel('$\mathrm{GeV}\,c^{-2}\,\mathrm{cm^{-3}}$', 
+    ax2.set_ylabel('$\\rho\,/\,\left[\mathrm{GeV}\,\mathrm{cm^{-3}}\\right]$', 
                    fontsize=12.)
     ax2.grid(False)
     return None
@@ -711,14 +711,12 @@ def fill_ax_new(ax, df, xcol, ycol,
         cmap = cmr.get_sub_cmap('viridis', 0., 0.9)
         sc = ax.scatter(xs,ys,marker='o',c=c,alpha=alpha,label=legend_txt,
                         cmap=cmap)
-        '''
         if ycol == 'den_disc':
-            pad = 0.25
+            pad = 0.15
         else:
             pad = 0.05
-        '''
-        cb = plt.colorbar(sc, pad=0.2, 
-                          location='bottom')
+        cb = plt.colorbar(sc, pad=pad, 
+                          location='right')
         cb.ax.tick_params(labelsize=12)
         cb.set_label(size=12,
                      label='$\log M_\mathrm{\star}\,/\,\mathrm{M_\odot}$')
@@ -1677,11 +1675,9 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
     fig = plt.figure(figsize=figsize, dpi=110)
     ax = fig.add_subplot(111)
     
-    #Plot 1:1 line
     xs = (df[xcol])
     ys = (df[ycol])
-    ax.plot([xs.min(), xs.max()], [xs.min(), xs.max()], color='gray', 
-            ls='--', label='1:1')
+
     errors = (ys-xs).values
     frac_errors = errors / ys.values
     frac_std = np.sqrt((frac_errors**2.).sum() / (len(frac_errors) - 2.))
@@ -1697,6 +1693,27 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
                 xadjustment=None, showcorr=False, labelsize=labelsize,
                 arrowprops={'arrowstyle': '-'},
                 adjust_text_kwargs=adjust_text_kwargs)
+
+    # Plot 1:1 line ###########################################################
+
+    # The following two lines are here because I made a decision about what I
+    # wanted the limits to be, but I don't always make this decision, in which
+    # case I would need the ax.get_xlim and ax.get_ylim lines that follow. They
+    # may seem
+    # redundant in this case; however, they're there so I can copy this code
+    # and use it in places where I don't first set the limits.
+    ax.set_xlim(xs.min(), xs.max())
+    ax.set_ylim(xs.min(), xs.max())
+
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    start = min(xlim[0], ylim[0])
+    stop = max(xlim[1], ylim[1])
+    ax.plot([start, stop], [start, stop], color='gray', 
+            ls='--', label='1:1')
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ###########################################################################
 
     ax.legend(fontsize=11)
 
@@ -2402,6 +2419,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
 
         if scale != 'linear':
             axs[i].set_yscale(scale)
+    print('Done plotting galaxies. Finalizing figure.')
 
     label_axes(axs, fig, gals)
     if fig.Nrows == 3:
@@ -2575,7 +2593,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
         vdamp = results['h'] * (vc / 100.) ** results['j']
         ps = fitting.smooth_step_max(vs, v0, vdamp, results['k'])
         if sigmoid_damped_eqnum is not None:
-            label = 'Eqn. {0:0.0f}'.format(sigmoid_damped_eqnum)
+            label = 'Eqn. {0:s}'.format(str(sigmoid_damped_eqnum))
         else:
             label = 'prediction from $v_\mathrm{c}$'
         ax.plot(vs, ps, label=label,
@@ -2592,23 +2610,24 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
                         label='$1\sigma$ band')
         return None
     
-    fig = plt.figure(figsize = (4.6 / 2. + 1., 2.5), dpi=dpi,
+    fig = plt.figure(figsize = (5., 2.5), dpi=dpi,
                      facecolor = (1., 1., 1., 0.))
     ax = fig.add_subplot(111)
-
-    predict(vc, ax, c='C3')
 
     vesc_hat_dict = dm_den.load_vcuts(vcut_type, df)
     ax.plot(vs, fitting.smooth_step_max(vs, vc, vesc_hat_dict['mw'], np.inf),
             ls='--',
-            label='Maxwellian, $v_0=v_\mathrm{c}$')
+            label='Maxwellian,\n$v_0=v_\mathrm{c}$')
     #ax.plot(vs, fitting.exp_max(vs, vc, vesc_hat_dict['mw']))
+    
+    predict(vc, ax, c='C3')
+
     if show_vcrit:
         with open(paths.data + 'vcrits_fr_distrib.pkl', 'rb') as f:
             vcrits = pickle.load(f)
         ax.axvline(vcrits['mw'], ls='--', color='grey', alpha=0.8)
-    ax.set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
-    ax.set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+    ax.set_ylabel('$f(v)\,4\pi v^2\,/\,[\mathrm{km^{-1}\,s}]$')
+    ax.set_xlabel('$v\,/\,[\mathrm{km\,s^{-1}}]$')
     ax.set_ylim(0., None)
     loc = [0.97,0.96]
     kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
@@ -2637,12 +2656,10 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
                         scilimits=(order_of_mag,
                                    order_of_mag),
                             useMathText=True)
-    ax.legend(bbox_to_anchor=(0.5, -0.1), 
-              loc='upper center', ncol=1,
-              bbox_transform=fig.transFigure)
-    #ax.legend(bbox_to_anchor=(0., -0.09), 
-    #          loc='upper left', ncol=2,
-    #          bbox_transform=fig.transFigure)
+    ax.legend(bbox_to_anchor=(1., 0.5), 
+              loc='center left', ncol=1,
+              bbox_transform=ax.transAxes,
+              borderaxespad=1.)
 
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
@@ -2780,8 +2797,8 @@ def plt_halo_integrals(gals,
         vdamp = params['h'] * vc100 ** params['j']
         gs_hat = fitting.g_smooth_step_max(vs_hat, v0, vdamp, params['k'])
         if sigmoid_damped_eqnum is not None:
-            sigmoid_damped_label = '$f(v)=\mathrm{{Eqn.}}\,{0:0.0f}$' \
-                                   .format(sigmoid_damped_eqnum)
+            sigmoid_damped_label = '$f(v)=\mathrm{{Eqn.}}\,{0:s}$' \
+                                   .format(str(sigmoid_damped_eqnum))
         else:
             sigmoid_damped_label = 'prediction from $v_\mathrm{c}$'
         axs[i].plot(vs_hat, gs_hat, label=sigmoid_damped_label,
@@ -2970,8 +2987,9 @@ def plt_halo_integrals(gals,
         xlabel_y = 0.
         legend_y = -0.1
     ax_ylabel.set_ylabel('$g(v_\mathrm{min})'
-                         '\ \mathrm{\left[km^{-1}\,s\\right]}$')
-    axs[-1].set_xlabel('$v_\mathrm{min}\ \mathrm{\left[km\,s^{-1}\\right]}$')
+                         '\,/\,\mathrm{\left[km^{-1}\,s\\right]}$')
+    axs[-1].set_xlabel(
+        '$v_\mathrm{min}\,/\,\mathrm{\left[km\,s^{-1}\\right]}$')
     # Put the x-axis label where we want it:
     axs[-1].xaxis.set_label_coords(0.5, xlabel_y, transform=fig.transFigure)                       
     handles, labels = axs[-1].get_legend_handles_labels()
@@ -3190,7 +3208,7 @@ def plt_halo_integral_mw(df_source,
 
     Ncols = 2
     Nrows = 1
-    xfigsize = 4. 
+    xfigsize = 5. 
     yfigsize = 2. 
     fig, axs = plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
                             dpi=dpi)
@@ -3213,10 +3231,10 @@ def plt_halo_integral_mw(df_source,
                                                           vesc_hat))
 
     for i in [0, 1]:
-        axs[i].plot(vmins, gs_max, label='Maxwellian, $v_0=v_{\\rm c}$')
+        axs[i].plot(vmins, gs_max, label='Maxwellian,\n$v_0=v_{\\rm c}$')
         axs[i].plot(vmins, gs_sigmoid_damped, 
-                    label=('$f(v) = {{\\rm Eqn. }}{0:0.0f}$'
-                           .format(sigmoid_damped_eqnum)),
+                    label=('$f(v) = {{\\rm Eqn. }}{0:s}$'
+                           .format(str(sigmoid_damped_eqnum))),
                     color='C3')
         if xtickspace is not None:
             axs[i].xaxis.set_major_locator(
@@ -3233,11 +3251,11 @@ def plt_halo_integral_mw(df_source,
     make_sci_y(axs, 1, -3)
     axs[1].set_xlim(right=670.)
 
-    axs[1].set_xlabel('$v_\mathrm{min}\ \mathrm{\left[km\,s^{-1}\\right]}$')
+    axs[1].set_xlabel('$v_\mathrm{min}\,/\,\mathrm{\left[km\,s^{-1}\\right]}$')
     # Put the x-axis label where we want it:
     axs[1].xaxis.set_label_coords(0.5, 0., transform=fig.transFigure)                       
 
-    axs[0].set_ylabel('$g(v_{\\rm min})\ \\rm\left[km^{-1}\,s\\right]$')
+    axs[0].set_ylabel('$g(v_{\\rm min})\,/\,\\rm\left[km^{-1}\,s\\right]$')
 
     axs[0].set_yscale('log')
     axs[0].set_ylim(bottom=ymin)
@@ -3249,13 +3267,13 @@ def plt_halo_integral_mw(df_source,
 
     axs[1].legend(bbox_to_anchor=(1., 0.), borderaxespad=0.)
     handles, labels = axs[0].get_legend_handles_labels()
-    trans = mpl.transforms.blended_transform_factory(axs[0].transAxes,
+    trans = mpl.transforms.blended_transform_factory(axs[1].transAxes,
                                                      fig.transFigure)
     axs[1].legend(handles=[handles[i] for i in [0, 2, 1, 3]],
-                  bbox_to_anchor=(1., 0.), 
-                  loc='upper center', ncol=1,
+                  bbox_to_anchor=(1., 0.5), 
+                  loc='center left', ncol=1,
                   bbox_transform=trans,
-                  borderaxespad=1.5)
+                  borderaxespad=1.)
 
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
@@ -3358,7 +3376,7 @@ def setup_multigal_fig(gals, show_resids=True):
         Ncols = 4
         Ngals = 12
     xfigsize = 4.6 / 2. * Ncols + 1.
-    yfigsize = 1.5 * Nrows + 1. 
+    yfigsize = 1.5 * Nrows + 1.
     if Ngals <= 4 and show_resids:
         # Add room for residual plots
         Nrows += 1
@@ -3383,14 +3401,14 @@ def label_axes(axs, fig, gals):
     if not isinstance(gals, (list, np.ndarray, pd.core.indexes.base.Index)) \
        and gals == 'discs':
         for i in [4]:
-            axs[i].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+            axs[i].set_ylabel('$f(v)\,4\pi v^2\,/\,[\mathrm{km^{-1}\,s}]$')
         xlabel_yloc = 0.05
     elif len(gals) < 4:
-        axs[0].set_ylabel('$f(v)\,4\pi v^2\ [\mathrm{km^{-1}\,s}]$')
+        axs[0].set_ylabel('$f(v)\,4\pi v^2\,/\,[\mathrm{km^{-1}\,s}]$')
         xlabel_yloc = 0.02
     else:
         xlabel_yloc = 0.04
-    axs[0].set_xlabel('$v\ [\mathrm{km\,s^{-1}}]$')
+    axs[0].set_xlabel('$v\,/\,[\mathrm{km\,s^{-1}}]$')
     axs[0].xaxis.set_label_coords(0.5, xlabel_yloc, transform=fig.transFigure)
     return None
 
