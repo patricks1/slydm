@@ -994,7 +994,7 @@ def plt_vesc_vc_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
                 color='red', 
                 arrowprops={'arrowstyle':'-|>', 'color':'red'}, 
                 textcoords='axes fraction',
-                xytext=(0.33, 0.66))
+                xytext=(0.45, 0.7))
 
     # Replace the necessary data labels/annotations with their overrides
     override_labels(label_overrides, ax, dm_den.load_data(df_source),
@@ -1389,7 +1389,7 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
-                    dpi=140)
+                    dpi=350)
 
     plt.show()
     
@@ -1646,7 +1646,7 @@ def plt_disc_diffs(df_source,
     if tgt_fname:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
-                    dpi=140)
+                    dpi=350)
 
     plt.show()
     
@@ -1723,7 +1723,7 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
     if tgt_fname:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
-                    dpi=140)
+                    dpi=350)
 
     plt.show()
 
@@ -2664,7 +2664,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
-                    dpi=250)
+                    dpi=350)
 
     plt.show()
 
@@ -3278,12 +3278,13 @@ def plt_halo_integral_mw(df_source,
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
-                    dpi=250)
+                    dpi=350)
     plt.show()
 
     return None
 
-def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False):
+def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False,
+                   xticklabel_fontsize=10, figsize=None):
     df_copy = dm_den.load_data(df_source)
     if only_discs:
         df_copy.drop(['m12z', 'm12w'], inplace=True)
@@ -3301,19 +3302,21 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False):
     df_copy['$\\beta_z$'] = 1. - df_copy['std(v_dot_zhat_disc(dm))']**2. \
                              / df_copy['std(v_dot_rhat_disc(dm))']**2.
     display(df_copy)
-    print((df_copy['$\\beta$'] < 0.25).sum() / len(df_copy))
-
+    print('fraction(beta < 0.25) = {0:0.4f}'
+          .format((df_copy['$\\beta$'] < 0.25).sum() / len(df_copy)))
 
     if vertical:
-        shape = (4.5, 8)
+        if figsize is None:
+            figsize = (4.5, 8.)
         position1 = 212
         position2 = 211
     else:
-        shape = (12,3)
+        if figsize is None:
+            figsize = (8.5, 2.5)
         position1 = 122
         position2 = 121
         
-    fig = plt.figure(figsize=shape, dpi=130)
+    fig = plt.figure(figsize=figsize, dpi=130)
     ax1 = fig.add_subplot(position1)
     fig.subplots_adjust(wspace=0.15, hspace=0.3)
 
@@ -3345,7 +3348,9 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False):
         #ax2.set_ylim(0.75,None)
     else:
         legend_y = -0.25
-        ax1.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
+        # ax1 is actually on the right.
+        ax1.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3,
+                   columnspacing=0.7)
         ax2.legend(bbox_to_anchor=(0.5,legend_y), loc="upper center", ncol=3)
         #ax2.set_ylim(0.75,None)
     ax1.set_axisbelow(True)
@@ -3357,10 +3362,11 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False):
         labels = ax1.xaxis.get_majorticklabels()
         ax.set_xticklabels(labels, rotation=30, ha='right', 
                            rotation_mode='anchor')
+        ax.tick_params('x', labelsize=xticklabel_fontsize)
 
     if savefig:
         plt.savefig(paths.figures+'anisotropy.png',
-                    bbox_inches='tight', dpi=140)
+                    bbox_inches='tight', dpi=350)
     plt.show()
 
 def setup_multigal_fig(gals, show_resids=True):
