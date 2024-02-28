@@ -1702,8 +1702,8 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
     # may seem
     # redundant in this case; however, they're there so I can copy this code
     # and use it in places where I don't first set the limits.
-    ax.set_xlim(xs.min(), xs.max())
-    ax.set_ylim(xs.min(), xs.max())
+    #ax.set_xlim(xs.min(), xs.max())
+    #ax.set_ylim(xs.min(), xs.max())
 
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
@@ -1711,8 +1711,8 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
     stop = max(xlim[1], ylim[1])
     ax.plot([start, stop], [start, stop], color='gray', 
             ls='--', label='1:1')
-    ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
+    ax.set_xlim(start, stop)
+    ax.set_ylim(start, stop)
     ###########################################################################
 
     ax.legend(fontsize=11)
@@ -2227,8 +2227,8 @@ def plt_universal_prefit(result, df_source, gals='discs',
                       label='data')
         # Plot prediction
         if sigmoid_damped_eqnum is not None:
-            sigmoid_damped_label = 'Eqn. {0:0.0f}' \
-                                   .format(sigmoid_damped_eqnum)
+            sigmoid_damped_label = 'Eqn. {0:s}' \
+                                   .format(str(sigmoid_damped_eqnum))
         else:
             sigmoid_damped_label = 'prediction from $v_\mathrm{c}$'
         axs[i].plot(vs_postfit,
@@ -2394,7 +2394,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
             else:
                 rms_txt_mao = ''
             txt_rms = (#'\n$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
-                       'RMS$_{{{5:0.0f}}}={1:0.2f}$' 
+                       'RMS$_{{{5:s}}}={1:0.2f}$' 
                        + rms_txt_mao
                        + rms_txt_mao_naive
                        + rms_txt_max)
@@ -2405,9 +2405,9 @@ def plt_universal_prefit(result, df_source, gals='discs',
                     rms_mao / 10. ** O_rms if show_mao_prediction else None,
                     rms_mao_naive / 10. ** O_rms if show_mao_naive else None,
                     rms_max / 10. ** O_rms if show_max_hard else None,
-                    sigmoid_damped_eqnum
+                    str(sigmoid_damped_eqnum)
                 ),
-                loc, **kwargs_txt)
+                loc, zorder=0, **kwargs_txt)
         axs[i].grid(False)
         if ymax is not None:
             axs[i].set_ylim(top=ymax)

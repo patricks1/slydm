@@ -1089,7 +1089,7 @@ def fit_vdamp(df_source, gals='discs',
 
         # Set label for the line from this work
         if sigmoid_damped_eqnum is not None:
-            label_this = 'fit, Eq. ' + str(int(sigmoid_damped_eqnum))
+            label_this = 'fit, Eq. ' + str(sigmoid_damped_eqnum)
         elif show_mao_fixed or show_mao_free or show_exp:
             label_this = 'fit, sigmoid damped'
         else:
