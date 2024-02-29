@@ -15,7 +15,6 @@ import grid_eval_mao
 import lmfit
 import copy
 import os
-import staudt_fire_utils as utils
 import UCI_tools.tools as uci
 from UCI_tools import staudt_tools
 from progressbar import ProgressBar
@@ -106,11 +105,11 @@ gmr_label = '$\sqrt{GM/R_0}\,/\,'\
               '\\left[\mathrm{km\,s^{-1}}\\right]$'
 vc_label = '$v_\mathrm{c}\,/\,[\mathrm{km\,s^{-1}}]$'
 
-vcut_labels = {'lim_fit': '$\hat{v}_\mathrm{esc}(v_\mathrm{c})$',
+vcut_labels = {'lim_fit': '$v_\mathrm{esc}(v_\mathrm{c})$',
                'lim': '$v_\mathrm{esc}$',
-               'vesc_fit': ('$\hat{v}_{\\rm esc}(\Phi'
+               'vesc_fit': ('$v_{\\rm esc}(\Phi'
                             '\\rightarrow v_\mathrm{c})$'),
-               'veschatphi': '$\hat{v}_\mathrm{esc}(\Phi)$',
+               'veschatphi': '$v_\mathrm{esc}(\Phi)$',
                'ideal': '$v_\mathrm{cut, ideal}$'}
 
 # Y-axis limit for all residual plots

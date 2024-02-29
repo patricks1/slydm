@@ -1200,7 +1200,7 @@ def fit_vdamp(df_source, gals='discs',
                         show=False).replace('$','')
 
         if show_vescs:
-            # Draw vesc line
+            # Draw vesc(Phi) line
             vesc = vescphi_dict[gal]
             axs[i].axvline(vesc, ls='--', alpha=0.8, color='k')
             trans = mpl.transforms.blended_transform_factory(axs[i].transData,
