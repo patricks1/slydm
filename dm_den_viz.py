@@ -121,6 +121,11 @@ dvc_eilers = 7.
 
 vesc_mw = 550.
 
+# Recommendations from Baxter et al. 2021
+vesc_std = 544. # km/s
+vc_std = 238. # km/s
+v0_std = vc_std
+
 # vc ranges from Sofue 2020
 vc_sofue=238.
 dvc_sofue=14.
@@ -2093,11 +2098,12 @@ def plt_universal_prefit(result, df_source, gals='discs',
                          show_mao_prediction=False,
                          show_mao_naive=False,
                          xtickspace=None, show_rms=False,
-                         tgt_fname=None, scale='linear', 
+                         tgt_path=None, scale='linear', 
                          prediction_vcut_type=None,
                          std_vcut_type=None,
                          sigmoid_damped_eqnum=None,
-                         mao_eqnum=None):
+                         mao_eqnum=None,
+                         show_plot=True):
     '''
     Noteworthy parameters
     ---------------------
@@ -2109,6 +2115,11 @@ def plt_universal_prefit(result, df_source, gals='discs',
                default: None
         Specifies how to determine the speed distribution cutoff for standard-
         assumption distributions
+    tgt_path: str, default None
+        If specified, the path to which the user wants to save the resulting
+        plot
+    show_plot: bool, default True
+        If True, display the plot.
     '''
     import dm_den
     import fitting
@@ -2394,8 +2405,8 @@ def plt_universal_prefit(result, df_source, gals='discs',
                 rms_txt_mao = ''
             txt_rms = (#'\n$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
                        'RMS$_{{{5:s}}}={1:0.2f}$' 
-                       + rms_txt_mao
                        + rms_txt_mao_naive
+                       + rms_txt_mao
                        + rms_txt_max)
             axs[i].annotate(
                 txt_rms.format(
@@ -2437,11 +2448,14 @@ def plt_universal_prefit(result, df_source, gals='discs',
                   bbox_transform=fig.transFigure,
                   borderaxespad=1.5)
 
-    if tgt_fname is not None:
-        plt.savefig(paths.figures+tgt_fname,
+    if tgt_path is not None:
+        plt.savefig(tgt_path,
                     bbox_inches='tight',
                     dpi=350)
-    plt.show()
+    if show_plot:
+        plt.show()
+    else:
+        plt.close()
 
     if show_rms:
         d = 2
@@ -2547,7 +2561,8 @@ def plt_mao_bands(dfsource):
     return None
 
 def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
-           sigmoid_damped_eqnum=None, show_vc=False):
+           sigmoid_damped_eqnum=None, show_vc=False, show_current_params=True,
+           show_shm=False):
     '''
     Parameters
     ----------
@@ -2568,6 +2583,11 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
         The equation number of our final model in the LaTeX paper
     show_vc: bool, default False
         Whether to annotate the circular velocity under the "Milky Way" title
+    show_current_params: bool, default True
+        Whether to show a Maxwellian with vc from eithers and vesc(vc)
+    show_shm: bool, default False
+        Whether to show a Maxwellian with recommended parameters from Baxter et
+        al. 2021 (v0 = vc = 238 km/s, vesc = 544 km/s)
 
     Returns
     -------
@@ -2614,9 +2634,17 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
     ax = fig.add_subplot(111)
 
     vesc_hat_dict = dm_den.load_vcuts(vcut_type, df)
-    ax.plot(vs, fitting.smooth_step_max(vs, vc, vesc_hat_dict['mw'], np.inf),
-            ls='--',
-            label='Maxwellian,\n$v_0=v_\mathrm{c}$')
+    if show_current_params:
+        ax.plot(vs, fitting.smooth_step_max(vs, vc, vesc_hat_dict['mw'], 
+                                            np.inf),
+                ls='--',
+                label='Maxwellian,\n$v_0=v_\mathrm{c}$')
+
+    if show_shm:
+        ax.plot(vs, fitting.smooth_step_max(vs, v0_std, vesc_std, np.inf),
+                ls='--',
+                label='SHM')
+
     #ax.plot(vs, fitting.exp_max(vs, vc, vesc_hat_dict['mw']))
     
     predict(vc, ax, c='C3')
