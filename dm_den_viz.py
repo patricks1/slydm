@@ -2089,7 +2089,6 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
     return None
 
 def plt_universal_prefit(result, df_source, gals='discs', 
-                         ddfrac=None, dhfrac=None, 
                          ymax=None, show_bands=True, 
                          show_sigmoid_hard=False,
                          show_sigmoid_exp=False,
@@ -2134,14 +2133,18 @@ def plt_universal_prefit(result, df_source, gals='discs',
     if (show_mao_naive or show_max_hard) and std_vcut_type is None:
         raise ValueError('You must specify a std_vcut_type if you want'
                          ' to show_mao_naive.')
-    if show_bands and (ddfrac is None or dhfrac is None):
-        grid_results = grid_eval.identify()
-        if ddfrac is None:
-            ddfrac = grid_results[0]
-            print('Using ddfrac = {0:0.5f}'.format(ddfrac))
-        if dhfrac is None:
-            dhfrac = grid_results[1]
-            print('Using dhfrac = {0:0.5f}'.format(dhfrac))
+    # I realized that this "prefit" method loads samples that were already
+    # generated with ddfrac and dhfrac assumptions, so this block of code
+    # doesn't do anything. I'm also now removing these kwargs from the function
+    # definition.
+    #if show_bands and (ddfrac is None or dhfrac is None):
+    #    grid_results = grid_eval.identify()
+    #    if ddfrac is None:
+    #        ddfrac = grid_results[0]
+    #        print('Using ddfrac = {0:0.5f}'.format(ddfrac))
+    #    if dhfrac is None:
+    #        dhfrac = grid_results[1]
+    #        print('Using dhfrac = {0:0.5f}'.format(dhfrac))
     df = dm_den.load_data(df_source)
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs=pickle.load(f)
