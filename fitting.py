@@ -925,9 +925,20 @@ def fit_vdamp(df_source, gals='discs',
     show_mao_free: bool
         If True, include the best-fit parameterization from Mao et al. 2013
         where we also let vesc be a free parameter
-    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'} 
                default None
         Specifies how to determine the speed distribution cutoff.
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
     show_rms: bool
         If true, show information about root mean square deviations of the
         distribution models from the data
