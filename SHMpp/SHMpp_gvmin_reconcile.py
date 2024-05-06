@@ -316,8 +316,8 @@ def gen_shmpp(v0, vesc, save=False, plot=False, verbose=True):
 
     Lvx = np.linspace(0, v0*4.6, 300)
 
-    _, LgvminR = gen_round(v0, vesc, save)
-    _, LgvminS = gen_saus(v0, vesc, save)
+    _, LgvminR = gen_round(v0, vesc, save, verbose)
+    _, LgvminS = gen_saus(v0, vesc, save, verbose)
 
     LgvminSHMpp = (1.-eta)*np.asarray(LgvminR) + eta*np.asarray(LgvminS)
 
