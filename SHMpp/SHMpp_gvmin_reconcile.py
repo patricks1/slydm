@@ -73,8 +73,6 @@ x1 = np.random.normal(mu, sigma, N)
 y1 = np.random.normal(mu, sigma, N)
 z1 = np.random.normal(mu, sigma, N)
 
-Lvx = range(0,int(1e3),5)
-
 def vE(Day,v0):
     ##########################################
     # Calculate the Earths speed
@@ -186,6 +184,8 @@ def gen_round(v0R, vescR, save=False, verbose=True):
         print("\nCalculating gvmin for Round component")
         #print("vmin [km/s],","g(vmin) [s/km]")
 
+    Lvx = np.linspace(0, v0R*4.6, 300)
+
     #Round component velocity dispersion 
     sigR = v0R/sqrt(2)
     vdisR = [sigR, sigR, sigR]
@@ -236,7 +236,7 @@ def gen_round(v0R, vescR, save=False, verbose=True):
 
     return Lvx, LgvminR 
 
-def gen_saus(v0, vesc, save=False):
+def gen_saus(v0, vesc, save=False, verbose=True):
     ##########################################
     # Sausage component
     # Calculate the g(vmin) integral for fS(v)
@@ -246,8 +246,11 @@ def gen_saus(v0, vesc, save=False):
     #weight function is exp(-(x2+y2+z2))
     #integral performed in the galactic frame
 
-    print("\nCalculating gvmin for Sausage component")
-    #print("vmin [km/s],","g(vmin) [s/km]")
+    if verbose:
+        print("\nCalculating gvmin for Sausage component")
+        #print("vmin [km/s],","g(vmin) [s/km]")
+
+    Lvx = np.linspace(0, v0*4.6, 300)
 
     #Sausage component velocity dispersion 
     sigrSaus = sqrt( 3. / (2.*(3.-2.*beta)) ) * v0
@@ -293,6 +296,8 @@ def gen_saus(v0, vesc, save=False):
         #if ivmin % 100 == 0:
         #    print(ivmin,gvminS)
 
+    LgvminS = np.array(LgvminS)
+
     if save:
         print("Export to gvmin_sausage_reconcile.dat \n")
         LoutS = list(zip(Lvx,LgvminS))
@@ -300,13 +305,16 @@ def gen_saus(v0, vesc, save=False):
 
     return Lvx, LgvminS
 
-def gen_shmpp(v0, vesc, save=False, plot=False):
+def gen_shmpp(v0, vesc, save=False, plot=False, verbose=True):
     ##########################################
     # Combine round and Sausage components for SHM++
     # output table of vmin [km/s] and g(vmin) [s/km]
     #########################################
 
-    print("Calculating gvmin for SHM++ ( with eta=",eta,")")
+    if verbose:
+        print("Calculating gvmin for SHM++ ( with eta=",eta,")")
+
+    Lvx = np.linspace(0, v0*4.6, 300)
 
     _, LgvminR = gen_round(v0, vesc, save)
     _, LgvminS = gen_saus(v0, vesc, save)
