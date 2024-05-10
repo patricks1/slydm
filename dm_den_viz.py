@@ -1814,6 +1814,17 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         Which glaxies to plot.
     vcut_type: {'lim_fit', 'lim', 'veschatphi', 'vesc_fit'}
         What type of cut speed to use.
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
 
     Returns
     -------
@@ -2110,10 +2121,32 @@ def plt_universal_prefit(result, df_source, gals='discs',
                default: None
         Specifies how to determine the speed distribution cutoff for
         prediction distributions
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
     std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                default: None
         Specifies how to determine the speed distribution cutoff for standard-
         assumption distributions
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
     tgt_path: str, default None
         If specified, the path to which the user wants to save the resulting
         plot
@@ -2572,6 +2605,17 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
     vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                default 'lim_fit'
         Specifies how to determine the speed distribution cutoff.
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
     tgt_fname: str
         File name of the plot image to save.
     dvc: float
@@ -2734,10 +2778,32 @@ def plt_halo_integrals(gals,
         assumption distributions like the standard Maxwellian and the naive 
         Mao,
         where v0=vc for both.
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
     prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                           default: None
         Specifies how to determine the speed distribution cutoff for prediction
         distributions like the universally fit damped sigmoid and Mao.
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
     ymax: float; default: 9.e-3 for log scale, None for linear scale
         Upper limit for the y-axis. 
     '''
@@ -3401,8 +3467,10 @@ def plt_halo_integral_mw_with_ratio(df_source,
     # Put the linear y-axis label where we want it:
     axs[axi_linear].yaxis.set_label_coords(-0.1, 0.5)
 
-    axs[axi_ratio].set_ylabel('$\dfrac{{g_{{{0:s}}}}}{{g_\mathrm{{Maxwellian}}}}$'
-                              .format(str(sigmoid_damped_eqnum)))
+    axs[axi_ratio].set_ylabel(
+            '$\dfrac{{g_{{{0:s}}}}}{{g_\mathrm{{Maxwellian}}}}$'
+            .format(str(sigmoid_damped_eqnum))
+    )
 
     axs[axi_linear].set_ylim(bottom=-0.5e-3)
 
