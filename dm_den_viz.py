@@ -3313,6 +3313,124 @@ def plt_halo_integral_mw(df_source,
 
     return None
 
+def plt_halo_integral_mw_with_ratio(df_source, 
+                         tgt_fname=None, sigmoid_damped_eqnum=None,
+                         xtickspace=None,
+                         dpi=150):
+    import fitting
+    import dm_den
+    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        params = pickle.load(f)
+    df = dm_den.load_data(df_source)
+
+    Ncols = 1
+    Nrows = 2
+    xfigsize = 5. 
+    yfigsize = 3.5 
+    fig, axs = plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
+                            dpi=dpi, sharex=True)
+    fig.subplots_adjust(hspace=0.)
+    
+    vmins = np.linspace(0., 780., 300)
+    vc100 = vc_eilers / 100.
+    vesc_hat = dm_den.load_vcuts('lim_fit', df)['mw']
+    
+    gs_max = fitting.g_smooth_step_max(vmins, vc_eilers, np.inf, np.inf)
+    gs_max_hard = fitting.g_smooth_step_max(vmins, vc_eilers, vesc_hat, np.inf)
+
+    v0 = params['d'] * vc100 ** params['e']
+    vdamp = params['h'] * vc100 ** params['j']
+    gs_sigmoid_damped = fitting.g_smooth_step_max(vmins, v0, vdamp, 
+                                                  params['k'])
+    gs_sigmoid_damped_hard = fitting.calc_g_general(vmins, 
+                                                    fitting.pN_max_double_hard,
+                                                    args=(v0, vdamp, 
+                                                          params['k'], 
+                                                          vesc_hat))
+
+    axi_ratio = 1
+    axi_linear = 0
+
+    axs[axi_ratio].plot(
+            vmins, (gs_sigmoid_damped / gs_max),
+            color='C3',
+            label='Eq. {0:s} / Maxwellian'.format(str(sigmoid_damped_eqnum))
+    )
+    axs[axi_ratio].plot(
+            vmins, (gs_sigmoid_damped_hard / gs_max_hard),
+            color='C3', ls='--',
+            label='cut Eq. {0:s} / cut Maxwellian'\
+                  .format(str(sigmoid_damped_eqnum))
+    )
+    axs[axi_ratio].axhline(1., lw=1., ls='--', color='grey')
+                    
+    axs[axi_linear].plot(vmins, gs_max, label='Maxwellian,\n$v_0=v_{\\rm c}$')
+    axs[axi_linear].plot(vmins, gs_sigmoid_damped, 
+                label=('$f(v) = {{\\rm Eqn. }}{0:s}$'
+                       .format(str(sigmoid_damped_eqnum))),
+                color='C3')
+
+    for i in [0, 1]:
+        if xtickspace is not None:
+            axs[i].xaxis.set_major_locator(
+                    mpl.ticker.MultipleLocator(base=xtickspace))
+            axs[i].xaxis.set_minor_locator(plt.NullLocator())
+    del i
+
+    axs[axi_linear].yaxis.set_major_locator(
+            mpl.ticker.MultipleLocator(base=1.e-3))
+    axs[axi_linear].xaxis.set_minor_locator(plt.NullLocator())
+    axs[axi_linear].set_xlim(right=670.)
+
+    axs[axi_linear].set_xlabel(
+            '$v_\mathrm{min}\,/\,\mathrm{\left[km\,s^{-1}\\right]}$'
+    )
+    # Put the x-axis label where we want it:
+    axs[axi_linear].xaxis.set_label_coords(0.5, 0., transform=fig.transFigure)
+
+    # Put linear plot in scientific notation
+    order_of_mag = -3
+    axs[axi_linear].yaxis.set_major_formatter(
+            lambda y, pos: '{0:0.0f}'.format(y / 10.**order_of_mag))
+    
+    axs[axi_linear].set_ylabel(
+            '$\dfrac{{g(v_{{\\rm min}})}}'
+            '{{10^{{{0:0.0f}}}\\rm\,km^{{-1}}\,s}}$'
+            .format(order_of_mag)
+    )
+    # Put the linear y-axis label where we want it:
+    axs[axi_linear].yaxis.set_label_coords(-0.1, 0.5)
+
+    axs[axi_ratio].set_ylabel('ratio')
+
+    axs[axi_linear].set_ylim(bottom=-0.5e-3)
+
+    # Set y-tick spacing for the ratio panel
+    axs[axi_ratio].yaxis.set_major_locator(
+            mpl.ticker.MultipleLocator(base=0.2)
+    )
+
+    handles, labels = axs[axi_ratio].get_legend_handles_labels()
+    trans = mpl.transforms.blended_transform_factory(axs[axi_linear].transAxes,
+                                                     fig.transFigure)
+    axs[axi_linear].legend(
+            #handles=[handles[i] for i in [0, 2, 1, 3]],
+            bbox_to_anchor=(1., 0.5), 
+            loc='center left', ncol=1,
+            bbox_transform=trans,
+            borderaxespad=1.
+    )
+
+    axs[0].tick_params(axis='x', direction='inout', length=6)
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures+tgt_fname,
+                    bbox_inches='tight',
+                    dpi=350)
+    plt.show()
+
+    return None
+
 def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False,
                    xticklabel_fontsize=10, figsize=None):
     df_copy = dm_den.load_data(df_source)
