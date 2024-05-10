@@ -3401,7 +3401,8 @@ def plt_halo_integral_mw_with_ratio(df_source,
     # Put the linear y-axis label where we want it:
     axs[axi_linear].yaxis.set_label_coords(-0.1, 0.5)
 
-    axs[axi_ratio].set_ylabel('ratio')
+    axs[axi_ratio].set_ylabel('$\dfrac{{g_{{{0:s}}}}}{{g_\mathrm{{Maxwellian}}}}$'
+                              .format(str(sigmoid_damped_eqnum)))
 
     axs[axi_linear].set_ylim(bottom=-0.5e-3)
 
