@@ -2899,16 +2899,16 @@ def plt_halo_integrals(gals,
         else:
             sigmoid_damped_label = 'prediction from $v_\mathrm{c}$'
         axs[i].plot(vs_hat, gs_hat, label=sigmoid_damped_label,
-                    color='C3', zorder=10)
+                    color='C3', zorder=51)
         if show_rms:
             rms_staudt, _ = fitting.calc_rms_err(vs_truth, gs, 
                                                  fitting.g_smooth_step_max,
                                                  (v0, vdamp, params['k']))
 
+        # Plot the prediction with an additional exponential cutoff 
+        # reaching
+        # 0 at vesc
         if show_sigmoid_exp:
-            # Plot the prediction with an additional exponential cutoff 
-            # reaching
-            # 0 at vesc
             with open(paths.data + 'params_sigmoid_exp.pkl', 'rb') as f:
                 params_sigmoid_exp = pickle.load(f)
             d_exp = params_sigmoid_exp['d']
@@ -2928,8 +2928,8 @@ def plt_halo_integrals(gals,
                               ', exp cut @ ' + vcut_labels['lim_fit'], 
                         color='C3', ls=':', zorder=10)
             
+        # Plot the prediction with a final hard cutoff at vesc
         if show_sigmoid_hard:
-            # Plot the prediction with a final hard cutoff at vesc
             axs[i].plot(vs_hat, 
                         fitting.calc_g_general(vs_hat,
                                                fitting.pN_max_double_hard,
@@ -2945,24 +2945,24 @@ def plt_halo_integrals(gals,
         axs[i].plot(vs_hat,
                     gs_max,
                     label='Maxwellian$,\,v_0=v_\mathrm{c}$',
-                    color='C0')
+                    color='C0', zorder=50)
         
+        # Plot Maxwellian with v0 = vc and an exponential cutoff at vesc
         if show_max_exp:
-            # Plot Maxwellian with v0 = vc and an exponential cutoff at vesc
             axs[i].plot(vs_hat,
                         fitting.g_exp(vs_hat, vc100 * 100., std_vcut),
                         color='C0', ls=':',
                         label=('$v_0=v_\mathrm{c}$, exp cut @ ' 
                                + vcut_labels[std_vcut_type]))
 
+        # Plot maxwellian with v0 = vc, hard truncation @ vesc
         if show_max_hard:
-            # Plot maxwellian with v0 = vc, hard truncation @ vesc
             axs[i].plot(vs_hat,
                         fitting.g_smooth_step_max(vs_hat, vc100 * 100.,
                                                   std_vcut, np.inf),
                         #label=('$v_0=v\mathrm{c}$, cut @ ' 
                         #       + vcut_labels[std_vcut_type]),
-                        color='C0', ls='--')
+                        color='C0', ls='--' )
 
         if show_mao_prediction or show_mao_naive:
             with open('./data/results_mao_' + prediction_vcut_type + '.pkl', 
