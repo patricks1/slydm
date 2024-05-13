@@ -2187,7 +2187,8 @@ def plt_universal_prefit(result, df_source, gals='discs',
         if std_vcut_type is not None:
             std_vcut_dict = dm_den.load_vcuts(std_vcut_type, df)
     if show_mao_prediction:
-        with open(paths.data + 'results_mao_' + prediction_vcut_type + '.pkl', 'rb') as f:
+        with open(paths.data + 'results_mao_' + prediction_vcut_type + '.pkl', 
+                  'rb') as f:
             fit_mao = pickle.load(f)
     if show_mao_naive:
         #fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
@@ -2367,7 +2368,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
                 mao_naive_label = 'Eqn. {0:0.0f}, $v_0=v_\mathrm{{c}}$' \
                                   .format(mao_eqnum)
             else:
-                mao_naive_label = 'Mao w/$v_0=v_\mathrm{c}$'
+                mao_naive_label = 'Mao, $v_0=v_\mathrm{c}$'
             axs[i].plot(vs_postfit,
                         fitting.mao(vs_postfit,
                                     vc, std_vcut, 
@@ -2863,7 +2864,7 @@ def plt_halo_integrals(gals,
     if fig.Ncols > 3:
         vesc_fs = 12.
         vesc_y = 0.4
-        legend_ncols = 4
+        legend_ncols = 3 
     elif fig.Ncols == 1:
         legend_ncols = 1
     else:
@@ -2943,7 +2944,7 @@ def plt_halo_integrals(gals,
                                            np.inf, np.inf)
         axs[i].plot(vs_hat,
                     gs_max,
-                    label='$f(v)=\mathrm{Maxwellian},\,v_0=v_\mathrm{c}$',
+                    label='Maxwellian$,\,v_0=v_\mathrm{c}$',
                     color='C0')
         
         if show_max_exp:
@@ -2964,7 +2965,8 @@ def plt_halo_integrals(gals,
                         color='C0', ls='--')
 
         if show_mao_prediction or show_mao_naive:
-            with open('./data/results_mao_' + prediction_vcut_type + '.pkl', 'rb') as f:
+            with open('./data/results_mao_' + prediction_vcut_type + '.pkl', 
+                      'rb') as f:
                 results_mao = pickle.load(f)
         if show_mao_prediction:
             # Plot the halo integral resulting from a universal Mao fit
@@ -2974,8 +2976,8 @@ def plt_halo_integrals(gals,
                                                fitting.pN_mao,
                                                (v0_mao, prediction_vcut, 
                                                 results_mao['p'])),
-                        label='Mao prediction from $v_\mathrm{c}$',
-                        color='m')
+                        label='Mao w/our method',
+                        color=mao_prediction_color)
         if show_mao_naive:
             # Plot the halo integral from using v0=vc with Mao
             axs[i].plot(vs_hat,
@@ -2985,7 +2987,7 @@ def plt_halo_integrals(gals,
                             (vc100 * 100., std_vcut,
                             fit_mao_naive.params['p'].value)),
                         label='Mao, $v_0=v_\mathrm{c}$',
-                        color='c')
+                        color=mao_naive_color)
             if show_rms:
                 rms_mao_naive, _ = fitting.calc_rms_err(
                         vs_truth, gs,
@@ -3491,6 +3493,14 @@ def plt_halo_integral_mw_with_ratio(df_source,
     )
 
     axs[0].tick_params(axis='x', direction='inout', length=6)
+
+    loc = [0.97,0.96]
+    kwargs_txt = dict(fontsize=16., xycoords='axes fraction',
+                      va='top', ha='right',
+                      bbox=dict(facecolor='white', alpha=0.8, 
+                                edgecolor='none', pad=0.1))
+    axs[0].annotate('Milky Way', loc,
+                    **kwargs_txt)
 
     if tgt_fname is not None:
         plt.savefig(paths.figures+tgt_fname,
