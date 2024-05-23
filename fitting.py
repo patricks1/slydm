@@ -89,17 +89,21 @@ def pN_smooth_step_max(v, v0, vdamp, k):
     pN *= trunc
     return pN
 
-def smooth_step_max(v, v0, vdamp, k):
+def smooth_step_max(v, v0, vdamp, k, speedy=False):
     '''
-    Smooth-step-truncated Maxwellian, as opposed to the immediate cutoff
+    Smooth-step-damped Maxwellian, as opposed to the immediate cutoff
     of a Heaviside function used in trunc_max
     
-    k is the strength of the exponential cutoff
+    k is the strength of the sigmoid damping
     '''
-    
+    if speedy:
+        min_S = 1.e-4 # minimum sigmoid value
+        max_v = vdamp + k * (1. / min_S - 1.)
+    else:
+        max_v = np.inf
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf, 
+        N = scipy.integrate.quad(pN_smooth_step_max, 0., max_v, 
                                  (v0, vdamp, k), epsabs=0)[0]
         p = pN_smooth_step_max(v, v0, vdamp, k) / N
     return p
