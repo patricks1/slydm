@@ -8,7 +8,7 @@ from astropy import units as u, constants as c
 from UCI_tools import staudt_tools
 from UCI_tools import tools as uci
 
-path = '/data17/grenache/staudt/dm_den/'
+path = '/DFS-L/DATA/cosmo/grenache/staudt/dm_den/'
 
 def get_rotated_gal(df, galname):
     ''' 

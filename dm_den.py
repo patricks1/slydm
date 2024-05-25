@@ -52,18 +52,18 @@ def build_direcs(suffix, res, mass_class, typ='fire', source='original',
         if min_radius is not None or max_radius is not None:
             raise ValueError('radius limits are not applicable when '
                              'source=\'original\'')
-        topdirec = '/data17/grenache/aalazar/'
+        topdirec = '/DFS-L/DATA/cosmo/grenache/aalazar/'
         cropstr = ''
     elif source=='cropped':
         if min_radius is None or max_radius is None:
             raise ValueError('min and max radii must be specified if '
                              'source=\'cropped\'')
-        topdirec = '/data17/grenache/staudt/'
+        topdirec = '/DFS-L/DATA/cosmo/grenache/staudt/'
         cropstr = '{0:0.1f}_to_{1:0.1f}_kpc/'.format(min_radius, max_radius)
     else:
         raise ValueError('source should be \'original\' or \'cropped\'')
     if int(mass_class)>10:
-        hdirec='/data17/grenache/aalazar/FIRE/GV'+typ_char+\
+        hdirec='/DFS-L/DATA/cosmo/grenache/aalazar/FIRE/GV'+typ_char+\
                '/m'+mass_class+suffix+\
                '_res'+res+\
                '/halo/rockstar_dm/hdf5/halo_600.hdf5'
@@ -103,13 +103,13 @@ def build_direcs_old(suffix, res, mass_class, typ='fire', source='original'):
     res=str(res)
     mass_class='{0:02d}'.format(mass_class)
     if source=='original':
-        topdirec = '/data17/grenache/aalazar/'
+        topdirec = '/DFS-L/DATA/cosmo/grenache/aalazar/'
     elif source=='cropped':
-        topdirec = '/data17/grenache/staudt/'
+        topdirec = '/DFS-L/DATA/cosmo/grenache/staudt/'
     else:
         raise ValueError('source should be \'original\' or \'cropped\'')
     if int(mass_class)>10:
-        hdirec='/data17/grenache/aalazar/FIRE/GV'+typ_char+'/m'+mass_class+suffix+\
+        hdirec='/DFS-L/DATA/cosmo/grenache/aalazar/FIRE/GV'+typ_char+'/m'+mass_class+suffix+\
                '_res'+res+\
                '/halo/rockstar_dm/hdf5/halo_600.hdf5'
         direc = topdirec+'/FIRE/GV'+typ_char+'/m'+mass_class+suffix+'_res'+res+\
@@ -740,7 +740,6 @@ def shot_noise_fraction(df_source):
 
     return frac_dict
 
-
 def get_disp_btwn(rmin,rmax,rs,v_mags):
     # This is isometric (i.e. wrong). Consider deleting it. 
     is_in=(rs<rmax)&(rs>rmin)
@@ -1146,7 +1145,6 @@ def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
     if not drsolar:
         drsolar=dr
     df = staudt_tools.init_df(mass_class)
-    #df = df[df.index=='m12b']
     df = insert_analysis(df)
 
     if include_vesc:

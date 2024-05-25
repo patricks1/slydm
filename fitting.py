@@ -1942,6 +1942,12 @@ def plt_universal(gals='discs', update_values=False,
                   band_alpha=0.4, data_color='grey', band_color='grey',
                   samples_color=plt.cm.viridis(0.5), ymax=None, show_rms=False,
                   **kwargs):
+    '''
+    Noteworthy Parameters
+    ---------------------
+    err_method: {'sampling', 'std_err', None}, default 'sampling'
+        The method to use to generate the error bands
+    '''
     if (ddfrac is not None or dhfrac is not None or assume_corr) \
         and err_method != 'sampling':
         raise ValueError('ddfrac, dhfrac, and assume_corr are only used in '
@@ -2034,6 +2040,12 @@ def plt_universal(gals='discs', update_values=False,
                            vcircs=vcircs, method=method, **kwargs)
 
     if update_values:
+        # Save ModelResult object
+        lmfit.model.save_modelresult(
+                result, 
+                paths.data + 'sigmoid_damped_ls_result.sav'
+        )
+
         # Save raw variables to data_raw.pkl
         data2save = {key: result.params[key].value
                      for key in result.params.keys()}
@@ -2093,9 +2105,12 @@ def plt_universal(gals='discs', update_values=False,
 
         N_vc = len(pdfs)
         vc_mean = df['v_dot_phihat_disc(T<=1e4)'].mean()
+        # Variance in vc:
         var_vc = np.sum((df['v_dot_phihat_disc(T<=1e4)'] \
                             - vc_mean)**2.) / N_vc
-        var_vs = np.sum((vs_truth.flatten() - vs_truth.mean())**2.) / result.ndata
+        # Variance in v
+        var_vs = np.sum((vs_truth.flatten() - vs_truth.mean())**2.) \
+                 / result.ndata
 
     fig, axs = dm_den_viz.setup_multigal_fig(gals)
 

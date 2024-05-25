@@ -1,4 +1,3 @@
-
 def calc_log_likelihood(theta, X, ys):
     '''
     Parameters
@@ -76,29 +75,44 @@ def calc_log_post(theta, X, ys):
         a given
         speed v, where f(v) is our sigmoid-damped speed distribution.
     '''
+    import numpy as np
+
     log_prior = calc_log_prior(theta)
     if not np.isfinite(log_prior):
         return -np.inf
     return log_prior + calc_log_likelihood(theta, X, ys)
 
-if __name__ == '__main__':
+def run(df_source, tgt_fname):
     import emcee
     import pickle
     import paths
     import dm_den
+    import argparse
+    import os
+    import multiprocessing
     import numpy as np
+
+    # Turn off numpy's multiprocessing that can cause problems
+    os.environ['OMP_NUM_THREADS'] = '1'
     
-    backend = emcee.backends.HDFBackend(paths + 'mcmc_samples.h5')
+    backend = emcee.backends.HDFBackend(paths.data + tgt_fname) 
 
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         ls_result = pickle.load(f)
 
         # Best estimate of the parameters from least squares minimization
-        mu = np.array([ls_result[param] 
-                       for param in ['d', 'e', 'h', 'j', 'k']])
+        #mu = np.array([ls_result[param] 
+        #               for param in ['d', 'e', 'h', 'j', 'k']])
+
+        # Purposefully putting in wrong priors for now to see what happens
+        mu = np.array([90., 1., 250., 1., 0.01])
+         
+    nondisks = ['m12z', 'm12w']
     with open(paths.data + 'v_pdfs_disc_dz1.0.pkl', 'rb') as f:
         pdfs = pickle.load(f)
-    df = dm_den.load_data('dm_stats_dz1.0_20231211.h5')
+    for nondisk in nondisks:
+        del pdfs[nondisk]
+    df = dm_den.load_data(df_source).drop(nondisks)
 
     # Feature matrix
     for galname in pdfs:
@@ -124,8 +138,11 @@ if __name__ == '__main__':
     nwalkers = 32
     pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
 
+    with multiprocessing.Pool() as pool:
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
+                                        args=(X, ys),
+                                        backend=backend,
+                                        pool=pool)
+        sampler.run_mcmc(pos, int(5e3), progress=True)
 
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
-                                    args=(X, ys),
-                                    backend=backend)
-    sampler.run_mcmc(pos, int(5e3), progress=True)
+    return None
