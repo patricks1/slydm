@@ -7,10 +7,22 @@ from UCI_tools import tools as uci
 from UCI_tools import staudt_tools
 from progressbar import ProgressBar
 
-def gen_gal_data(galname, cropped_run='202304'):
+def gen_gal_data(galname, cropped_run):
     '''
     Generate cropped data from the original hdf5 files. Data is cropped at a
     certain radius from the center of the galaxy
+
+    Parameters
+    ----------
+    galname: str
+        Name of the galaxy for which the method should generate cropped data
+    cropped_run: str
+        The suffix of the directory into which the method should save the data.
+        For example, the directory containing cropped data that was rotated 
+        based on all 3 of stars, DM, and gas is 'GVB_202304'. In this case,
+        `cropped_run` was '202304'. The directory containing cropped data
+        rotated based on only stars is 'GVB_star_rot'. In this case, 
+        `cropped_run` was 'star_rot'.
     '''
 
     import dm_den

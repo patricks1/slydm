@@ -3,9 +3,18 @@ import mcmc
 import read_mcmc
 import paths
 import fitting
+import dm_den
 
 date_str = datetime.today().strftime('%Y%m%d')
-df_source = 'dm_stats_dz1.0_20231211.h5'
+vescphi_dict_fname = 'vescsphi_rot_' + date_str + '.pkl'
+df_fname = 'dm_stats_dz1.0_' + date_str + date_str + '.h5'
+mcmc_samples_fname = 'mcmc_samples_' + date_str + '.h5'
+
+###############################################################################
+# Generate galaxy properties dataframe
+###############################################################################
+dm_den.get_vescs(vescphi_dict_fname, rotate=True)
+_ = dm_den.gen_data(df_fname, dr=1.5, dz=1.0, source='cropped')
 
 ###############################################################################
 # Generate least squares fit results for the Staudt et al. speed distribution.
@@ -20,7 +29,6 @@ _ = fitting.save_samples(df_source, N=5000)
 ###############################################################################
 # MCMC
 ###############################################################################
-mcmc_samples_fname = 'mcmc_samples_' + date_str + '.h5'
 mcmc_distrib_samples_fname = 'mcmc_distrib_samples_' + date_str + '.h5'
 
 # Run the MCMC. This will take >12 hr.

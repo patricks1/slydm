@@ -12,7 +12,8 @@ path = '/DFS-L/DATA/cosmo/grenache/staudt/dm_den/'
 
 def get_rotated_gal(df, galname):
     ''' 
-    Returns a dictionary of the given galaxy including rotated vectors 
+    Returns a dictionary of the given galaxy including rotated vectors, where
+    the galaxy is rotated based on all three of stars, DM, and gas.
     '''
 
     #dark matter and stars
@@ -41,6 +42,9 @@ def get_rotated_gal(df, galname):
     cen_coord = dm_stars[8]
 
     d = {}
+    # Take the outputs of dm_den.unpack_new and dm_den.unpack_gas, which are
+    # just np.ndarray's, combine gas, dm, and stars, and put them
+    # into a dictionary 
     for name, i in zip(['mass','r','v_mag','v_vec','parttype','coord'],
                        [0,2,4,5,6,7]):
         d[name] = np.append(gas[i], dm_stars[i], axis=0)
@@ -64,6 +68,8 @@ def get_rotated_gal(df, galname):
                                                          'energy']])
     d['T'] = np.append(Ts, np.repeat(np.nan,len(dm_stars[0])))
 
+    # Rotate the galaxy based on stars, stars, and DM (`d` contains all 3 of
+    # those.)
     dat_rot = rotate_galaxy.rotate_gal(*[d[data] for data in ['coord_centered',
                                                               'v_vec',
                                                               'mass',

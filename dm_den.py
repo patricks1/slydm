@@ -995,6 +995,13 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         rs_all = flatten_particle_data(d, 'r')
         ms_all = flatten_particle_data(d, 'mass_phys')
 
+        # Get (m_dm / m_tot) | (r <= R0)
+        dm_in_rsolar = rs_dm <= rsolar
+        m_dm_in_rsolar = (ms_dm[dm_in_rsolar]).sum()
+        all_in_rsolar = rs_all <= rsolar
+        m_all_in_rsolar = (ms_all[all_in_rsolar]).sum()
+        df.loc[galname, 'm_dm/m_tot(r<=R0)']
+
         # limited to the disc
         den_disc, disp_dm_disc = get_den_disp(rsolar, rs_dm, dr,
                                               ms=ms_dm, v_mags=None,
@@ -1835,7 +1842,7 @@ def test_gen_data(df_new=None, test_fname=None):
     if df_new is not None and test_fname is not None:
         raise Exception('You can only specify one of `df_new`'
                         ' or `test_fname`.')
-    df_old = load_data('dm_stats_dz1.0_20230724.h5')
+    df_old = load_data('dm_stats_dz1.0_20231211.h5')
     if test_fname is not None:
         df_new = load_data(test_fname)
     elif df_new is not None:
