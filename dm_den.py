@@ -831,9 +831,12 @@ def get_vcirc(r_axis,rs,ms):
 
 def calc_vesc(ms, coords, rvec):
     '''
-    Calculate escape velocity at rvec, given masses and the 
+    Calculate vesc( Phi(rvec) ) = sqrt(2 * Phi(rvec) ) at rvec
+    given masses and the 
     coordinate locations of
-    those masses
+    those masses. `get_v_escs` uses this to generate the pickled vescs 
+    dictionaries, e.g. ./data/vescs_rot_20230514.pkl. `load_vcuts()` loads
+    ./data/vescs_rot_20230514.pkl given the arg vcut_type = 'veschatphi'.
 
     Parameters
     ----------
@@ -860,12 +863,46 @@ def calc_vesc(ms, coords, rvec):
 
 def get_v_escs(fname=None, rotate=False):
     '''
-    Get escape velocities for all M12's, without any pre-existing analysis
+    Generate a dictionary of vesc( Phi(r=8.3 kpc) ) = sqrt( 2 * Phi(r=8.3 kpc) ) 
+    for all M12's
+    at 8 different aziumuthal angles, without any pre-existing 
+    analysis. Each galaxy-key also contains the average vesc of the 8 positions 
+    and
+    the standard deviation. This was the method used to generate the pickled 
+    vescs
+    dictionaries, e.g. ./data/vescs_rot_20230514.pkl. `load_vcuts()` loads
+    ./data/vescs_rot_20230514.pkl given the arg vcut_type = 'veschatphi'.
+
+    Parameters
+    ----------
+    fname: str, default None
+        If provided, the pickle filename in paths.data where the method saves 
+        the
+        dictionary.
+    rotate: bool, default False
+        If True, perform the analysis in the plane of the disk, determined
+        using all 3 of stars, DM, and gas. If False,
+        perform the analysis in the
+        default x-y plane.
+
+    Returns
+    -------
+    v_escs: dict
+        A dictionary keyed by galaxy containing vesc(Phi) calculations at 8
+        azimuthal angles, the mean of those values, and the standard deviation.
+
+        v_escs[gal]['v_escs']: np.ndarray
+            The 8 escape speeds
+        v_escs[gal]['ve_avg']: float
+            The mean of those 8 speeds
+        v_escs[gal]['std_ve']: float
+            The standard deviation of those 8 speeds
     '''
 
     def fill_v_escs_dic(gal):
         if rotate:
             import rotation_wrapper
+            # Rotate the galaxy based on all 3 of stars, dm, and gas
             dic = rotation_wrapper.get_rotated_gal(df, gal)
         else:
             dic = unpack_4pot(df, gal)
@@ -899,7 +936,7 @@ def get_v_escs(fname=None, rotate=False):
 
     try:
         if fname:
-            direc='/export/nfs0home/pstaudt/projects/project01/data/'
+            direc = paths.data
             fname=direc+fname
             f = open(fname,'wb')
         for gal in df.index:
@@ -1000,7 +1037,16 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         m_dm_in_rsolar = (ms_dm[dm_in_rsolar]).sum()
         all_in_rsolar = rs_all <= rsolar
         m_all_in_rsolar = (ms_all[all_in_rsolar]).sum()
-        df.loc[galname, 'm_dm/m_tot(r<=R0)']
+        frac_dm_R0 = m_dm_in_rsolar / m_all_in_rsolar
+        df.loc[galname, 'frac_dm(r<=R0)'] = frac_dm_R0
+
+        # Get (m_dm / m_tot) | (r <= 5 kpc)
+        dm_in5 = rs_dm <= 5.
+        m_dm_in5 = (ms_dm[dm_in5]).sum()
+        all_in5 = rs_all <= 5.
+        m_all_in5 = (ms_all[all_in5]).sum()
+        frac_dm_5 = m_dm_in5 / m_all_in5
+        df.loc[galname, 'frac_dm(r<=5kpc)'] = frac_dm_5
 
         # limited to the disc
         den_disc, disp_dm_disc = get_den_disp(rsolar, rs_dm, dr,
@@ -1084,7 +1130,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         df.loc[galname, 'std(v_dot_rhat_disc(dm))'] = np.std(
             dm['v_dot_rhat'][dm_inshell & dm_indisc]
         )
-
+    
     else:
         raise ValueError('source should be \'original\' or \'cropped\'')
 
@@ -1139,7 +1185,18 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
 
 def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
              vcircparts=['PartType0','PartType1','PartType4'], 
-             source='original', dz=1., freq_save=False, include_vesc=True):
+             source='original', dz=1., freq_save=False, 
+             vescphi_dict_fname='vescs_rot_20230514.pkl'):
+    '''
+    Noteworthy parameters
+    ---------------------
+    vescphi_dict_fname: str, default 'vescs_rot_20230514.pkl'
+        The file name of the vesc(Phi) = sqrt(2 * Phi) dictionary that the
+        method should use for the dataframe's 'vesc' column.
+
+        If the user sets this to None, the dataframe will not contain a `vesc`
+        column.
+    '''
     def insert_analysis(df):
         #dat=[]
         for g in df.index:
@@ -1154,8 +1211,9 @@ def gen_data(fname=None, mass_class=12, dr=1.5, drsolar=None, typ='fire',
     df = staudt_tools.init_df(mass_class)
     df = insert_analysis(df)
 
-    if include_vesc:
-        with open(paths.data + 'vescs_rot_20230514.pkl', 'rb') as f:
+    if vescphi_dict_fname is not None:
+        # vesc( Phi(rvec) ) = sqrt(2 * Phi(rvec) ), generated with get_v_escs()
+        with open(paths.data + vescphi_dict_fname, 'rb') as f:
             vescs = pickle.load(f)
 
         for gal in df.index:
@@ -1781,6 +1839,7 @@ def find_max_v(dfsource, r=8.3, bootstrap=False, tgt_fname=None):
         rng = np.random.default_rng() 
 
         if bootstrap:
+            # Take only every 1 in 10 particles, 10 times
             max_speeds =  np.array([rng.choice(speeds, N_sample).max() 
                                     for i in range(10)])
             speeds_dict[gal] = max_speeds

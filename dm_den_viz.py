@@ -339,7 +339,7 @@ def make_formula_appear(show_formula,
                                 np.abs(intercept), r2,
                                 operator)))
         else:
-            ax.annotate('${0:s}={1:0.2f}{2:s}{5:s}{3:0.2f}$\n'
+            ax.annotate('${0:s}={1:0.4f}{2:s}{5:s}{3:0.2f}$\n'
                         '$r^2={4:0.2f}$'\
                         .format(ystring, coefs[0], xstring, 
                                 np.abs(intercept), r2,

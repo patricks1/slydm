@@ -274,6 +274,8 @@ def load_data(galname, getparts='all', verbose=True):
             d.attrs[attr] = f['Header'].attrs[attr]
         
         if getparts=='all':
+            # All the particle types will be the keys in f, except for the
+            # 'Header' key.
             key1s = list(f.keys())
             key1s.remove('Header')
         else: 
