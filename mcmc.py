@@ -37,7 +37,7 @@ def calc_log_likelihood(theta, X, ys):
     log_likelihood = -sse
     return log_likelihood
 
-def calc_log_prior(theta):
+def calc_log_gaussian_prior(theta):
     '''
     Calculate the log prior assuming a p(theta) is a multivariate Gaussian.
     '''
@@ -56,7 +56,46 @@ def calc_log_prior(theta):
         cov = ls_result['covar']
     return scipy.stats.multivariate_normal.logpdf(theta, mean=mu, cov=cov)
 
-def calc_log_post(theta, X, ys):
+def calc_log_uniform_prior(theta):
+    '''
+    Calculate the log prior assuming a uniform distribution.
+
+    Parameters
+    ----------
+    theta: np.ndarray, shape=(5,)
+        Parameter values for which to return the probability density. They
+        should be ordered as d, e, h, j, k.
+    '''
+    import numpy as np
+
+    theta_ranges = {
+            'd': [50., 500.],
+            'e': [0.1, 5.],
+            'h': [50., 500.],
+            'j': [0.1, 5.],
+            'k': [1.e-5, 0.5]
+    }
+
+    N = 0. # Normalization
+    for t in theta_ranges:
+        N += theta_ranges[t][1] - theta_ranges[t][0]
+    p = 1. / N
+    
+    # Ensure that the prior integrates over all dimensions to unity.
+    P = 0.
+    for t in theta_ranges:
+        P += (theta_ranges[t][1] - theta_ranges[t][0]) * p
+    assert P == 1.
+
+    for i, t in enumerate(theta_ranges):
+        # Check if each parameter is within its acceptable range. If not,
+        # the prior is 0, and the log prior is -infty.
+        if not (theta_ranges[t][0] <= theta[i] <= theta_ranges[t][1]):
+            return -np.inf
+
+    return np.log(p)
+
+def calc_log_post(theta, X, ys, log_prior_function):
     '''
     Calculate the log posterior
 
@@ -74,13 +113,17 @@ def calc_log_post(theta, X, ys):
         having 
         a given
         speed v, where f(v) is our sigmoid-damped speed distribution.
+    log_prior_function: function
+        The log prior function to use. For example, 
+        `mcmc.calc_log_gaussian_prior`
+        or `mcmc.calc_log_uniform_prior`.
     '''
     import numpy as np
 
-    log_prior = calc_log_prior(theta)
-    if not np.isfinite(log_prior):
+    log_prior_value = log_prior_function(theta)
+    if not np.isfinite(log_prior_value):
         return -np.inf
-    return log_prior + calc_log_likelihood(theta, X, ys)
+    return log_prior_value + calc_log_likelihood(theta, X, ys)
 
 def run(df_source, tgt_fname):
     import emcee
@@ -140,7 +183,7 @@ def run(df_source, tgt_fname):
 
     with multiprocessing.Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
-                                        args=(X, ys),
+                                        args=(X, ys, calc_log_uniform_prior),
                                         backend=backend,
                                         pool=pool)
         sampler.run_mcmc(pos, int(5e3), progress=True)
