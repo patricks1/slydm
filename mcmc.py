@@ -33,7 +33,7 @@ def calc_log_likelihood(theta, X, ys):
     yhats = [fitting.smooth_step_max(v, v0, vdamp, k, speedy=True)
              for v, v0, vdamp in zip(vs, v0s, vdamps)]
     yhats = np.array(yhats)
-    sse = (yhats - ys) ** 2.
+    sse = np.sum((yhats - ys) ** 2.)
     log_likelihood = -sse
     return log_likelihood
 
@@ -53,7 +53,7 @@ def calc_log_gaussian_prior(theta):
         mu = np.array([ls_result[param] 
                        for param in ['d', 'e', 'h', 'j', 'k']])
 
-        cov = ls_result['covar'] 
+        cov = ls_result['covar'] * 5. 
     return scipy.stats.multivariate_normal.logpdf(theta, mean=mu, cov=cov)
 
 def calc_log_uniform_prior(theta):
@@ -125,8 +125,8 @@ def calc_log_post(theta, X, ys, log_prior_function):
     log_likelihood_value = calc_log_likelihood(theta, X, ys)
     log_posterior_value = log_prior_value + log_likelihood_value
     
-    is_inf = np.isneginf(log_posterior_value)
-    log_posterior_value[is_inf] = -1.e32 
+    #is_inf = np.isneginf(log_posterior_value)
+    #log_posterior_value[is_inf] = -1.e32 
 
     if np.any(np.isnan(log_posterior_value)):
         print(theta)
@@ -196,9 +196,9 @@ def run(log_prior_function, df_source, tgt_fname):
                                         args=(X, ys, log_prior_function),
                                         backend=backend,
                                         pool=pool)
-        print('initial size: {0}'.format(backend.iteration))
-        print('starting samples shape: {0}'
-              .format(sampler.get_chain().shape))
+        #print('initial size: {0}'.format(backend.iteration))
+        #print('starting samples shape: {0}'
+        #      .format(sampler.get_chain().shape))
 
         sampler.run_mcmc(pos, int(5e3), progress=True)
 
