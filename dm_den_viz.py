@@ -2114,7 +2114,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
                          sigmoid_damped_eqnum=None,
                          mao_eqnum=None,
                          show_plot=True,
-                         samples_type='grid_search'):
+                         samples_fname='samples_dz1.0_sigmoid_damped.h5'):
     '''
     Noteworthy parameters
     ---------------------
@@ -2153,8 +2153,8 @@ def plt_universal_prefit(result, df_source, gals='discs',
         plot
     show_plot: bool, default True
         If True, display the plot.
-    samples_type: {'grid_search', 'mcmc'},  default 'grid_search'
-        The type of samples to plot. 
+    samples_fname: str
+        The filename of the samples to use in the plot. 
     '''
     import dm_den
     import fitting
@@ -2169,11 +2169,6 @@ def plt_universal_prefit(result, df_source, gals='discs',
     if (show_mao_naive or show_max_hard) and std_vcut_type is None:
         raise ValueError('You must specify a std_vcut_type if you want'
                          ' to show_mao_naive.')
-    if samples_type not in ['grid_search', 'mcmc']:
-        raise ValueError(
-                '`samples_type` can only be either \'grid_search\''
-                ' or \'mcmc\'.'
-        )
 
     # I realized that this "prefit" method loads samples that were already
     # generated with ddfrac and dhfrac assumptions, so this block of code
@@ -2222,15 +2217,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
                          for key in ['d', 'e', 'h', 'j', 'k']]
     else:
         raise ValueError('Unexpected data type provided for `params`')
-    if samples_type == 'grid_search':
-        samples = fitting.load_samples('samples_dz1.0_sigmoid_damped.h5')
-    elif samples_type == 'mcmc':
-        samples = fitting.load_samples('mcmc_distrib_samples_20240524.h5')
-    else:
-        raise ValueError(
-                '`samples_type` can only be either \'grid_search\''
-                ' or \'mcmc\'.'
-        )
+    samples = fitting.load_samples(samples_fname)
 
 
     fig, axs = setup_multigal_fig(gals)

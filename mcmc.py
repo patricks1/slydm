@@ -17,7 +17,7 @@ def calc_log_likelihood(theta, X, ys):
     '''
     import numpy as np
     import fitting
-    
+
     Ndimy = ys.ndim
     if Ndimy != 1:
         raise Exception('ys should only have one dimension.')
@@ -53,7 +53,7 @@ def calc_log_gaussian_prior(theta):
         mu = np.array([ls_result[param] 
                        for param in ['d', 'e', 'h', 'j', 'k']])
 
-        cov = ls_result['covar']
+        cov = ls_result['covar'] 
     return scipy.stats.multivariate_normal.logpdf(theta, mean=mu, cov=cov)
 
 def calc_log_uniform_prior(theta):
@@ -90,7 +90,8 @@ def calc_log_uniform_prior(theta):
     for i, t in enumerate(theta_ranges):
         # Check if each parameter is within its acceptable range. If not,
         # the prior is 0, and the log prior is -infty.
-        if not (theta_ranges[t][0] <= theta[i] <= theta_ranges[t][1]):
+        in_range = theta_ranges[t][0] <= theta[i] <= theta_ranges[t][1]
+        if not in_range:
             return -np.inf
 
     return np.log(p)
@@ -121,11 +122,20 @@ def calc_log_post(theta, X, ys, log_prior_function):
     import numpy as np
 
     log_prior_value = log_prior_function(theta)
-    if not np.isfinite(log_prior_value):
-        return -np.inf
-    return log_prior_value + calc_log_likelihood(theta, X, ys)
+    log_likelihood_value = calc_log_likelihood(theta, X, ys)
+    log_posterior_value = log_prior_value + log_likelihood_value
+    
+    is_inf = np.isneginf(log_posterior_value)
+    log_posterior_value[is_inf] = -1.e32 
 
-def run(df_source, tgt_fname):
+    if np.any(np.isnan(log_posterior_value)):
+        print(theta)
+        print(log_prior_value)
+        print(log_posterior_value)
+
+    return log_posterior_value
+
+def run(log_prior_function, df_source, tgt_fname):
     import emcee
     import pickle
     import paths
@@ -144,11 +154,11 @@ def run(df_source, tgt_fname):
         ls_result = pickle.load(f)
 
         # Best estimate of the parameters from least squares minimization
-        #mu = np.array([ls_result[param] 
-        #               for param in ['d', 'e', 'h', 'j', 'k']])
+        mu = np.array([ls_result[param] 
+                       for param in ['d', 'e', 'h', 'j', 'k']])
 
-        # Purposefully putting in wrong priors for now to see what happens
-        mu = np.array([90., 1., 250., 1., 0.01])
+        # Purposefully starting off in the wrong place to see what happens
+        #mu = np.array([90., 1., 250., 1., 0.01])
          
     nondisks = ['m12z', 'm12w']
     with open(paths.data + 'v_pdfs_disc_dz1.0.pkl', 'rb') as f:
@@ -183,9 +193,13 @@ def run(df_source, tgt_fname):
 
     with multiprocessing.Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
-                                        args=(X, ys, calc_log_uniform_prior),
+                                        args=(X, ys, log_prior_function),
                                         backend=backend,
                                         pool=pool)
+        print('initial size: {0}'.format(backend.iteration))
+        print('starting samples shape: {0}'
+              .format(sampler.get_chain().shape))
+
         sampler.run_mcmc(pos, int(5e3), progress=True)
 
     return None

@@ -24,7 +24,7 @@ _ = fitting.plt_universal(
         err_method=None,
         update_values=True
 )
-_ = fitting.save_samples(df_source, N=5000)
+_ = fitting.save_samples(df_fname, N=5000)
 
 ###############################################################################
 # MCMC
@@ -33,11 +33,12 @@ mcmc_distrib_samples_fname = 'mcmc_distrib_samples_' + date_str + '.h5'
 
 # Run the MCMC. This will take >12 hr.
 mcmc.run(
-        df_source, 
+        mcmc.calc_log_gaussian_prior,
+        df_fname, 
         mcmc_samples_fname
 )
 # Sample the THETA posteior to make speed distribution samples.
 read_mcmc.make_distrib_samples(
-        df_source,
+        df_fname,
         mcmc_distrib_samples_fname
 )
