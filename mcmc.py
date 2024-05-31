@@ -34,6 +34,13 @@ def calc_log_likelihood(theta, X, ys):
              for v, v0, vdamp in zip(vs, v0s, vdamps)]
     yhats = np.array(yhats)
     sse = np.sum((yhats - ys) ** 2.)
+
+    if np.isnan(sse):
+        # Some non-allowed parameter values might result in a f(v) = 0/0 e.g. 
+        # negative
+        # k values. These aren't allowed anyway, so just return -np.inf.
+        return -np.inf
+
     log_likelihood = -sse
     return log_likelihood
 
@@ -124,14 +131,6 @@ def calc_log_post(theta, X, ys, log_prior_function):
     log_prior_value = log_prior_function(theta)
     log_likelihood_value = calc_log_likelihood(theta, X, ys)
     log_posterior_value = log_prior_value + log_likelihood_value
-    
-    #is_inf = np.isneginf(log_posterior_value)
-    #log_posterior_value[is_inf] = -1.e32 
-
-    if np.any(np.isnan(log_posterior_value)):
-        print(theta)
-        print(log_prior_value)
-        print(log_posterior_value)
 
     return log_posterior_value
 
