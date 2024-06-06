@@ -91,7 +91,7 @@ def pN_smooth_step_max(v, v0, vdamp, k):
 
 def smooth_step_max(v, v0, vdamp, k, speedy=False):
     '''
-    Smooth-step-damped Maxwellian, as opposed to the immediate cutoff
+    Sigmoid-damped Maxwellian, as opposed to the immediate cutoff
     of a Heaviside function used in trunc_max
     
     k is the strength of the sigmoid damping
@@ -100,10 +100,18 @@ def smooth_step_max(v, v0, vdamp, k, speedy=False):
 
     v0_is_arraylike = isinstance(v0, collections.abc.Iterable)
     vdamp_is_arraylike = isinstance(vdamp, collections.abc.Iterable)
+    v_is_arraylike = isinstance(v, collections.abc.Iterable)
+    if ((v0_is_arraylike or vdamp_is_arraylike) 
+        and (not v_is_arraylike or len(v) != len(v0))):
+        raise ValueError('If v0 and vdamp are arrays, v should be an array of'
+                         ' the same'
+                         ' size.')
     if not v0_is_arraylike:
         v0 = np.array([v0])
     if not vdamp_is_arraylike:
         vdamp = np.array([vdamp])
+    if type(v) == list:
+        v = np.array(v)
     if type(v0) == list:
         v0 = np.array(v0)
     if type(vdamp) == list:
@@ -126,8 +134,8 @@ def smooth_step_max(v, v0, vdamp, k, speedy=False):
                 (v0_, vdamp_): normalize(pN_smooth_step_max, (v0_, vdamp_, k)) 
                 for v0_, vdamp_ in zip(v0_set, vdamp_set)
         }
-        p = [pN_smooth_step_max(v, v0_, vdamp_, k) / N_dict[(v0_, vdamp_)]
-             for v0_, vdamp_ in zip(v0, vdamp)]
+        Ns = np.array([N_dict[v0_, vdamp_] for v0_, vdamp_ in zip(v0, vdamp)])
+        p = pN_smooth_step_max(v, v0, vdamp, k) / Ns
     
     if len(p) == 1:
         return p[0]
@@ -2040,12 +2048,10 @@ def plt_universal(gals='discs', update_values=False,
         if vc100:
             vcircs = vcircs.copy()
             vcircs /= 100.
-        ps = [smooth_step_max(v,
-                              d * (vc) ** e,
-                              h * (vc) ** j,
-                              k)
-              for v, vc in zip(vs, vcircs)]
-        ps = np.array(ps)
+        ps = smooth_step_max(vs,
+                             d * (vcircs) ** e,
+                             h * (vcircs) ** j,
+                             k)
         return ps
     
     model = lmfit.model.Model(calc_p,
@@ -2161,12 +2167,14 @@ def plt_universal(gals='discs', update_values=False,
         ps_postfit = result.eval(vs=vs_postfit, vcircs=vcircs_postfit)
 
         vs_truth = pdfs[gal]['vs']
-        rms_err, sse_add = calc_rms_err(vs_truth, pdfs[gal]['ps'], 
-                                  calc_p,  
-                                  [np.repeat(vc, len(pdfs[gal]['vs'])), 
-                                   *[result.params[key] for key in ['d', 'e', 
-                                                                    'h', 'j', 
-                                                                    'k']]])
+        rms_err, sse_add = calc_rms_err(
+                vs_truth, pdfs[gal]['ps'], 
+                calc_p,  
+                [np.repeat(vc, len(pdfs[gal]['vs'])), 
+                *[result.params[key] for key in ['d', 'e', 
+                                                 'h', 'j', 
+                                                 'k']]]
+        )
         if show_rms:
             sse += sse_add
             N_data += len(vs_truth)
