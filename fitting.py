@@ -309,25 +309,32 @@ def calc_g_i(i, vmins, vcircs, N_dict, d, e, h, j, k):
     gi = np.array([g, i])
     return gi 
 
+def normalize(pN_function, args):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+                'ignore', 
+                category=scipy.integrate.IntegrationWarning)
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        N = scipy.integrate.quad(
+                pN_function, 
+                0., 
+                np.inf,
+                args, 
+                epsabs=0
+        )[0]
+    return N
+
 def calc_gs(vmins, vcircs, d, e, h, j, k, parallel=False):
     '''
     Calculate the value of the halo integral given vmin and circular
     velocity
     '''
     assert len(vmins) == len(vcircs)
-    def normalize(vc):
-        v0 = d * (vc / 100.) ** e
-        vdamp = h * (vc / 100.) ** j
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                    'ignore', 
-                    category=scipy.integrate.IntegrationWarning)
-            warnings.filterwarnings('ignore', category=RuntimeWarning)
-            N = scipy.integrate.quad(pN_smooth_step_max, 0., np.inf,
-                                 (v0, vdamp, k), epsabs=0)[0]
-        return N
     vcircs_set = np.array(list(set(vcircs)))
-    N_dict = {vc: normalize(vc) for vc in vcircs_set}
+    v0s_set = d * (vcircs_set / 100.) ** e
+    vdamps_set = h * (vcircs_set / 100.) ** j
+    N_dict = {vc: normalize(pN_smooth_step_max, (v0, vdamp, k)) 
+              for vc, v0, vdamp in zip(vcircs_set, v0s_set, vdamps_set)}
     if parallel:
         pool = mp.Pool(mp.cpu_count())
         gi_s = [pool.apply_async(calc_g_i, 
