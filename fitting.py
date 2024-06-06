@@ -96,17 +96,43 @@ def smooth_step_max(v, v0, vdamp, k, speedy=False):
     
     k is the strength of the sigmoid damping
     '''
+    import collections
+
+    v0_is_arraylike = isinstance(v0, collections.abc.Iterable)
+    vdamp_is_arraylike = isinstance(vdamp, collections.abc.Iterable)
+    if not v0_is_arraylike:
+        v0 = np.array([v0])
+    if not vdamp_is_arraylike:
+        vdamp = np.array([vdamp])
+    if type(v0) == list:
+        v0 = np.array(v0)
+    if type(vdamp) == list:
+        vdamp = np.array(vdamp)
+    if len(v0) != len(vdamp):
+        raise ValueError('v0 and vdamp should be the same length.')
+    N_vcs = len(v0) # Implied number of circular speeds
+
+    v0_set, vdamp_set = np.unique([v0, vdamp], axis=1)
+
     if speedy:
         min_S = 1.e-4 # minimum sigmoid value
-        max_v = vdamp + k * (1. / min_S - 1.)
+        max_v_set = vdamp_set + k * (1. / min_S - 1.)
     else:
-        max_v = np.inf
+        max_v_set = np.repeat(np.inf, N_vcs)
+
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        N = scipy.integrate.quad(pN_smooth_step_max, 0., max_v, 
-                                 (v0, vdamp, k), epsabs=0)[0]
-        p = pN_smooth_step_max(v, v0, vdamp, k) / N
-    return p
+        N_dict = {
+                (v0_, vdamp_): normalize(pN_smooth_step_max, (v0_, vdamp_, k)) 
+                for v0_, vdamp_ in zip(v0_set, vdamp_set)
+        }
+        p = [pN_smooth_step_max(v, v0_, vdamp_, k) / N_dict[(v0_, vdamp_)]
+             for v0_, vdamp_ in zip(v0, vdamp)]
+    
+    if len(p) == 1:
+        return p[0]
+    else:
+        return np.array(p)
 
 def exp_max(v, v0, vesc):
     '''
