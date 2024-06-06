@@ -1980,7 +1980,8 @@ def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
                   vc100=True, err_method='sampling', ddfrac=None, dhfrac=None,
                   assume_corr=False,
-                  band_alpha=0.4, data_color='grey', band_color='grey',
+                  band_alpha=0.4, data_color='k', 
+                  band_color=plt.cm.viridis(1.),
                   samples_color=plt.cm.viridis(0.5), ymax=None, show_rms=False,
                   **kwargs):
     '''
@@ -1989,6 +1990,8 @@ def plt_universal(gals='discs', update_values=False,
     err_method: {'sampling', 'std_err', None}, default 'sampling'
         The method to use to generate the error bands
     '''
+    if err_method not in ['sampling', 'std_err', None]:
+        raise ValueError('Unexpected argument for `err_method`.')
     if (ddfrac is not None or dhfrac is not None or assume_corr) \
         and err_method != 'sampling':
         raise ValueError('ddfrac, dhfrac, and assume_corr are only used in '

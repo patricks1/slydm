@@ -1,3 +1,11 @@
+theta_ranges = {
+        'd': [100., 130.],
+        'e': [0.8, 1.2],
+        'h': [200., 400.],
+        'j': [0.1, 0.8],
+        'k': [1.e-2, 4.5e-2]
+}
+
 def calc_log_likelihood(theta, X, ys):
     '''
     Parameters
@@ -30,9 +38,7 @@ def calc_log_likelihood(theta, X, ys):
     vcs, vs = X.T
     v0s = d * (vcs / 100.) ** e 
     vdamps = h * (vcs / 100.) ** j
-    yhats = [fitting.smooth_step_max(v, v0, vdamp, k, speedy=True)
-             for v, v0, vdamp in zip(vs, v0s, vdamps)]
-    yhats = np.array(yhats)
+    yhats = fitting.smooth_step_max(vs, v0s, vdamps, k, speedy=True)
     sse = np.sum((yhats - ys) ** 2.)
 
     if np.isnan(sse):
@@ -75,14 +81,6 @@ def calc_log_uniform_prior(theta):
     '''
     import numpy as np
 
-    theta_ranges = {
-            'd': [50., 500.],
-            'e': [0.1, 5.],
-            'h': [50., 500.],
-            'j': [0.1, 5.],
-            'k': [1.e-5, 0.5]
-    }
-
     N = 0. # Normalization
     for t in theta_ranges:
         N += theta_ranges[t][1] - theta_ranges[t][0]
@@ -92,7 +90,7 @@ def calc_log_uniform_prior(theta):
     P = 0.
     for t in theta_ranges:
         P += (theta_ranges[t][1] - theta_ranges[t][0]) * p
-    assert P == 1.
+    assert np.allclose(P, 1.)
 
     for i, t in enumerate(theta_ranges):
         # Check if each parameter is within its acceptable range. If not,
@@ -182,23 +180,37 @@ def run(log_prior_function, df_source, tgt_fname):
     ys = np.concatenate([pdfs[galname]['ps']
                    for galname in pdfs])
 
-    # Make a tiny Gaussian ball around the current best estimate (I don't know
-    # why we name this `pos`, but that's what 
-    # https://github.com/dfm/emcee/blob/main/docs/tutorials/line.ipynb calls
-    # it.)
-    ndim = len(mu) # number of parameters
     nwalkers = 32
-    pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
+    ndim = len(mu) # number of parameters
+
+    size = backend.iteration
+    print('initial size: {0}'.format(size))
+    #print('starting samples shape: {0}'
+    #      .format(sampler.get_chain().shape))
+
+    if size > 0:
+        # Start the walkers where they last ended.
+        pos = None
+    else:
+        # Set the initial positions to a tiny Gaussian ball around the 
+        # best estimate from least-squares minimization.
+        pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
+
+        # Generate initial positions within the valid ranges
+        #pos = np.zeros((nwalkers, ndim))
+        #for i, key in enumerate(theta_ranges):
+        #        pos[:, i] = np.random.uniform(
+        #                theta_ranges[key][0], 
+        #                theta_ranges[key][1], 
+        #                nwalkers
+        #        )
 
     with multiprocessing.Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
                                         args=(X, ys, log_prior_function),
                                         backend=backend,
                                         pool=pool)
-        #print('initial size: {0}'.format(backend.iteration))
-        #print('starting samples shape: {0}'
-        #      .format(sampler.get_chain().shape))
 
-        sampler.run_mcmc(pos, int(5e3), progress=True)
+        sampler.run_mcmc(pos, int(1e4), progress=True)
 
     return None

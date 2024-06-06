@@ -1,4 +1,4 @@
-def read(samples_fname, consider_burnin=True, flat=True):
+def read(samples_fname, consider_burnin=True, flat=True, verbose=False):
     import emcee
     import paths
     import warnings
@@ -14,16 +14,28 @@ def read(samples_fname, consider_burnin=True, flat=True):
             thin = 1
         burnin = int(2 * np.max(tau))
         samples = reader.get_chain(discard=burnin, thin=thin, flat=flat)
-        print('burn-in: {0:0.0f}'
-              '\nthin: {1:0.0f}'
-              .format(burnin, thin))
+        if verbose:
+            print('tau: {2}'
+                  '\nburn-in: {0:0.0f}'
+                  '\nthin: {1:0.0f}'
+                  .format(burnin, thin, tau))
     else:
         samples = reader.get_chain(flat=flat)
 
-    print('\nsamples shape: {0}'
-          .format(str(samples.shape)))
-
     return samples
+
+def plot_chains(samples_fname):
+    import emcee
+    import paths
+    import matplotlib.pyplot as plt
+
+    reader = emcee.backends.HDFBackend(paths.data + samples_fname)
+    samples = reader.get_chain(flat=True)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(samples[:, 0], 'b.')
+    plt.show()
+    return None
 
 def corner_plot(samples_fname, consider_burnin=True, log_prior_function=None):
     import corner
@@ -33,7 +45,11 @@ def corner_plot(samples_fname, consider_burnin=True, log_prior_function=None):
     import numpy as np
     from progressbar import ProgressBar
 
-    flat_samples = read(samples_fname, consider_burnin=consider_burnin)
+    samples = read(samples_fname, consider_burnin=consider_burnin, flat=False,
+                   verbose=True)
+    print('samples shape: {0}'
+          .format(str(samples.shape)))
+    flat_samples = samples.reshape(-1, samples.shape[-1])
     ndim = flat_samples.shape[1]
     fig = corner.corner(flat_samples, labels=['D', 'e', 'H', 'j', 'k'])
     axs = np.array(fig.axes).reshape((ndim, ndim))
