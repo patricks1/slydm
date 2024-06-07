@@ -1980,15 +1980,22 @@ def plt_universal(gals='discs', update_values=False,
                   tgt_fname=None, method='leastsq', 
                   vc100=True, err_method='sampling', ddfrac=None, dhfrac=None,
                   assume_corr=False,
-                  band_alpha=0.4, data_color='k', 
+                  band_alpha=0.9, data_color='k', 
                   band_color=plt.cm.viridis(1.),
                   samples_color=plt.cm.viridis(0.5), ymax=None, show_rms=False,
+                  pdfs_fname='v_pdfs_disc_dz1.0_20240606.pkl',
+                  raw_results_fname=None,
                   **kwargs):
     '''
     Noteworthy Parameters
     ---------------------
     err_method: {'sampling', 'std_err', None}, default 'sampling'
         The method to use to generate the error bands
+    pdfs_fname: str
+        The filename from which to get the galaxies' true probability densities
+    raw_results_fname: str, default 'data_raw.pkl'
+        Filename to which the program will save its raw data results in float
+        format with no rounding
     '''
     if err_method not in ['sampling', 'std_err', None]:
         raise ValueError('Unexpected argument for `err_method`.')
@@ -2007,6 +2014,12 @@ def plt_universal(gals='discs', update_values=False,
     if update_values and gals != 'discs':
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
+    if not update_values and raw_results_fname is not None:
+        raise ValueError('Only specify the raw_results_fname if you are'
+                         'updating values.')
+    if update_values and raw_results_fname is None:
+        raw_results_fname = 'data_raw.pkl'
+
     import dm_den
     import dm_den_viz
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
@@ -2016,7 +2029,8 @@ def plt_universal(gals='discs', update_values=False,
         Ngals = 12
     else:
         Ngals = len(gals)
-    pdfs = copy.deepcopy(pdfs_v)
+    with open(paths.data + pdfs_fname, 'rb') as f:
+        pdfs = pickle.load(f)
     pdfs.pop('m12z')
     pdfs.pop('m12w')
     for gal in pdfs:
@@ -2095,7 +2109,7 @@ def plt_universal(gals='discs', update_values=False,
                    for key in result.params.keys()}
         covar = {'covar': result.covar}
         data2save = data2save | stderrs | covar #combine dictionaries
-        dm_den.save_var_raw(data2save)
+        dm_den.save_var_raw(data2save, raw_results_fname)
 
         p = result.covar.shape[0] #Number of parameters we're estimating
         N = 600 #There's 600 data points (50 bins for each disc) 

@@ -14,7 +14,7 @@ wide_ranges = {
         'k': [0.1e-2, 8.e-2]
 }
 
-def calc_log_likelihood(theta, X, ys):
+def calc_log_likelihood(theta, X, ys, dys):
     '''
     Parameters
     ----------
@@ -30,14 +30,18 @@ def calc_log_likelihood(theta, X, ys):
         having 
         a given
         speed v, where f(v) is our sigmoid-damped speed distribution.
+    dys: np.ndarray, shape = (N,)
+        Errors in y
     '''
     import numpy as np
     import fitting
 
     Ndimy = ys.ndim
-    if Ndimy != 1:
-        raise Exception('ys should only have one dimension.')
+    if Ndimy != 1 or dys.ndim != 1:
+        raise Exception('ys and dys should only have one dimension.')
     N = len(ys)
+    if len(dys) != N:
+        raise Exception('ys and dys should be be the same length.')
     if X.shape != (N, 2):
         raise Exception('X has the wrong shape. It should have 2 columns and'
                         ' the same number'
@@ -47,18 +51,19 @@ def calc_log_likelihood(theta, X, ys):
     v0s = d * (vcs / 100.) ** e 
     vdamps = h * (vcs / 100.) ** j
     yhats = fitting.smooth_step_max(vs, v0s, vdamps, k, speedy=True)
-    sse = np.sum((yhats - ys) ** 2.)
+    
+    chi2 = np.sum((yhats - ys) ** 2. / dys ** 2.) # chi squared
 
-    if np.isnan(sse):
+    if np.isnan(chi2):
         # Some non-allowed parameter values might result in a f(v) = 0/0 e.g. 
         # negative
         # k values. These aren't allowed anyway, so just return -np.inf.
         return -np.inf
 
-    log_likelihood = -sse
+    log_likelihood = -chi2
     return log_likelihood
 
-def calc_log_gaussian_prior(theta, multiplier):
+def calc_log_gaussian_prior(theta, multiplier, ls_results_source):
     '''
     Calculate the log prior assuming a p(theta) is a multivariate Gaussian.
     '''
@@ -67,18 +72,26 @@ def calc_log_gaussian_prior(theta, multiplier):
     import pickle
     import numpy as np
 
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+    ndim = len(theta)
+
+    with open(paths.data + ls_results_source, 'rb') as f:
         ls_result = pickle.load(f)
 
         # Best estimate of the parameters from least squares minimization
         mu = np.array([ls_result[param] 
                        for param in ['d', 'e', 'h', 'j', 'k']])
 
-        cov = ls_result['covar'] * multiplier 
+        cov = np.zeros((ndim, ndim))
+        dis = np.diag_indices(ndim)
+        np.fill_diagonal(cov, ls_result['covar'][dis])
+        cov = cov * multiplier 
     return scipy.stats.multivariate_normal.logpdf(theta, mean=mu, cov=cov)
 
-def calc_log_fat_gaussian_prior(theta):
-    return calc_log_gaussian_prior(theta, 50.**2.)
+def calc_log_fat_gaussian_prior(theta, ls_results_source):
+    return calc_log_gaussian_prior(theta, 50.**2., ls_results_source)
+
+def calc_log_wide_gaussian_prior(theta, ls_results_source):
+    return calc_log_gaussian_prior(theta, 5.**2., ls_results_source)
 
 def calc_log_wide_uniform_prior(theta):
     return calc_log_uniform_prior(theta, wide_ranges)
@@ -118,7 +131,7 @@ def calc_log_uniform_prior(theta, theta_ranges):
 
     return np.log(p)
 
-def calc_log_post(theta, X, ys, log_prior_function):
+def calc_log_post(theta, X, ys, dys, log_prior_function, log_prior_args=()):
     '''
     Calculate the log posterior
 
@@ -136,20 +149,28 @@ def calc_log_post(theta, X, ys, log_prior_function):
         having 
         a given
         speed v, where f(v) is our sigmoid-damped speed distribution.
+    dys: np.ndarray, shape = (N,)
+        Errors in y
     log_prior_function: function
         The log prior function to use. For example, 
         `mcmc.calc_log_gaussian_prior`
         or `mcmc.calc_log_uniform_prior`.
+    log_prior_args: tuple, default ()
+        Args that should be passed to the log prior function, other than the
+        `theta` vector
     '''
     import numpy as np
 
-    log_prior_value = log_prior_function(theta)
-    log_likelihood_value = calc_log_likelihood(theta, X, ys)
+    log_prior_value = log_prior_function(theta, *log_prior_args)
+    log_likelihood_value = calc_log_likelihood(theta, X, ys, dys)
     log_posterior_value = log_prior_value + log_likelihood_value
 
     return log_posterior_value
 
-def run(log_prior_function, df_source, tgt_fname):
+def run(log_prior_function, df_source, tgt_fname, 
+        pdfs_source='v_pdfs_disc_dz1.0_20240606.pkl',
+        ls_results_source='data_raw.pkl',
+        log_prior_args=()):
     import emcee
     import pickle
     import paths
@@ -164,7 +185,7 @@ def run(log_prior_function, df_source, tgt_fname):
     
     backend = emcee.backends.HDFBackend(paths.data + tgt_fname) 
 
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+    with open(paths.data + ls_results_source, 'rb') as f:
         ls_result = pickle.load(f)
 
         # Best estimate of the parameters from least squares minimization
@@ -175,7 +196,7 @@ def run(log_prior_function, df_source, tgt_fname):
         #mu = np.array([90., 1., 250., 1., 0.01])
          
     nondisks = ['m12z', 'm12w']
-    with open(paths.data + 'v_pdfs_disc_dz1.0.pkl', 'rb') as f:
+    with open(paths.data + pdfs_source, 'rb') as f:
         pdfs = pickle.load(f)
     for nondisk in nondisks:
         del pdfs[nondisk]
@@ -196,13 +217,23 @@ def run(log_prior_function, df_source, tgt_fname):
     # `vs_truth`
     ys = np.concatenate([pdfs[galname]['ps']
                    for galname in pdfs])
+    dys = np.concatenate([pdfs[galname]['p_errors']
+                         for galname in pdfs])
 
-    nwalkers = 32
+    # With Poisson errors, a y_i == 0 causes dy_i == np.nan
+    isfinite = np.isfinite(dys)
+    X = X[isfinite]
+    ys = ys[isfinite]
+    dys = dys[isfinite]
+
+    nwalkers = 64 
     ndim = len(mu) # number of parameters
 
     with multiprocessing.Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
-                                        args=(X, ys, log_prior_function),
+                                        args=(
+                                            X, ys, dys, log_prior_function,
+                                            log_prior_args),
                                         backend=backend,
                                         pool=pool)
 
@@ -228,6 +259,6 @@ def run(log_prior_function, df_source, tgt_fname):
             #                nwalkers
             #        )
 
-        sampler.run_mcmc(pos, int(7e5), progress=True)
+        sampler.run_mcmc(pos, int(7e4), progress=True)
 
     return None

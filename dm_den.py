@@ -1291,8 +1291,22 @@ def comp_disp_vc(galname='m12i',dr=1.5,fname=None):
 
     return rs_axis, disps_fire, vcircs_fire, disps_dmo, vcircs_dmo 
 
-def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_v_earth=False, dz=0.5)
+def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_v_earth=False, dz=0.5):
     import cropper
+    if type(df) != pd.core.frame.DataFrame:
+        raise TypeError('df should be a dataframe.')
+    if type(galname) != str:
+        raise TypeError('galname should be a string.')
+    if type(bins) != int:
+        raise TypeError('bins should be an integer.')
+    if type(r) != float:
+        raise TypeError('r should be a float.')
+    if type(dr) != float:
+        raise TypeError('dr should be a float.')
+    if not isinstance(dz, (type(None), float)):
+        raise TypeError('dz should either be a float or None.')
+    if type(incl_v_earth) != bool:
+        raise TypeError('incl_v_earth should be a boolean.')
     d = cropper.load_data(galname, getparts=['PartType1'], verbose=False)
     dm = d['PartType1']
     ms = dm['mass_phys']
@@ -1336,7 +1350,20 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_v_earth=False, dz=0.5)
     plt.close()
     return ps, bins, mu, counts, d_ps
 
-def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_v_earth=False, dz=1.)
+def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_v_earth=False, dz=1.):
+    if type(bins) != int:
+        raise TypeError('bins should be an integer.')
+    if type(r) != float:
+        raise TypeError('r should be a float.')
+    if type(dr) != float:
+        raise TypeError('dr should be a float.')
+    if not isinstance(dz, (type(None), float)):
+        raise TypeError('dz should either be a float or None.')
+    if type(fname) != str:
+        raise TypeError('fname should be a string.')
+    if type(incl_v_earth) != bool:
+        raise TypeError('incl_v_earth should be a boolean.')
+    
     df=staudt_tools.init_df() 
     pdfs={}
 
@@ -1352,7 +1379,7 @@ def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_v_earth=False, dz=1.)
                 , pdfs[galname]['bins'] \
                 , pdfs[galname]['v_avg'] \
                 , pdfs[galname]['counts'] \
-                , pdfs[galname]['ps_errors'] \
+                , pdfs[galname]['p_errors'] \
                 = res
     test_pdfs(pdfs)
 
