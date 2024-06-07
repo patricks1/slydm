@@ -1017,7 +1017,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
                                   d['PartType1']['v_dot_phihat'],
                                   d['PartType1']['v_dot_zhat']]).transpose(1,0)
         v_mags_dm = np.linalg.norm(v_vecs_dm, axis=1)
-        zs = d['PartType1']['coord_rot'][:,2]
+        zs_dm = d['PartType1']['coord_rot'][:,2]
 
         rs_gas = d['PartType0']['r']
         ms_gas = d['PartType0']['mass_phys']
@@ -1031,6 +1031,8 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
 
         rs_all = flatten_particle_data(d, 'r')
         ms_all = flatten_particle_data(d, 'mass_phys')
+        coord_rot_all = flatten_particle_data(d, 'coord_rot')
+        zs_all = coord_rot_all[:, 2] 
 
         # Get (m_dm / m_tot) | (r <= R0)
         dm_in_rsolar = rs_dm <= rsolar
@@ -1048,11 +1050,22 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         frac_dm_5 = m_dm_in5 / m_all_in5
         df.loc[galname, 'frac_dm(r<=5kpc)'] = frac_dm_5
 
+        # Get (m_dm / m_tot ) in the Solar ring
+        dm_inshell = (rs_dm <= r_solar + dr/2.) & (rs_dm >= r_solar - dr/2.)
+        dm_indisc = np.abs(zs_dm) <= dz/2.
+        m_dm_ring = (ms_dm[dm_inshell & dm_indisc]).sum()
+        all_in_shell = ((rs_all <= r_solar + dr/2.) 
+                        & (rs_all >= r_solar - dr/2.))
+        all_in_disc = np.abs(zs_all) <= dz/2.
+        m_all_ring = (ms_all[all_in_shell & all_in_disc]).sum()
+        frac_dm_ring = m_dm_ring / m_all_ring
+        df.loc[galname, 'frac_dm_ring']
+
         # limited to the disc
         den_disc, disp_dm_disc = get_den_disp(rsolar, rs_dm, dr,
                                               ms=ms_dm, v_mags=None,
                                               v_vecs=v_vecs_dm_cyl,
-                                              zs=zs, dz=dz, verbose=False)
+                                              zs=zs_dm, dz=dz, verbose=False)
 
         df.loc[galname,'den_disc'] = den_disc
         df.loc[galname,'f_disc'] = 10.**7./den_disc
@@ -1119,8 +1132,9 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
 
         # Dark matter component dispersions
         dm = d['PartType1']
-        dm_inshell = np.abs(dm['r'] - rsolar) <= dr/2.
-        dm_indisc = np.abs(dm['coord_rot'][:,2]) <= dz/2.
+        # The following two lines are already calculated above.
+        #dm_inshell = np.abs(dm['r'] - rsolar) <= dr/2.
+        #dm_indisc = np.abs(dm['coord_rot'][:,2]) <= dz/2.
         df.loc[galname, 'std(v_dot_phihat_disc(dm))'] = np.std(
             dm['v_dot_phihat'][dm_inshell & dm_indisc]
         )

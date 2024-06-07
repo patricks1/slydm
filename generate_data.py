@@ -17,7 +17,13 @@ mcmc_distrib_samples_fname = 'mcmc_distrib_samples_' + date_str + '.h5'
 # Generate galaxy properties dataframe
 ###############################################################################
 _ = dm_den.get_v_escs(vescphi_dict_fname, rotate=True)
-_ = dm_den.gen_data(df_fname, dr=1.5, dz=1.0, source='cropped')
+_ = dm_den.gen_data(
+        df_fname, 
+        dr=1.5, 
+        dz=1., 
+        source='cropped', 
+        vescphi_dict_fname=vescphi_dict_fname
+)
 
 ###############################################################################
 # Generate probability densities p(v) = 4 pi v^2 f(v) where f(v) is the speed
