@@ -1051,15 +1051,15 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         df.loc[galname, 'frac_dm(r<=5kpc)'] = frac_dm_5
 
         # Get (m_dm / m_tot ) in the Solar ring
-        dm_inshell = (rs_dm <= r_solar + dr/2.) & (rs_dm >= r_solar - dr/2.)
+        dm_inshell = (rs_dm <= rsolar + dr/2.) & (rs_dm >= rsolar - dr/2.)
         dm_indisc = np.abs(zs_dm) <= dz/2.
         m_dm_ring = (ms_dm[dm_inshell & dm_indisc]).sum()
-        all_in_shell = ((rs_all <= r_solar + dr/2.) 
-                        & (rs_all >= r_solar - dr/2.))
+        all_in_shell = ((rs_all <= rsolar + dr/2.) 
+                        & (rs_all >= rsolar - dr/2.))
         all_in_disc = np.abs(zs_all) <= dz/2.
         m_all_ring = (ms_all[all_in_shell & all_in_disc]).sum()
         frac_dm_ring = m_dm_ring / m_all_ring
-        df.loc[galname, 'frac_dm_ring']
+        df.loc[galname, 'frac_dm_ring'] = frac_dm_ring
 
         # limited to the disc
         den_disc, disp_dm_disc = get_den_disp(rsolar, rs_dm, dr,

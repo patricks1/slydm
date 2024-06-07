@@ -55,7 +55,7 @@ mcmc.run(
         ls_results_source=ls_results_fname,
         log_prior_args=(ls_results_fname,) 
 )
-# Sample the THETA posteior to make speed distribution samples.
+# Sample the `THETA` posteior to make speed distribution samples.
 read_mcmc.make_distrib_samples(
         df_fname,
         mcmc_distrib_samples_fname
