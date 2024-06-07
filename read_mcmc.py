@@ -77,8 +77,8 @@ def corner_plot(samples_fname, consider_burnin=True, log_prior_function=None,
             sampler = emcee.EnsembleSampler(nwalkers, ndim, log_prior_function,
                                             pool=pool)
             print('Sampling prior')
-            sampler.run_mcmc(pos, int(3e3), progress=True)
-            tau = sampler.get_autocorr_time()
+            sampler.run_mcmc(pos, int(4e3), progress=True)
+            tau = sampler.get_autocorr_time(quiet=True)
             burnin = int(2 * np.max(tau))
             samples = sampler.get_chain(flat=True, discard=burnin)
     
@@ -193,7 +193,7 @@ def estimate(samples_fname):
     for i in range(ndim):
         est = np.percentile(samples[:, i], [16, 50, 84])
         q = np.diff(est)
-        txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{+{2:.3f}}}"
+        txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.4f}}}^{{+{2:.4f}}}"
         txt = txt.format(est[1], q[0], q[1], labels[i])
         display(Math(txt))
     return None

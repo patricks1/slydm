@@ -87,10 +87,10 @@ def calc_log_gaussian_prior(theta, multiplier, ls_results_source):
         cov = cov * multiplier 
     return scipy.stats.multivariate_normal.logpdf(theta, mean=mu, cov=cov)
 
-def calc_log_fat_gaussian_prior(theta, ls_results_source):
+def calc_log_fat_gaussian_prior(theta, ls_results_source='data_raw.pkl'):
     return calc_log_gaussian_prior(theta, 50.**2., ls_results_source)
 
-def calc_log_wide_gaussian_prior(theta, ls_results_source):
+def calc_log_wide_gaussian_prior(theta, ls_results_source='data_raw.pkl'):
     return calc_log_gaussian_prior(theta, 5.**2., ls_results_source)
 
 def calc_log_wide_uniform_prior(theta):
