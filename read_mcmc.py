@@ -76,8 +76,8 @@ def corner_plot(samples_fname, consider_burnin=True, log_prior_function=None,
         with multiprocessing.Pool() as pool:
             sampler = emcee.EnsembleSampler(nwalkers, ndim, log_prior_function,
                                             pool=pool)
-            print('Sampling prior')
-            sampler.run_mcmc(pos, int(4e3), progress=True)
+            print('\nSampling prior')
+            sampler.run_mcmc(pos, int(1e4), progress=True)
             tau = sampler.get_autocorr_time(quiet=True)
             burnin = int(2 * np.max(tau))
             samples = sampler.get_chain(flat=True, discard=burnin)
