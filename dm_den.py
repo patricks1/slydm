@@ -1291,8 +1291,7 @@ def comp_disp_vc(galname='m12i',dr=1.5,fname=None):
 
     return rs_axis, disps_fire, vcircs_fire, disps_dmo, vcircs_dmo 
 
-def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, dz=0.5, 
-          density=True):
+def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_v_earth=False, dz=0.5)
     import cropper
     d = cropper.load_data(galname, getparts=['PartType1'], verbose=False)
     dm = d['PartType1']
@@ -1307,7 +1306,7 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, dz=0.5,
                            dm['v_dot_zhat']]).T
     v_mags = np.linalg.norm(v_vecs, axis=1)
     #ms, mvir, rs, rvir, v_mags, v_vecs, parttypes = unpack_new(df, galname)[:7]
-    if incl_ve:
+    if incl_v_earth:
         if 'disp_dm_solar' in df and not np.isnan(df.loc[galname,
                                                          'disp_dm_solar']):
             sigma3d = df.loc[galname,'disp_dm_solar'] 
@@ -1329,13 +1328,15 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_ve=False, dz=0.5,
         inshell = inshell & ( np.abs(zs) <= dz / 2. )
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    ps, bins, _ = ax.hist(v_mags[inshell], bins=bins, density=density)
+    counts, bins, _ = ax.hist(v_mags[inshell], bins=bins)
+    ps = counts / (counts.sum() * np.diff(bins))
+    frac_errors = 1. / np.sqrt(counts) # Poisson error
+    d_ps = ps * frac_errors
     mu = np.average(v_mags[inshell])
     plt.close()
-    return ps, bins, mu
+    return ps, bins, mu, counts, d_ps
 
-def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False, dz=1.,
-                density=True):
+def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_v_earth=False, dz=1.)
     df=staudt_tools.init_df() 
     pdfs={}
 
@@ -1343,18 +1344,18 @@ def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_ve=False, dz=1.,
         print('Generating {0:s}'.format(galname))
 
         pdfs[galname]={}
-        res = v_pdf(df, galname, incl_ve=incl_ve, dz=dz, density=density)
+        res = v_pdf(df, galname, incl_v_earth=incl_v_earth, dz=dz)
         bins = res[1]
         vs = (bins[1:] + bins[:-1]) / 2.
         pdfs[galname]['vs'] = vs
-        if density:
-            pdfs[galname]['ps'] ,\
-                    pdfs[galname]['bins'] ,\
-                    pdfs[galname]['v_avg'] = res
-        else:
-            pdfs[galname]['counts'] ,\
-                pdfs[galname]['bins'] ,\
-                pdfs[galname]['v_avg'] = res
+        pdfs[galname]['ps'] \
+                , pdfs[galname]['bins'] \
+                , pdfs[galname]['v_avg'] \
+                , pdfs[galname]['counts'] \
+                , pdfs[galname]['ps_errors'] \
+                = res
+    test_pdfs(pdfs)
+
     if fname:
         direc = paths.data
         fname=direc+fname
@@ -1935,6 +1936,35 @@ def test_gen_data(df_new=None, test_fname=None):
         print('gen_data test passed.')
     return None
 
+def test_pdfs(new_pdfs, ref_fname=None):
+    if ref_fname is None:
+        ref_fname = 'v_pdfs_disc_dz1.0.pkl'
+    with open(paths.data + ref_fname, 'rb') as f:
+        ref_pdfs = pickle.load(f)
+    gals = list(ref_pdfs.keys())
+    new_gals = list(new_pdfs.keys())
+    if gals != new_gals:
+        raise ValueError(
+                'At least one galaxy missing from new pdf dictionary.'
+        )
+    changed_data = []
+    for gal in gals:
+        for key in new_pdfs[gal]:
+            if key in ref_pdfs[gal]:
+                old = ref_pdfs[gal][key]
+                new = new_pdfs[gal][key]
+                unchanged = np.allclose(old,
+                                        new)
+            if not unchanged:
+                changed_data += [(gal, key)]
+                print('\n{0} failed'.format((gal, key)))
+                print( np.array([old, new]).T )
+    if len(changed_data) != 0:
+        raise Exception('One of more data sets have changed')
+    else:
+        print('PDFs test passed.')
+    return None
+                
 def compare_dfs(fname1, fname2):
     df1 = load_data(fname1)
     df2 = load_data(fname2)

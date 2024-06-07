@@ -6,6 +6,14 @@ theta_ranges = {
         'k': [1.e-2, 4.5e-2]
 }
 
+wide_ranges = {
+        'd': [0., 500.],
+        'e': [0.1, 3.],
+        'h': [50., 1000.],
+        'j': [0.1, 3.],
+        'k': [0.1e-2, 8.e-2]
+}
+
 def calc_log_likelihood(theta, X, ys):
     '''
     Parameters
@@ -50,7 +58,7 @@ def calc_log_likelihood(theta, X, ys):
     log_likelihood = -sse
     return log_likelihood
 
-def calc_log_gaussian_prior(theta):
+def calc_log_gaussian_prior(theta, multiplier):
     '''
     Calculate the log prior assuming a p(theta) is a multivariate Gaussian.
     '''
@@ -66,10 +74,19 @@ def calc_log_gaussian_prior(theta):
         mu = np.array([ls_result[param] 
                        for param in ['d', 'e', 'h', 'j', 'k']])
 
-        cov = ls_result['covar'] * 5. 
+        cov = ls_result['covar'] * multiplier 
     return scipy.stats.multivariate_normal.logpdf(theta, mean=mu, cov=cov)
 
-def calc_log_uniform_prior(theta):
+def calc_log_fat_gaussian_prior(theta):
+    return calc_log_gaussian_prior(theta, 50.**2.)
+
+def calc_log_wide_uniform_prior(theta):
+    return calc_log_uniform_prior(theta, wide_ranges)
+
+def calc_log_narrower_uniform_prior(theta):
+    return calc_log_uniform_prior(theta, theta_ranges)
+
+def calc_log_uniform_prior(theta, theta_ranges):
     '''
     Calculate the log prior assuming a uniform distribution.
 
@@ -183,34 +200,34 @@ def run(log_prior_function, df_source, tgt_fname):
     nwalkers = 32
     ndim = len(mu) # number of parameters
 
-    size = backend.iteration
-    print('initial size: {0}'.format(size))
-    #print('starting samples shape: {0}'
-    #      .format(sampler.get_chain().shape))
-
-    if size > 0:
-        # Start the walkers where they last ended.
-        pos = None
-    else:
-        # Set the initial positions to a tiny Gaussian ball around the 
-        # best estimate from least-squares minimization.
-        pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
-
-        # Generate initial positions within the valid ranges
-        #pos = np.zeros((nwalkers, ndim))
-        #for i, key in enumerate(theta_ranges):
-        #        pos[:, i] = np.random.uniform(
-        #                theta_ranges[key][0], 
-        #                theta_ranges[key][1], 
-        #                nwalkers
-        #        )
-
     with multiprocessing.Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
                                         args=(X, ys, log_prior_function),
                                         backend=backend,
                                         pool=pool)
 
-        sampler.run_mcmc(pos, int(1e4), progress=True)
+        size = backend.iteration
+        print('initial size: {0}'.format(size))
+        #print('starting samples shape: {0}'
+        #      .format(sampler.get_chain().shape))
+
+        if size > 0:
+            # Start the walkers where they last ended.
+            pos = None
+        else:
+            # Set the initial positions to a tiny Gaussian ball around the 
+            # best estimate from least-squares minimization.
+            pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
+
+            # Generate initial positions within the valid ranges
+            #pos = np.zeros((nwalkers, ndim))
+            #for i, key in enumerate(theta_ranges):
+            #        pos[:, i] = np.random.uniform(
+            #                theta_ranges[key][0], 
+            #                theta_ranges[key][1], 
+            #                nwalkers
+            #        )
+
+        sampler.run_mcmc(pos, int(7e5), progress=True)
 
     return None

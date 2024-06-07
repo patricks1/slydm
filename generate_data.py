@@ -8,6 +8,7 @@ import dm_den
 date_str = datetime.today().strftime('%Y%m%d')
 vescphi_dict_fname = 'vescs(phi)_rot_' + date_str + '.pkl'
 df_fname = 'dm_stats_dz1.0_' + date_str + date_str + '.h5'
+pdfs_fname = 'v_pdfs_disc_dz1.0' + dat_str + '.pkl'
 mcmc_samples_fname = 'mcmc_samples_' + date_str + '.h5'
 
 ###############################################################################
@@ -15,6 +16,12 @@ mcmc_samples_fname = 'mcmc_samples_' + date_str + '.h5'
 ###############################################################################
 _ = dm_den.get_v_escs(vescphi_dict_fname, rotate=True)
 _ = dm_den.gen_data(df_fname, dr=1.5, dz=1.0, source='cropped')
+
+###############################################################################
+# Generate probability densities p(v) = 4 pi v^2 f(v) where f(v) is the speed
+# distribution
+###############################################################################
+_ = dm_den.make_v_pdfs(fname=pdfs_fname, r=8.3, dr=1.5, dz=1.)
 
 ###############################################################################
 # Generate least squares fit results for the Staudt et al. speed distribution.
