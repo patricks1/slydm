@@ -6,12 +6,12 @@ import fitting
 import dm_den
 
 date_str = datetime.today().strftime('%Y%m%d')
-vescphi_dict_fname = 'vescs(phi)_rot_' + date_str + '.pkl'
-df_fname = 'dm_stats_dz1.0_' + date_str + date_str + '.h5'
-pdfs_fname = 'v_pdfs_disc_dz1.0_' + date_str + '.pkl'
-ls_results_fname = 'data_raw_' + date_str + '.pkl' # least-squares results
-mcmc_samples_fname = 'mcmc_samples_' + date_str + '.h5'
-mcmc_distrib_samples_fname = 'mcmc_distrib_samples_' + date_str + '.h5'
+vescphi_dict_fname = date_str + '_vescs(phi)_rot' + '.pkl'
+df_fname = date_str + '_dm_stats_dz1.0' '.h5'
+pdfs_fname = date_str + '_v_pdfs_disc_dz1.0' + '.pkl'
+ls_results_fname = date_str + '_data_raw' + '.pkl' # least-squares results
+mcmc_samples_fname = date_str + '_mcmc_samples' + '.h5'
+mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples' + '.h5'
 
 ###############################################################################
 # Generate galaxy properties dataframe
