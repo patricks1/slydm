@@ -1307,11 +1307,13 @@ def comp_disp_vc(galname='m12i',dr=1.5,fname=None):
 
 def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_v_earth=False, dz=0.5):
     import cropper
+    import warnings
+
     if type(df) != pd.core.frame.DataFrame:
         raise TypeError('df should be a dataframe.')
     if type(galname) != str:
         raise TypeError('galname should be a string.')
-    if type(bins) != int:
+    if not isinstance(bins, (int, list, np.ndarray)):
         raise TypeError('bins should be an integer.')
     if type(r) != float:
         raise TypeError('r should be a float.')
@@ -1358,8 +1360,10 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_v_earth=False, dz=0.5):
     ax = fig.add_subplot(111)
     counts, bins, _ = ax.hist(v_mags[inshell], bins=bins)
     ps = counts / (counts.sum() * np.diff(bins))
-    frac_errors = 1. / np.sqrt(counts) # Poisson error
-    d_ps = ps * frac_errors
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        frac_errors = 1. / np.sqrt(counts) # Poisson error
+        d_ps = ps * frac_errors
     mu = np.average(v_mags[inshell])
     plt.close()
     return ps, bins, mu, counts, d_ps

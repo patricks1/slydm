@@ -2219,7 +2219,6 @@ def plt_universal_prefit(result, df_source, gals='discs',
         raise ValueError('Unexpected data type provided for `params`')
     samples = fitting.load_samples(samples_fname)
 
-
     fig, axs = setup_multigal_fig(gals)
 
     sse_mao_full = 0. # SSE for the fully predictive Mao model
@@ -2259,19 +2258,28 @@ def plt_universal_prefit(result, df_source, gals='discs',
                                                             samples[gal],
                                                             samples_color,
                                                             axs[i])
-            #lowers, uppers = fitting.gal_bands(gal, vs_postfit, df, 
-            #                                   result, ddfrac=ddfrac, 
-            #                                   dhfrac=dhfrac,
-            #                                   assume_corr=False,
-            #                                   ax = axs[i], 
-            #                                   samples_color=samples_color)
-            axs[i].fill_between(#vs_postfit, 
-                                samples['vs'],
-                                lowers, uppers, 
-                                color=plt.cm.viridis(1.), 
-                                alpha=0.9, 
-                                ec=samples_color, zorder=1, 
-                                label='$1\sigma$ band')
+            #band = np.array([lowers, uppers])
+            #percent_diffs = np.abs(
+            #        -1. + band / fitting.smooth_step_max(
+            #                                samples['vs'],
+            #                                v0, 
+            #                                vdamp, 
+            #                                k)
+            #).max(axis=0)
+            #print('{0:s}'.format(gal))
+            #print(*np.array([samples['vs'], percent_diffs, lowers, uppers]).T,
+            #      sep='\n')
+            #print('')
+            axs[i].fill_between(
+                    samples['vs'],
+                    lowers, 
+                    uppers, 
+                    color=plt.cm.viridis(1.), 
+                    alpha=0.9, 
+                    ec=samples_color, 
+                    zorder=1, 
+                    label='$1\sigma$ band'
+            )
 
         # Plot data
         axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='k',

@@ -3370,3 +3370,48 @@ def compare_methods(save_fname=None, verbose=False):
     plt.show()
 
     return None 
+
+###############################################################################
+def determine_systematics(
+        df_source,
+        fit_results_fname, 
+        samples_fname):
+    import dm_den
+    import dm_den_viz
+    
+    with open(paths.data + fit_results_fname, 'rb') as f:
+        fit_results = pickle.load(f)
+    v_by_v0_bins = np.linspace(0., 2.3, 31)
+    d, e, h, j, k = [fit_results[key]
+                     for key in ['d', 'e', 'h', 'j', 'k']]
+    df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
+    samples = load_samples(samples_fname)
+
+    fig, axs = dm_den_viz.setup_multigal_fig('discs', show_resids=False)
+    pss = []
+    for i, galname in enumerate(df.index):
+        vc = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
+        v0 = d * (vc / 100.) ** e 
+        bins = v_by_v0_bins * v0
+        vs = (bins[1:] + bins[:-1]) / 2.
+        pdf = dm_den.v_pdf(df, galname, bins, dz=1.)
+        ps = pdf[0]
+        pss.append(ps)
+        axs[i].stairs(ps, v_by_v0_bins, color='k')
+
+        lowers, uppers = gal_bands_from_samples(
+            vs, 
+            samples[galname], 
+            plt.cm.viridis(0.5)
+        )
+        # I need to make a new distrib_samples file with 30 v's for each galaxy
+        # going from v0 * 0 to v0 * 2.3.
+        print(samples[galname])
+        print(lowers)
+        is_captured = lowers < ps < uppers
+        print(is_captured)
+
+    plt.show()
+    return None
+        
+

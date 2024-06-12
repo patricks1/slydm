@@ -182,20 +182,26 @@ def trace_plot(samples_fname):
 
     return None
 
-def estimate(samples_fname):
+def estimate(samples_fname, result_fname=None):
+    import dm_den
     from IPython.display import display, Math
     import numpy as np
 
     samples = read(samples_fname)
-    labels = ['D', 'e', 'H', 'j', 'k']
+    labels = ['d', 'e', 'h', 'j', 'k']
 
     ndim = samples.shape[1]
+    results_dict = {}
     for i in range(ndim):
         est = np.percentile(samples[:, i], [16, 50, 84])
         q = np.diff(est)
         txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.4f}}}^{{+{2:.4f}}}"
         txt = txt.format(est[1], q[0], q[1], labels[i])
         display(Math(txt))
+        
+        results_dict[labels[i]] = est[1]
+    if result_fname is not None:
+        dm_den.save_var_raw(results_dict, result_fname) 
     return None
 
 def make_gal_distrib_samples(df, gal, THETA, vs):
