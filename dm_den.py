@@ -1377,8 +1377,8 @@ def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_v_earth=False, dz=1.):
         raise TypeError('dr should be a float.')
     if not isinstance(dz, (type(None), float)):
         raise TypeError('dz should either be a float or None.')
-    if type(fname) != str:
-        raise TypeError('fname should be a string.')
+    if isinstance(fname, (type(None), str):
+        raise TypeError('fname should be a string or None.')
     if type(incl_v_earth) != bool:
         raise TypeError('incl_v_earth should be a boolean.')
     
@@ -1407,6 +1407,76 @@ def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_v_earth=False, dz=1.):
         with open(fname,'wb') as f:
             pickle.dump(pdfs, f, pickle.HIGHEST_PROTOCOL)
     return pdfs
+
+def make_v_over_v0_pdfs(
+    df_source,
+    fit_results_fname,
+    maxv0=2.3, 
+    Nbins=30, 
+    r=8.3, 
+    dr=1.5, 
+    dz=1., 
+    fname=None):
+    '''
+    Make probability densities of, as usual, speed, but base the bins on each
+    galaxy's v0. Each galaxy will have different bins in v but the same bins in
+    v/v0. The purpose of this is to be able to calculate systematic errors of
+    the final model as a function of v/v0
+
+    Parameters
+    ----------
+    df_source: str
+        The file name of the analysis-results DataFrame to use. The circular
+        speed to use in determining v0 comes from here.
+    fit_results_fname: str
+        The file name of the fit results to use. This contains the best 
+        estimates of the d and e parameters used to determine v0 in 
+        v0 = d * (vc / 100 km/s) ** e
+    maxv0: float, default 2.3
+        The highest multiple of v0 to bin.
+    Nbins: int, default 30
+        The number of bins to evaluate.
+    r: float, default 8.3
+        The assumption for the Solar distance from the center of a galaxy.
+    dr: float, default 1.5
+        The full width of the Solar shell on the r-axis.
+    dz: float, default 1.
+        2x the height above and below the disk-plane at which to chop the Solar
+        shell for creating the Solar ring mask. In other words, the maximum 
+        full-width of the Solar ring on the z-axis.
+    '''
+    if type(df_source) != str:
+        raise TypeError('df_source should be a str.')
+    if type(fit_results_fname) != str:
+        raise TypeError('fit_results_fname should be a str.')
+    if type(maxv0) != float:
+        raise TypeError('maxv0 should be a float.')
+    if type(Nbins) != int:
+        raise TypeError('Nbins should be an integer.')
+    if type(r) != float:
+        raise TypeError('r should be a float.')
+    if type(dr) != float:
+        raise TypeError('dr should be a float.')
+    if not isinstance(dz, (type(None), float)):
+        raise TypeError('dz should either be a float or None.')
+    if isinstance(fname, (type(None), str):
+        raise TypeError('fname should be a string or None.')
+
+    with open(paths.data + fit_results_fname, 'rb') as f:
+        fit_results = pickle.load(f)
+    v_by_v0_bins = np.linspace(0., maxv0, Nbins + 1)
+    vs_by_v0 = (v_by_v0_bins[1:] + v_by_v0_bins[:-1]) / 2.
+    d, e = [fit_results[key]
+            for key in ['d', 'e']
+    df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
+
+    pss = {} 
+    for i, galname in enumerate(df.index):
+        vc = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
+        v0 = d * (vc / 100.) ** e 
+        vs = (v_bins[1:] + v_bins[:-1]) / 2.
+        v_bins = v_by_v0_bins * v0
+        pdf = dm_den.v_pdf(df, galname, v_bins, dz=1.)
 
 def x_3d_pdf(df, galname, bins=100, r=8.3, dr=1.5, test_unpack=None, 
              typ='fire'):
