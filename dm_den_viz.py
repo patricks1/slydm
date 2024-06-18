@@ -2258,18 +2258,19 @@ def plt_universal_prefit(result, df_source, gals='discs',
                                                             samples[gal],
                                                             samples_color,
                                                             axs[i])
-            #band = np.array([lowers, uppers])
-            #percent_diffs = np.abs(
-            #        -1. + band / fitting.smooth_step_max(
-            #                                samples['vs'],
-            #                                v0, 
-            #                                vdamp, 
-            #                                k)
-            #).max(axis=0)
-            #print('{0:s}'.format(gal))
-            #print(*np.array([samples['vs'], percent_diffs, lowers, uppers]).T,
-            #      sep='\n')
-            #print('')
+            band = np.array([lowers, uppers])
+            percent_diffs = np.abs(
+                    -1. + band / fitting.smooth_step_max(
+                                            samples['vs'],
+                                            v0, 
+                                            vdamp, 
+                                            k)
+            ).max(axis=0)
+            print('{0:s}'.format(gal))
+            print(*np.array([samples['vs'], percent_diffs, lowers, uppers]).T,
+                  sep='\n')
+            print('')
+
             axs[i].fill_between(
                     samples['vs'],
                     lowers, 

@@ -9,9 +9,11 @@ date_str = datetime.today().strftime('%Y%m%d')
 vescphi_dict_fname = date_str + '_vescs(phi)_rot.pkl'
 df_fname = date_str + '_dm_stats_dz1.0.h5'
 pdfs_fname = date_str + '_v_pdfs_disc_dz1.0.pkl'
+pdfs4systematics_fname = date_str + '_v_pdfs4systematics_disc_dz1.0.pkl'
 ls_results_fname = date_str + '_data_raw.pkl' # least-squares results
 mcmc_samples_fname = date_str + '_mcmc_samples.h5'
 mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples.h5'
+mcmc_distrib_samples_by_v0_fname = date_str + '_mcmc_distrib_samples_by_v0.h5'
 mcmc_results_fname = date_str + '_mcmc_results.pkl'
 
 ###############################################################################
@@ -31,6 +33,7 @@ _ = dm_den.gen_data(
 # distribution
 ###############################################################################
 _ = dm_den.make_v_pdfs(r=8.3, dr=1.5, dz=1., fname=pdfs_fname)
+_ = 
 
 ###############################################################################
 # Generate least squares fit results for the Staudt et al. speed distribution.
@@ -47,7 +50,7 @@ _ = fitting.save_samples(df_fname, N=5000)
 ###############################################################################
 # MCMC
 ###############################################################################
-# Run the MCMC. This will take >12 hr.
+# Run the MCMC.
 mcmc.run(
         mcmc.calc_log_gaussian_prior,
         df_fname, 
@@ -60,6 +63,12 @@ mcmc.run(
 read_mcmc.make_distrib_samples(
         df_fname,
         mcmc_distrib_samples_fname
+)
+# Also generate speed distribution samples for a universal array of v/v0 values
+read_mcmc.make_distrib_samples_by_v0(
+        df_fname,
+        mcmc_samples_fname,
+        mcmc_distrib_samples_by_v0_fname
 )
 # Generate best parameter estimates from the MCMC
 read_mcmc.estimate(mcmc_samples_fname, mcmc_results_fname)

@@ -2858,7 +2858,14 @@ def load_samples(fname='samples_dz1.0_sigmoid_damped.h5'):
     samples_dict = {}
     with h5py.File(paths.data + fname, 'r') as f:
         for key in f.keys():
-            samples_dict[key] = f[key][:]
+            if type(f[key]) == h5py.Dataset:
+                samples_dict[key] = f[key][()]
+            elif type(f[key]) == h5py.Group:
+                grp = f[key]
+                samples_dict[key] = {}
+                for subkey in grp:
+                    samples_dict[key][subkey] = grp[subkey][()]
+
     return samples_dict
 
 def gal_bands(gal, vs, df, result, ddfrac=0.1, dhfrac=0.18,
@@ -3372,46 +3379,93 @@ def compare_methods(save_fname=None, verbose=False):
     return None 
 
 ###############################################################################
+def vs_into_bins(vs):
+    diffs = np.diff(vs)
+    diff = diffs[0]
+    assert np.all(np.isclose(diffs, diff))
+    bins = vs - diff / 2.
+    bins = np.append(bins, bins[-1] + diff)
+    vs_from_bins = (bins[1:] + bins[:-1]) / 2.
+    assert np.allclose(vs, vs_from_bins)
+    return bins
+
 def determine_systematics(
         df_source,
-        fit_results_fname, 
         samples_fname):
     import dm_den
     import dm_den_viz
     
-    with open(paths.data + fit_results_fname, 'rb') as f:
-        fit_results = pickle.load(f)
-    v_by_v0_bins = np.linspace(0., 2.3, 31)
-    d, e, h, j, k = [fit_results[key]
-                     for key in ['d', 'e', 'h', 'j', 'k']]
+    #v_by_v0_bins = np.linspace(0., 2.3, 31)
     df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
     samples = load_samples(samples_fname)
+    d, e, h, j, k = (samples['params'][t] 
+                     for t in ['d', 'e', 'h', 'j', 'k'])
+    vs_by_v0 = samples['v_v0']
+    v_by_v0_bins = vs_into_bins(vs_by_v0)
 
     fig, axs = dm_den_viz.setup_multigal_fig('discs', show_resids=False)
     pss = []
-    for i, galname in enumerate(df.index):
+    lowerss = []
+    upperss = []
+    v0s = []
+    pbar = ProgressBar()
+    for i, galname in enumerate(pbar(df.index)):
         vc = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
         v0 = d * (vc / 100.) ** e 
-        bins = v_by_v0_bins * v0
-        vs = (bins[1:] + bins[:-1]) / 2.
+        v0s.append(v0)
+        #bins = v_by_v0_bins * v0
+        #vs = (bins[1:] + bins[:-1]) / 2.
+        vs = samples[galname]['vs']
+
+        bins = vs_into_bins(vs)
+
         pdf = dm_den.v_pdf(df, galname, bins, dz=1.)
         ps = pdf[0]
         pss.append(ps)
-        axs[i].stairs(ps, v_by_v0_bins, color='k')
+        axs[i].stairs(ps, bins / v0, color='k')
 
         lowers, uppers = gal_bands_from_samples(
-            vs, 
-            samples[galname], 
-            plt.cm.viridis(0.5)
+            vs_by_v0, 
+            samples[galname]['ps'], 
+            plt.cm.viridis(0.5),
+            axs[i]
         )
-        # I need to make a new distrib_samples file with 30 v's for each galaxy
-        # going from v0 * 0 to v0 * 2.3.
-        print(samples[galname])
-        print(lowers)
-        is_captured = lowers < ps < uppers
-        print(is_captured)
+        upperss.append(uppers)
+        lowerss.append(lowers)
+    pss = np.array(pss)
+    lowerss = np.array(lowerss)
+    upperss = np.array(upperss)
+    v0s = np.array(v0s)
 
-    plt.show()
-    return None
-        
+    is_captured = (lowerss < pss) & (pss < upperss)
+    dist_lower = lowerss / pss - 1.
+    dist_upper = upperss / pss - 1. 
+    abs_dists = np.abs(np.array([dist_lower, dist_upper]))
+    dist_indices = np.argmin(
+            abs_dists,
+            axis = 0,
+    )
+    dist = np.array([dist_lower, dist_upper])[
+            dist_indices,
+            np.arange(abs_dists.shape[1])[:, None],
+            np.arange(abs_dists.shape[2])[None, :]
+    ]
+    # If the band captured the data at a certain v/v0 for a certain galaxy,
+    # set the distance to 0 at that data point.
+    dist[is_captured] = 0.
 
+    systematics = np.sqrt((dist.T ** 2.).mean(axis=1)) # RMS
+    # NEED TO EITHER TILE OR REPEAT V0S
+    total_uppsers = uppers + systematics * v0s
+    total_lowers = lowers - systematics * v0s
+
+    for i, galname in df.index:
+        axs[i].fill_between(
+                v_by_v0s,
+                total_lowers[i],
+                total_uppers[i],
+                color='grey',
+                alpha=0.8
+        )
+
+    return dist, vs_by_v0, v_by_v0_bins

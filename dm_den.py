@@ -1377,7 +1377,7 @@ def make_v_pdfs(bins=50, r=8.3, dr=1.5, fname=None, incl_v_earth=False, dz=1.):
         raise TypeError('dr should be a float.')
     if not isinstance(dz, (type(None), float)):
         raise TypeError('dz should either be a float or None.')
-    if isinstance(fname, (type(None), str):
+    if isinstance(fname, (type(None), str)):
         raise TypeError('fname should be a string or None.')
     if type(incl_v_earth) != bool:
         raise TypeError('incl_v_earth should be a boolean.')
