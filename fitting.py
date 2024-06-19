@@ -3394,6 +3394,7 @@ def determine_systematics(
         samples_fname):
     import dm_den
     import dm_den_viz
+    import fitting
     
     #v_by_v0_bins = np.linspace(0., 2.3, 31)
     df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
@@ -3403,25 +3404,37 @@ def determine_systematics(
     vs_by_v0 = samples['v_v0']
     v_by_v0_bins = vs_into_bins(vs_by_v0)
 
-    fig, axs = dm_den_viz.setup_multigal_fig('discs', show_resids=False)
-    pss = []
-    lowerss = []
-    upperss = []
+    fig, axs = dm_den_viz.setup_multigal_fig(
+            'discs', 
+            show_resids=False,
+            sharey=True
+    )
+    Y = [] # Probability densities from the data
+    YHAT = [] # Predicted probablity densities from the fit
+    LOWER_STAT = [] # Bottom of statistical error band
+    UPPER_STAT = [] # Top of statistical error band  
     v0s = []
     pbar = ProgressBar()
     for i, galname in enumerate(pbar(df.index)):
         vc = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
         v0 = d * (vc / 100.) ** e 
+        vdamp = h * (vc / 100.) ** j
         v0s.append(v0)
         #bins = v_by_v0_bins * v0
         #vs = (bins[1:] + bins[:-1]) / 2.
         vs = samples[galname]['vs']
-
         bins = vs_into_bins(vs)
 
         pdf = dm_den.v_pdf(df, galname, bins, dz=1.)
         ps = pdf[0]
-        pss.append(ps)
+        Y.append(ps)
+        YHAT.append(fitting.smooth_step_max(
+                vs,
+                v0,
+                vdamp,
+                k
+        ))
+
         axs[i].stairs(ps, bins / v0, color='k')
 
         lowers, uppers = gal_bands_from_samples(
@@ -3430,16 +3443,20 @@ def determine_systematics(
             plt.cm.viridis(0.5),
             axs[i]
         )
-        upperss.append(uppers)
-        lowerss.append(lowers)
-    pss = np.array(pss)
-    lowerss = np.array(lowerss)
-    upperss = np.array(upperss)
+        UPPER_STAT.append(uppers)
+        LOWER_STAT.append(lowers)
+    Y = np.array(Y)
+    YHAT = np.array(YHAT)
+    LOWER_STAT = np.array(LOWER_STAT)
+    UPPER_STAT = np.array(UPPER_STAT)
     v0s = np.array(v0s)
 
-    is_captured = (lowerss < pss) & (pss < upperss)
-    dist_lower = lowerss / pss - 1.
-    dist_upper = upperss / pss - 1. 
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        # Percentage distance of the lower and upper statistical bounds from
+        # the target vector:
+        dist_lower = LOWER_STAT / Y - 1.
+        dist_upper = UPPER_STAT / Y - 1. 
     abs_dists = np.abs(np.array([dist_lower, dist_upper]))
     dist_indices = np.argmin(
             abs_dists,
@@ -3452,20 +3469,33 @@ def determine_systematics(
     ]
     # If the band captured the data at a certain v/v0 for a certain galaxy,
     # set the distance to 0 at that data point.
+    is_captured = (LOWER_STAT < Y) & (Y < UPPER_STAT)
     dist[is_captured] = 0.
 
+    dist[~np.isfinite(dist)] = np.nan
+    
     systematics = np.sqrt((dist.T ** 2.).mean(axis=1)) # RMS
-    # NEED TO EITHER TILE OR REPEAT V0S
-    total_uppsers = uppers + systematics * v0s
-    total_lowers = lowers - systematics * v0s
+    # Error band from the combination of statistical and systematic errors:
+    UPPER_TOT = UPPER_STAT + systematics * YHAT 
+    LOWER_TOT = LOWER_STAT - systematics * YHAT
 
-    for i, galname in df.index:
+    print(np.array([vs_by_v0, systematics]).T)
+    for i, galname in enumerate(df.index):
         axs[i].fill_between(
-                v_by_v0s,
-                total_lowers[i],
-                total_uppers[i],
+                vs_by_v0,
+                LOWER_TOT[i],
+                UPPER_TOT[i],
                 color='grey',
                 alpha=0.8
         )
+        axs[i].set_ylim(bottom=0.)
+        print(galname)
+        print(np.array([
+            vs_by_v0, 
+            YHAT[i],
+            systematics * Y[i],
+            UPPER_TOT[i]
+        ]).T)
+    plt.show()
 
     return dist, vs_by_v0, v_by_v0_bins

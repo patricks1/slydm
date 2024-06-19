@@ -3103,7 +3103,7 @@ def plt_halo_integrals(gals,
     axs[-1].set_xlabel(
         '$v_\mathrm{min}\,/\,\mathrm{\left[km\,s^{-1}\\right]}$')
     # Put the x-axis label where we want it:
-    axs[-1].xaxis.set_label_coords(0.5, xlabel_y, transform=fig.transFigure)                       
+    axs[-1].xaxis.set_label_coords(0.5, xlabel_y, transform=fig.transFigure) 
     handles, labels = axs[-1].get_legend_handles_labels()
     if show_std_vcut:
         handles.append(mpl.lines.Line2D(
@@ -3610,7 +3610,7 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False,
                     bbox_inches='tight', dpi=350)
     plt.show()
 
-def setup_multigal_fig(gals, show_resids=True):
+def setup_multigal_fig(gals, show_resids=True, sharey='row'):
     islist = isinstance(gals, (list, np.ndarray, 
                                pd.core.indexes.base.Index))
     if islist:
@@ -3632,7 +3632,7 @@ def setup_multigal_fig(gals, show_resids=True):
     else:
         height_ratios = None
     fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
-                         sharey='row',
+                         sharey=sharey,
                          sharex=True, dpi=140, height_ratios=height_ratios)
     if Ngals == 1:
         axs=[axs]
