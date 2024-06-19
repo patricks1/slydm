@@ -3445,7 +3445,7 @@ def determine_systematics(
                 vdamp,
                 k
         )
-        axs[i].plot(vs_by_v0, yhat, color='r')
+        axs[i].plot(vs_by_v0, yhat, color='C3')
         YHAT.append(yhat)
     Y = np.array(Y)
     YHAT = np.array(YHAT)
@@ -3478,31 +3478,36 @@ def determine_systematics(
 
     # Percent difference of systematic portion of deviations from the
     # prediction
-    SYS_PERCENT_DEV = dist / YHAT
-    
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        SYS_PERCENT_DEV = dist / YHAT
     systematics = np.sqrt((SYS_PERCENT_DEV.T ** 2.).mean(axis=1)) # RMS
     # Error band from the combination of statistical and systematic errors:
     UPPER_TOT = UPPER_STAT + systematics * YHAT 
     LOWER_TOT = LOWER_STAT - systematics * YHAT
 
-    print(np.array([vs_by_v0, systematics]).T)
     for i, galname in enumerate(df.index):
         axs[i].fill_between(
                 vs_by_v0,
                 LOWER_TOT[i],
                 UPPER_TOT[i],
-                color='grey',
-                alpha=0.8
+                color='pink',
+                zorder=0
         )
         axs[i].set_ylim(bottom=0.)
-        print(galname)
-        print(np.array([
-            vs_by_v0, 
-            YHAT[i],
-            systematics,
-            systematics * YHAT[i],
-            UPPER_TOT[i]
-        ]).T)
+        for j in [-4, -5, -6]:
+            axs[i].axvline(vs_by_v0[j])
+        axs[i].annotate(
+                galname, 
+                (0.97, 0.95), 
+                va='top', 
+                ha='right', 
+                xycoords='axes fraction',
+                bbox={'facecolor': 'white', 'edgecolor':'none'}
+        )
+    axs[4].set_ylabel('$f(v)\,4\pi v^2\,/\,[\mathrm{km^{-1}\,s}]$')
+    axs[0].set_xlabel('$\dfrac{v}{v_0(v_\mathrm{c})}$')
+    axs[0].xaxis.set_label_coords(0.5, 0.04, transform=fig.transFigure)
     plt.show()
 
     return SYS_PERCENT_DEV, vs_by_v0, v_by_v0_bins

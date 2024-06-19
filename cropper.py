@@ -42,12 +42,12 @@ def gen_gal_data(galname, cropped_run):
     typ = 'fire'
 
     #original directiory result:
-    orig_dir_res = dm_den.build_direcs(suffix, res, mass_class, typ,
+    orig_dir_res = staudt_tools.build_direcs(suffix, res, mass_class, typ,
                                        source='original', 
                                        cropped_run=cropped_run)
     halodirec, snapdir_orig, almost_full_path_orig, num_files = orig_dir_res
     #cropped directory result:
-    crop_dir_res = dm_den.build_direcs(suffix_cropped, res, mass_class, typ,
+    crop_dir_res = staudt_tools.build_direcs(suffix_cropped, res, mass_class, typ,
                                        source='cropped',
                                        min_radius=0.,
                                        max_radius=10.)
