@@ -3428,13 +3428,6 @@ def determine_systematics(
         pdf = dm_den.v_pdf(df, galname, bins, dz=1.)
         ps = pdf[0]
         Y.append(ps)
-        YHAT.append(fitting.smooth_step_max(
-                vs,
-                v0,
-                vdamp,
-                k
-        ))
-
         axs[i].stairs(ps, bins / v0, color='k')
 
         lowers, uppers = gal_bands_from_samples(
@@ -3445,6 +3438,15 @@ def determine_systematics(
         )
         UPPER_STAT.append(uppers)
         LOWER_STAT.append(lowers)
+
+        yhat = fitting.smooth_step_max(
+                vs,
+                v0,
+                vdamp,
+                k
+        )
+        axs[i].plot(vs_by_v0, yhat, color='r')
+        YHAT.append(yhat)
     Y = np.array(Y)
     YHAT = np.array(YHAT)
     LOWER_STAT = np.array(LOWER_STAT)
@@ -3453,10 +3455,10 @@ def determine_systematics(
 
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
-        # Percentage distance of the lower and upper statistical bounds from
+        # Distance of the lower and upper statistical bounds from
         # the target vector:
-        dist_lower = LOWER_STAT / Y - 1.
-        dist_upper = UPPER_STAT / Y - 1. 
+        dist_lower = LOWER_STAT - Y
+        dist_upper = UPPER_STAT - Y
     abs_dists = np.abs(np.array([dist_lower, dist_upper]))
     dist_indices = np.argmin(
             abs_dists,
@@ -3472,9 +3474,13 @@ def determine_systematics(
     is_captured = (LOWER_STAT < Y) & (Y < UPPER_STAT)
     dist[is_captured] = 0.
 
-    dist[~np.isfinite(dist)] = np.nan
+    #dist[~np.isfinite(dist)] = np.nan 
+
+    # Percent difference of systematic portion of deviations from the
+    # prediction
+    SYS_PERCENT_DEV = dist / YHAT
     
-    systematics = np.sqrt((dist.T ** 2.).mean(axis=1)) # RMS
+    systematics = np.sqrt((SYS_PERCENT_DEV.T ** 2.).mean(axis=1)) # RMS
     # Error band from the combination of statistical and systematic errors:
     UPPER_TOT = UPPER_STAT + systematics * YHAT 
     LOWER_TOT = LOWER_STAT - systematics * YHAT
@@ -3493,9 +3499,10 @@ def determine_systematics(
         print(np.array([
             vs_by_v0, 
             YHAT[i],
-            systematics * Y[i],
+            systematics,
+            systematics * YHAT[i],
             UPPER_TOT[i]
         ]).T)
     plt.show()
 
-    return dist, vs_by_v0, v_by_v0_bins
+    return SYS_PERCENT_DEV, vs_by_v0, v_by_v0_bins
