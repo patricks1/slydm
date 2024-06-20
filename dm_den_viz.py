@@ -701,7 +701,7 @@ def fill_ax_new(ax, df, xcol, ycol,
         c = dm_den.load_data('dm_stats_stellar_20221110.h5') \
                   .loc[df.index,['mvir_stellar']].values
         #######################################################################
-        #import cropper
+        #import UCI_tools.cropper
         #for galname in df.index:
         #    gal_data = cropper.load_data(galname, getparts=['PartType4'])
         #    M0 = dm_den.get_mwithin(8.3, 
@@ -1734,7 +1734,7 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
     return None
 
 def plt_particle_counts(df_source, dropgals=None):
-    import cropper
+    import UCI_tools.cropper
 
     df = dm_den.load_data(df_source)
     if dropgals is not None:
