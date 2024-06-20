@@ -896,8 +896,8 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
             vcircparts=['PartType0','PartType1','PartType4'],
             source='original', dz=1.):
     
-    from cropper import load_data as load_cropped
-    from cropper import flatten_particle_data
+    from UCI_tools.cropper import load_data as load_cropped
+    from UCI_tools.cropper import flatten_particle_data
 
     if drsolar is None:
         drsolar=dr
