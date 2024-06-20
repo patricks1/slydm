@@ -28,72 +28,6 @@ class rich_dict(dict):
     '''
     pass
 
-def build_direcs(suffix, res, mass_class, typ='fire', source='original',
-                 min_radius=None, max_radius=None, cropped_run=None):
-    assert typ in ['fire','dmo']
-    if source == 'cropped' and cropped_run is None:
-        cropped_run = '202304'
-    if typ=='fire':
-        if source == 'cropped':
-            # Using this folder while I make sure I'm not breaking anything by
-            # discontinuing the use of float128's
-            typ_char = '_'.join(['B', cropped_run])
-            #print('type_char: {0:s}'.format(typ_char))
-        else:
-            typ_char='B'
-    elif typ=='dmo':
-        typ_char='D'
-
-    res=str(res)
-    mass_class='{0:02d}'.format(mass_class)
-    snapnum = str(600)
-
-    if source=='original':
-        if min_radius is not None or max_radius is not None:
-            raise ValueError('radius limits are not applicable when '
-                             'source=\'original\'')
-        topdirec = '/DFS-L/DATA/cosmo/grenache/aalazar/'
-        cropstr = ''
-    elif source=='cropped':
-        if min_radius is None or max_radius is None:
-            raise ValueError('min and max radii must be specified if '
-                             'source=\'cropped\'')
-        topdirec = '/DFS-L/DATA/cosmo/grenache/staudt/'
-        cropstr = '{0:0.1f}_to_{1:0.1f}_kpc/'.format(min_radius, max_radius)
-    else:
-        raise ValueError('source should be \'original\' or \'cropped\'')
-    if int(mass_class)>10:
-        hdirec='/DFS-L/DATA/cosmo/grenache/aalazar/FIRE/GV'+typ_char+\
-               '/m'+mass_class+suffix+\
-               '_res'+res+\
-               '/halo/rockstar_dm/hdf5/halo_600.hdf5'
-        direc = topdirec+'FIRE/GV'+typ_char+'/m'+mass_class+suffix+'_res'+res+\
-                '/output/'+cropstr+'hdf5/'
-    elif int(mass_class)==10:
-        raise ValueError('Cannot yet handle log M < 11')
-        #The following code will not work, but I've leaving it for future
-        #development
-        if typ=='dmo':
-            raise ValueError('Cannot yet handle DMO for log M < 11')
-        path = '/data25/rouge/mercadf1/FIRE/m10x_runs/' #Path to m10x runs
-        run = 'h1160816' #input the run name
-        haloName = 'm'+mass_class+suffix #input the halo name within this run
-        pt = 'PartType1' #You can change this to whatever particle you want
-        hdirec=path+run+'/'+haloName+'/halo_pos.txt'
-        direc=path+run+'/output/snapshot_'+run+'_Z12_bary_box_152.hdf5'
-    else:
-        raise ValueError('Cannot yet handle log M < 10')
-
-    snapdir = direc+'snapdir_'+snapnum+'/'
-    try:
-        num_files=len(os.listdir(snapdir))
-    except:
-        num_files=None
-    #path to the snapshot directory PLUS the first part of the filename:
-    almost_full_path = snapdir+'snapshot_'+snapnum
-
-    return hdirec, snapdir, almost_full_path, num_files
-
 def build_direcs_old(suffix, res, mass_class, typ='fire', source='original'):
     assert typ in ['fire','dmo']
     if typ=='fire':
@@ -1003,7 +937,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         host_key=df.loc[galname,'host_key']
         mass_class = df.loc[galname,'mass_class']
 
-        halodirec = build_direcs(suffix, res, mass_class, typ)[0]
+        halodirec = staudt_tools.build_direcs(suffix, res, mass_class, typ)[0]
         rvir = get_halo_info(halodirec, suffix, typ, host_key, 
                              mass_class)[1]
         #######################################################################

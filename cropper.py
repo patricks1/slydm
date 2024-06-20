@@ -242,7 +242,7 @@ def load_data(galname, getparts='all', verbose=True):
     if verbose:
         print('Loading {0:s}'.format(galname))
 
-    from dm_den import build_direcs 
+    from UCI_tools.staudt_tools import build_direcs 
 
     min_radius = 0. #kpc
     max_radius = 10. #kpc
