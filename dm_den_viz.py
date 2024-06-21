@@ -1790,6 +1790,7 @@ def make_sci_y(axs, i, order_of_mag):
     Put y-axis in scientific notation
     '''
     if i < 4:
+        print('allegedly working...')
         # If the plot is in the very first row, do proper scientific
         # notation so the multiplier appears at the top.
         axs[i].ticklabel_format(style='sci', axis='y', 

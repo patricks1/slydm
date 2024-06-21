@@ -3396,7 +3396,6 @@ def determine_systematics(
     import dm_den_viz
     import fitting
     
-    #v_by_v0_bins = np.linspace(0., 2.3, 31)
     df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
     samples = load_samples(samples_fname)
     d, e, h, j, k = (samples['params'][t] 
@@ -3434,7 +3433,6 @@ def determine_systematics(
             vs_by_v0, 
             samples[galname]['ps'], 
             plt.cm.viridis(0.5),
-            axs[i]
         )
         UPPER_STAT.append(uppers)
         LOWER_STAT.append(lowers)
@@ -3475,19 +3473,28 @@ def determine_systematics(
     is_captured = (LOWER_STAT < Y) & (Y < UPPER_STAT)
     SYS_DEV[is_captured] = 0.
 
-    #SYS_DEV[~np.isfinite(SYS_DEV)] = np.nan 
-
     # Percent difference of systematic portion of deviations from the
     # prediction
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         SYS_PERCENT_DEV = SYS_DEV / YHAT
+    SYS_PERCENT_DEV[~np.isfinite(SYS_PERCENT_DEV)] = np.nan 
     sys_percents = np.sqrt((SYS_PERCENT_DEV.T ** 2.).mean(axis=1)) # RMS
     sys_devs = np.sqrt((SYS_DEV.T ** 2.).mean(axis=1)) # RMS
     # Error band from the combination of statistical and systematic errors:
-    UPPER_TOT = UPPER_STAT + sys_devs * YHAT 
-    LOWER_TOT = LOWER_STAT - sys_devs * YHAT
+    #UPPER_TOT = UPPER_STAT + sys_percents * YHAT 
+    #LOWER_TOT = LOWER_STAT - sys_percents * YHAT
+    UPPER_TOT = UPPER_STAT + sys_devs 
+    LOWER_TOT = LOWER_STAT - sys_devs
 
+    return sys_devs, UPPER_TOT, LOWER_TOT, vs_by_v0, v_by_v0_bins
+
+def plt_systematics(LOWER_TOT, UPPER_TOT):
+
+    import dm_den
+    import dm_den_viz
+
+    df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
     for i, galname in enumerate(df.index):
         axs[i].fill_between(
                 vs_by_v0,
@@ -3496,9 +3503,10 @@ def determine_systematics(
                 color='pink',
                 zorder=0
         )
+        dm_den_viz.make_sci_y(axs, i, -3)
         axs[i].set_ylim(bottom=0.)
-        for j in [-4, -5, -6]:
-            axs[i].axvline(vs_by_v0[j])
+        #for j in [-4, -5, -6]:
+        #    axs[i].axvline(vs_by_v0[j])
         axs[i].annotate(
                 galname, 
                 (0.97, 0.95), 
@@ -3512,4 +3520,3 @@ def determine_systematics(
     axs[0].xaxis.set_label_coords(0.5, 0.04, transform=fig.transFigure)
     plt.show()
 
-    return SYS_PERCENT_DEV, vs_by_v0, v_by_v0_bins
