@@ -1,4 +1,4 @@
-import UCI_tools.rotate_galaxy
+from UCI_tools import rotate_galaxy
 import dm_den
 import pickle
 import os

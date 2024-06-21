@@ -521,7 +521,7 @@ def den_disp_phi_bins(source_fname, save=False, N_slices=15,
     '''
     if not isinstance(save, bool):
         raise ValueError('`save` must be a boolean.')
-    import UCI_tools.cropper
+    from UCI_tools import cropper
 
     df = load_data(source_fname)
     dz = df.attrs['dz']
@@ -605,7 +605,7 @@ def shot_noise_fraction(df_source):
     density and dispersion across all galaxies' phi slices when splitting each
     solar ring into 15, 30, 45, 60, 75, and 100 phi slices.
     '''
-    import UCI_tools.cropper
+    from UCI_tools import cropper
 
     df = load_data(df_source)
 
@@ -1240,7 +1240,7 @@ def comp_disp_vc(galname='m12i',dr=1.5,fname=None):
     return rs_axis, disps_fire, vcircs_fire, disps_dmo, vcircs_dmo 
 
 def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_v_earth=False, dz=0.5):
-    import UCI_tools.cropper
+    from UCI_tools import cropper
     import warnings
 
     if type(df) != pd.core.frame.DataFrame:
@@ -1798,7 +1798,7 @@ def find_max_v(dfsource, r=8.3, bootstrap=False, tgt_fname=None):
         is True, each value will be a np.ndarray of shape (10,) corresponding
         to the escape speed found on each of ten iterations
     '''
-    import UCI_tools.cropper
+    from UCI_tools import cropper
     df = load_data(dfsource).drop(['m12w', 'm12z'])
     r = 8.3 # Assumed Solar distance from the center of the galaxy, kpc
     dr = df.attrs['dr']

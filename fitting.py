@@ -3464,7 +3464,8 @@ def determine_systematics(
             abs_dists,
             axis = 0,
     )
-    dist = np.array([dist_lower, dist_upper])[
+    # Systematic portion of the deviations from the predictions to the data
+    SYS_DEV = np.array([dist_lower, dist_upper])[
             dist_indices,
             np.arange(abs_dists.shape[1])[:, None],
             np.arange(abs_dists.shape[2])[None, :]
@@ -3472,19 +3473,20 @@ def determine_systematics(
     # If the band captured the data at a certain v/v0 for a certain galaxy,
     # set the distance to 0 at that data point.
     is_captured = (LOWER_STAT < Y) & (Y < UPPER_STAT)
-    dist[is_captured] = 0.
+    SYS_DEV[is_captured] = 0.
 
-    #dist[~np.isfinite(dist)] = np.nan 
+    #SYS_DEV[~np.isfinite(SYS_DEV)] = np.nan 
 
     # Percent difference of systematic portion of deviations from the
     # prediction
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
-        SYS_PERCENT_DEV = dist / YHAT
-    systematics = np.sqrt((SYS_PERCENT_DEV.T ** 2.).mean(axis=1)) # RMS
+        SYS_PERCENT_DEV = SYS_DEV / YHAT
+    sys_percents = np.sqrt((SYS_PERCENT_DEV.T ** 2.).mean(axis=1)) # RMS
+    sys_devs = np.sqrt((SYS_DEV.T ** 2.).mean(axis=1)) # RMS
     # Error band from the combination of statistical and systematic errors:
-    UPPER_TOT = UPPER_STAT + systematics * YHAT 
-    LOWER_TOT = LOWER_STAT - systematics * YHAT
+    UPPER_TOT = UPPER_STAT + sys_devs * YHAT 
+    LOWER_TOT = LOWER_STAT - sys_devs * YHAT
 
     for i, galname in enumerate(df.index):
         axs[i].fill_between(
