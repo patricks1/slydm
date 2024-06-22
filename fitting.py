@@ -3413,6 +3413,10 @@ def determine_systematics(
     LOWER_STAT = [] # Bottom of statistical error band
     UPPER_STAT = [] # Top of statistical error band  
     v0s = []
+
+    with open(paths.data + 'v_by_v0_pdfs_disc_dz1.0.pkl', 'rb') as f:
+        pdfs = pickle.load(f)
+
     pbar = ProgressBar()
     for i, galname in enumerate(pbar(df.index)):
         vc = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
@@ -3422,10 +3426,10 @@ def determine_systematics(
         #bins = v_by_v0_bins * v0
         #vs = (bins[1:] + bins[:-1]) / 2.
         vs = samples[galname]['vs']
-        bins = vs_into_bins(vs)
 
-        pdf = dm_den.v_pdf(df, galname, bins, dz=1.)
-        ps = pdf[0]
+        pdf = pdfs[galname]
+        bins = vs_into_bins(vs)
+        ps = pdf['ps']
         Y.append(ps)
         axs[i].stairs(ps, bins / v0, color='k')
 
@@ -3463,7 +3467,7 @@ def determine_systematics(
             axis = 0,
     )
     # Systematic portion of the deviations from the predictions to the data
-    SYS_DEV = np.array([dist_lower, dist_upper])[
+    SYS_ERR = np.array([dist_lower, dist_upper])[
             dist_indices,
             np.arange(abs_dists.shape[1])[:, None],
             np.arange(abs_dists.shape[2])[None, :]
@@ -3471,23 +3475,38 @@ def determine_systematics(
     # If the band captured the data at a certain v/v0 for a certain galaxy,
     # set the distance to 0 at that data point.
     is_captured = (LOWER_STAT < Y) & (Y < UPPER_STAT)
-    SYS_DEV[is_captured] = 0.
+    SYS_ERR[is_captured] = 0.
+
+    STAT_ERR = (UPPER_STAT - LOWER_STAT) / 2.
+    STAT_DEV = (np.array([UPPER_STAT, LOWER_STAT]) - YHAT).transpose(1, 2, 0)
+    STAT_PERCENT_DEV = STAT_DEV / np.repeat(YHAT[:, :, np.newaxis], 2, axis=2)
+
 
     # Percent difference of systematic portion of deviations from the
     # prediction
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
-        SYS_PERCENT_DEV = SYS_DEV / YHAT
-    SYS_PERCENT_DEV[~np.isfinite(SYS_PERCENT_DEV)] = np.nan 
-    sys_percents = np.sqrt((SYS_PERCENT_DEV.T ** 2.).mean(axis=1)) # RMS
-    sys_devs = np.sqrt((SYS_DEV.T ** 2.).mean(axis=1)) # RMS
+        SYS_PERCENT_ERR = SYS_ERR / YHAT
+    SYS_PERCENT_ERR[~np.isfinite(SYS_PERCENT_ERR)] = np.nan 
+    sys_percent_errs = np.sqrt((SYS_PERCENT_ERR.T ** 2.).mean(axis=1)) # RMS
+    sys_errs = np.sqrt((SYS_ERR.T ** 2.).mean(axis=1)) # RMS
     # Error band from the combination of statistical and systematic errors:
-    #UPPER_TOT = UPPER_STAT + sys_percents * YHAT 
-    #LOWER_TOT = LOWER_STAT - sys_percents * YHAT
-    UPPER_TOT = UPPER_STAT + sys_devs 
-    LOWER_TOT = LOWER_STAT - sys_devs
+    #UPPER_TOT = UPPER_STAT + sys_percent_errs * YHAT 
+    #LOWER_TOT = LOWER_STAT - sys_percent_errs * YHAT
+    UPPER_TOT = UPPER_STAT + sys_errs 
+    LOWER_TOT = LOWER_STAT - sys_errs
 
-    return sys_devs, UPPER_TOT, LOWER_TOT, vs_by_v0, v_by_v0_bins
+    return (
+        sys_errs, 
+        sys_percent_errs, 
+        UPPER_TOT, 
+        LOWER_TOT, 
+        vs_by_v0, 
+        v_by_v0_bins, 
+        STAT_DEV,
+        STAT_PERCENT_DEV,
+        STAT_ERR
+    )
 
 def plt_systematics(LOWER_TOT, UPPER_TOT):
 

@@ -9,7 +9,7 @@ date_str = datetime.today().strftime('%Y%m%d')
 vescphi_dict_fname = date_str + '_vescs(phi)_rot.pkl'
 df_fname = date_str + '_dm_stats_dz1.0.h5'
 pdfs_fname = date_str + '_v_pdfs_disc_dz1.0.pkl'
-pdfs4systematics_fname = date_str + '_v_pdfs4systematics_disc_dz1.0.pkl'
+pdfs4systematics_fname = date_str + '_v_by_v0_pdfs_disc_dz1.0.pkl'
 ls_results_fname = date_str + '_data_raw.pkl' # least-squares results
 mcmc_samples_fname = date_str + '_mcmc_samples.h5'
 mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples.h5'
@@ -59,16 +59,31 @@ mcmc.run(
         ls_results_source=ls_results_fname,
         log_prior_args=(ls_results_fname,) 
 )
+# Generate best parameter estimates from the MCMC
+read_mcmc.estimate(mcmc_samples_fname, mcmc_results_fname)
 # Sample the `THETA` posteior to make speed distribution samples.
 read_mcmc.make_distrib_samples(
         df_fname,
         mcmc_distrib_samples_fname
 )
-# Also generate speed distribution samples for a universal array of v/v0 values
+# Also generate speed distribution *samples* for a universal array of v/v0 
+# values
 read_mcmc.make_distrib_samples_by_v0(
         df_fname,
         mcmc_samples_fname,
-        mcmc_distrib_samples_by_v0_fname
+        mcmc_distrib_samples_by_v0_fname,
+        maxv0=2.3,
+        Nvs=30
 )
-# Generate best parameter estimates from the MCMC
-read_mcmc.estimate(mcmc_samples_fname, mcmc_results_fname)
+# And make the *actual distributions* for that v/v0 array
+dm_den.make_v_over_v0_pdfs(
+        df_source,
+        mcmc_results_fname,
+        fname=pdfs4systematics_fname,
+        maxv0=2.3,
+        Nbins=30,
+        r=8.3,
+        dr=1.5,
+        dz=1.)
+
+
