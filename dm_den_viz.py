@@ -1790,7 +1790,6 @@ def make_sci_y(axs, i, order_of_mag):
     Put y-axis in scientific notation
     '''
     if i < 4:
-        print('allegedly working...')
         # If the plot is in the very first row, do proper scientific
         # notation so the multiplier appears at the top.
         axs[i].ticklabel_format(style='sci', axis='y', 
@@ -2542,6 +2541,74 @@ def plt_universal_prefit(result, df_source, gals='discs',
                                       d=d, show=False).replace('$', '')
             display(Latex('$\mathrm{{RMS_{{Sigmoid, hard}}}}={0:s}$'
                           .format(txt)))
+
+    return None
+
+def plt_errs(
+        vs_by_v0, 
+        tot_errs, 
+        df_source,
+        mcmc_results_fname='results_mcmc.pkl',
+        v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl'):
+    import dm_den
+    import fitting
+
+    df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
+    with open(paths.data + v_by_v0_pdf_fname, 'rb') as f:
+        pdfs = pickle.load(f)
+    with open(paths.data + mcmc_results_fname, 'rb') as f:
+        results = pickle.load(f)
+    d, e, h, j, k = (results[p] for p in ['d', 'e', 'h', 'j', 'k'])
+
+    v_by_v0_bins = pdfs[df.index[0]]['v_by_v0_bins']
+    vs_by_v0 = pdfs[df.index[0]]['vs_by_v0']
+
+    fig, axs = setup_multigal_fig(
+            'discs', 
+            show_resids=False,
+    )
+    for i, galname in enumerate(df.index):
+        vc = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
+        v0 = d * (vc / 100.) ** e 
+        vdamp = h * (vc / 100.) ** j
+
+        vs = vs_by_v0 * v0
+
+        pdf = pdfs[galname]
+        assert np.array_equal(pdf['v_by_v0_bins'], v_by_v0_bins)
+        assert np.array_equal(pdf['vs_by_v0'], vs_by_v0)
+        ps = pdf['ps']
+        axs[i].stairs(ps, v_by_v0_bins, color='k')
+
+        yhats = fitting.smooth_step_max(
+                vs,
+                v0,
+                vdamp,
+                k
+        )
+        axs[i].plot(vs_by_v0, yhats, color='C3')
+        axs[i].fill_between(
+                vs_by_v0,
+                yhats - tot_errs,
+                yhats + tot_errs,
+                color='pink',
+                zorder=0
+        )
+        axs[i].annotate(
+                galname, 
+                (0.97, 0.95), 
+                va='top', 
+                ha='right', 
+                xycoords='axes fraction',
+                bbox={'facecolor': 'white', 'edgecolor':'none'}
+        )
+        axs[i].set_ylim(0., 5.e-3)
+        make_sci_y(axs, i, -3)
+
+    axs[4].set_ylabel('$f(v)\,4\pi v^2\,/\,[\mathrm{km^{-1}\,s}]$')
+    axs[0].set_xlabel('$\dfrac{v}{v_0(v_\mathrm{c})}$')
+    axs[0].xaxis.set_label_coords(0.5, 0.04, transform=fig.transFigure)
+    plt.show()
 
     return None
 

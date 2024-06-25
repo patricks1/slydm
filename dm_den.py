@@ -1422,12 +1422,12 @@ def make_v_over_v0_pdfs(
 
         res = dm_den.v_pdf(df, galname, v_bins, dz=1.)
         pdfs[galname]['vs'] = vs
-        pdfs[galname]['ps'] \
-                , pdfs[galname]['bins'] \
-                , pdfs[galname]['v_avg'] \
-                , pdfs[galname]['counts'] \
-                , pdfs[galname]['p_errors'] \
-                = res
+        (pdfs[galname]['ps'],
+         pdfs[galname]['bins'],
+         pdfs[galname]['v_avg'],
+         pdfs[galname]['counts'],
+         pdfs[galname]['p_errors']
+        ) = res
         pdfs[galname]['v_by_v0_bins'] = v_by_v0_bins
         pdfs[galname]['vs_by_v0'] = vs_by_v0
 
@@ -1438,7 +1438,6 @@ def make_v_over_v0_pdfs(
             pickle.dump(pdfs, f, pickle.HIGHEST_PROTOCOL)
 
     return pdfs
-
 
 def x_3d_pdf(df, galname, bins=100, r=8.3, dr=1.5, test_unpack=None, 
              typ='fire'):

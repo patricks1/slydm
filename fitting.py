@@ -3391,7 +3391,8 @@ def vs_into_bins(vs):
 
 def determine_systematics(
         df_source,
-        samples_fname):
+        samples_fname,
+        v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl'):
     import dm_den
     import dm_den_viz
     import fitting
@@ -3401,20 +3402,14 @@ def determine_systematics(
     d, e, h, j, k = (samples['params'][t] 
                      for t in ['d', 'e', 'h', 'j', 'k'])
     vs_by_v0 = samples['v_v0']
-    v_by_v0_bins = vs_into_bins(vs_by_v0)
 
-    fig, axs = dm_den_viz.setup_multigal_fig(
-            'discs', 
-            show_resids=False,
-            sharey=True
-    )
     Y = [] # Probability densities from the data
     YHAT = [] # Predicted probablity densities from the fit
     LOWER_STAT = [] # Bottom of statistical error band
     UPPER_STAT = [] # Top of statistical error band  
     v0s = []
 
-    with open(paths.data + 'v_by_v0_pdfs_disc_dz1.0.pkl', 'rb') as f:
+    with open(paths.data + v_by_v0_pdf_fname, 'rb') as f:
         pdfs = pickle.load(f)
 
     pbar = ProgressBar()
@@ -3423,15 +3418,11 @@ def determine_systematics(
         v0 = d * (vc / 100.) ** e 
         vdamp = h * (vc / 100.) ** j
         v0s.append(v0)
-        #bins = v_by_v0_bins * v0
-        #vs = (bins[1:] + bins[:-1]) / 2.
         vs = samples[galname]['vs']
 
         pdf = pdfs[galname]
-        bins = vs_into_bins(vs)
         ps = pdf['ps']
         Y.append(ps)
-        axs[i].stairs(ps, bins / v0, color='k')
 
         lowers, uppers = gal_bands_from_samples(
             vs_by_v0, 
@@ -3447,7 +3438,6 @@ def determine_systematics(
                 vdamp,
                 k
         )
-        axs[i].plot(vs_by_v0, yhat, color='C3')
         YHAT.append(yhat)
     Y = np.array(Y)
     YHAT = np.array(YHAT)
@@ -3455,12 +3445,19 @@ def determine_systematics(
     UPPER_STAT = np.array(UPPER_STAT)
     v0s = np.array(v0s)
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=RuntimeWarning)
-        # Distance of the lower and upper statistical bounds from
-        # the target vector:
-        dist_lower = LOWER_STAT - Y
-        dist_upper = UPPER_STAT - Y
+    ###########################################################################
+    # Total error band, of which systematic errors make >97%
+    ###########################################################################
+    TOT_ERR = YHAT - Y
+    tot_errs = np.sqrt((TOT_ERR.T ** 2.).mean(axis=1)) # RMS
+
+    ###########################################################################
+    # Isolate the systematic portion of the uncertainty band
+    ###########################################################################
+    # Distance of the lower and upper statistical bounds from
+    # the target vector:
+    dist_lower = LOWER_STAT - Y
+    dist_upper = UPPER_STAT - Y
     abs_dists = np.abs(np.array([dist_lower, dist_upper]))
     dist_indices = np.argmin(
             abs_dists,
@@ -3468,20 +3465,19 @@ def determine_systematics(
     )
     # Systematic portion of the deviations from the predictions to the data
     SYS_ERR = np.array([dist_lower, dist_upper])[
-            dist_indices,
-            np.arange(abs_dists.shape[1])[:, None],
-            np.arange(abs_dists.shape[2])[None, :]
+        dist_indices,
+        np.arange(abs_dists.shape[1])[:, None],
+        np.arange(abs_dists.shape[2])[None, :]
     ]
     # If the band captured the data at a certain v/v0 for a certain galaxy,
     # set the distance to 0 at that data point.
     is_captured = (LOWER_STAT < Y) & (Y < UPPER_STAT)
     SYS_ERR[is_captured] = 0.
+    sys_errs = np.sqrt((SYS_ERR.T ** 2.).mean(axis=1)) # RMS
 
-    STAT_ERR = (UPPER_STAT - LOWER_STAT) / 2.
-    STAT_DEV = (np.array([UPPER_STAT, LOWER_STAT]) - YHAT).transpose(1, 2, 0)
-    STAT_PERCENT_DEV = STAT_DEV / np.repeat(YHAT[:, :, np.newaxis], 2, axis=2)
-
-
+    ###########################################################################
+    # Things I don't use but might want later
+    ###########################################################################
     # Percent difference of systematic portion of deviations from the
     # prediction
     with warnings.catch_warnings():
@@ -3489,53 +3485,15 @@ def determine_systematics(
         SYS_PERCENT_ERR = SYS_ERR / YHAT
     SYS_PERCENT_ERR[~np.isfinite(SYS_PERCENT_ERR)] = np.nan 
     sys_percent_errs = np.sqrt((SYS_PERCENT_ERR.T ** 2.).mean(axis=1)) # RMS
-    sys_errs = np.sqrt((SYS_ERR.T ** 2.).mean(axis=1)) # RMS
-    # Error band from the combination of statistical and systematic errors:
-    #UPPER_TOT = UPPER_STAT + sys_percent_errs * YHAT 
-    #LOWER_TOT = LOWER_STAT - sys_percent_errs * YHAT
-    UPPER_TOT = UPPER_STAT + sys_errs 
-    LOWER_TOT = LOWER_STAT - sys_errs
+
+    # Statistical uncertainty bands
+    STAT_ERR = (UPPER_STAT - LOWER_STAT) / 2.
+    STAT_DEV = (np.array([UPPER_STAT, LOWER_STAT]) - YHAT).transpose(1, 2, 0)
+    STAT_PERCENT_DEV = STAT_DEV / np.repeat(YHAT[:, :, np.newaxis], 2, axis=2)
+    ###########################################################################
 
     return (
+        vs_by_v0,
+        tot_errs,
         sys_errs, 
-        sys_percent_errs, 
-        UPPER_TOT, 
-        LOWER_TOT, 
-        vs_by_v0, 
-        v_by_v0_bins, 
-        STAT_DEV,
-        STAT_PERCENT_DEV,
-        STAT_ERR
     )
-
-def plt_systematics(LOWER_TOT, UPPER_TOT):
-
-    import dm_den
-    import dm_den_viz
-
-    df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
-    for i, galname in enumerate(df.index):
-        axs[i].fill_between(
-                vs_by_v0,
-                LOWER_TOT[i],
-                UPPER_TOT[i],
-                color='pink',
-                zorder=0
-        )
-        dm_den_viz.make_sci_y(axs, i, -3)
-        axs[i].set_ylim(bottom=0.)
-        #for j in [-4, -5, -6]:
-        #    axs[i].axvline(vs_by_v0[j])
-        axs[i].annotate(
-                galname, 
-                (0.97, 0.95), 
-                va='top', 
-                ha='right', 
-                xycoords='axes fraction',
-                bbox={'facecolor': 'white', 'edgecolor':'none'}
-        )
-    axs[4].set_ylabel('$f(v)\,4\pi v^2\,/\,[\mathrm{km^{-1}\,s}]$')
-    axs[0].set_xlabel('$\dfrac{v}{v_0(v_\mathrm{c})}$')
-    axs[0].xaxis.set_label_coords(0.5, 0.04, transform=fig.transFigure)
-    plt.show()
-
