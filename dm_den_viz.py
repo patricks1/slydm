@@ -2602,7 +2602,16 @@ def plt_errs(
                 xycoords='axes fraction',
                 bbox={'facecolor': 'white', 'edgecolor':'none'}
         )
-        axs[i].set_ylim(0., 5.e-3)
+    # Must draw before going back and setting the ylim or the top ylim gets
+    # automatically determined every time we we set bottom=0. With sharey=True,
+    # this would mean that all axs have a top ylim set by axs[-1]. Also, I've
+    # found that running make_sci_y before drawing causes all the y-axis labels
+    # to be the same. Normally this would be fine, but the first row have a
+    # different type of label so "x10^-3" shows in the top left while the other
+    # rows don't have that.
+    plt.draw()
+    for i in range(len(df)):
+        axs[i].set_ylim(bottom=0.)
         make_sci_y(axs, i, -3)
 
     axs[4].set_ylabel('$f(v)\,4\pi v^2\,/\,[\mathrm{km^{-1}\,s}]$')

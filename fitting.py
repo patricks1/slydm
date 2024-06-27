@@ -3470,10 +3470,27 @@ def determine_systematics(
         np.arange(abs_dists.shape[2])[None, :]
     ]
     # If the band captured the data at a certain v/v0 for a certain galaxy,
-    # set the distance to 0 at that data point.
+    # set the systematic error to 0 at that data point.
     is_captured = (LOWER_STAT < Y) & (Y < UPPER_STAT)
     SYS_ERR[is_captured] = 0.
     sys_errs = np.sqrt((SYS_ERR.T ** 2.).mean(axis=1)) # RMS
+
+    # Statistical uncertainties broken out by upper and lower band
+    STAT_ERR = (np.array([UPPER_STAT, LOWER_STAT]) - YHAT).transpose(1, 2, 0)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        min_mult = np.min(
+            np.repeat(sys_errs[:, np.newaxis], 2, axis=1) / np.abs(STAT_ERR)
+        )
+    print('Systematics are at a minimum {0:0.0f}x greater than statistics.'
+          .format(math.floor(min_mult)))
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        print('Systematics make up at least {0:0.0f}% of the total'
+              ' uncertainty.'
+              .format(math.floor(np.min(sys_errs / tot_errs) * 100.)))
+        
 
     ###########################################################################
     # Things I don't use but might want later
@@ -3486,10 +3503,12 @@ def determine_systematics(
     SYS_PERCENT_ERR[~np.isfinite(SYS_PERCENT_ERR)] = np.nan 
     sys_percent_errs = np.sqrt((SYS_PERCENT_ERR.T ** 2.).mean(axis=1)) # RMS
 
-    # Statistical uncertainty bands
-    STAT_ERR = (UPPER_STAT - LOWER_STAT) / 2.
-    STAT_DEV = (np.array([UPPER_STAT, LOWER_STAT]) - YHAT).transpose(1, 2, 0)
-    STAT_PERCENT_DEV = STAT_DEV / np.repeat(YHAT[:, :, np.newaxis], 2, axis=2)
+    # Statistical uncertainties averaging upper and lower
+    STAT_ERR_AVG = (UPPER_STAT - LOWER_STAT) / 2. 
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        STAT_PERCENT_ERR = STAT_ERR / np.repeat(YHAT[:, :, np.newaxis], 2, axis=2)
     ###########################################################################
 
     return (
