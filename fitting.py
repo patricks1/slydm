@@ -1876,6 +1876,12 @@ def fit_mao_naive_aggp(
         # our full version of the Mao model
         uci.save_var_latex('p_mao_naive_agg', '{0:0.1f}'.format(y))
 
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(result.best_fit)
+    ax.plot(ps_truth)
+    plt.show()
+
     return result
 
 def fit_mao_naive_indvp(gal):

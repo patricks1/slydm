@@ -2742,7 +2742,8 @@ def plt_mw(
         vcut_type,
         fit_results_fname,
         distrib_samples_fname=('mcmc_distrib_samples'
-                               '_by_v0_narrower_uniform_prior_20240606.h5'),
+                               '_by_v0_20240702'
+                               '(narrower_uniform_prior_20240606).h5'),
         v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl',
         tgt_fname=None,
         dvc=0.,
@@ -2988,6 +2989,7 @@ def plt_halo_integrals(gals,
     '''
     import dm_den
     import fitting
+
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
     plotting_a_cut_prediction = (show_sigmoid_hard 
@@ -3019,6 +3021,7 @@ def plt_halo_integrals(gals,
     if gals == ['mw']:
         df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc_eilers
         df.loc['mw', 'vc100'] = vc_eilers / 100.
+
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs=pickle.load(f)
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
@@ -3033,7 +3036,9 @@ def plt_halo_integrals(gals,
         gal_names = gals.copy()
 
     if show_mao_naive:
+        print('fitting mao naive')
         fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
+    print(fit_mao_naive.params)
 
     fig, axs = setup_multigal_fig(gals, show_resids=False) 
 
@@ -3529,7 +3534,7 @@ def plt_halo_integral_mw(df_source,
 
     axs[1].set_xlabel('$v_\mathrm{min}\,/\,\mathrm{\left[km\,s^{-1}\\right]}$')
     # Put the x-axis label where we want it:
-    axs[1].xaxis.set_label_coords(0.5, 0., transform=fig.transFigure)                       
+    axs[1].xaxis.set_label_coords(0.5, 0., transform=fig.transFigure)
 
     axs[0].set_ylabel('$g(v_{\\rm min})\,/\,\\rm\left[km^{-1}\,s\\right]$')
 
