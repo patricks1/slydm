@@ -99,6 +99,8 @@ def mao(v, v0, vesc, p):
             (v0_, vesc_): normalize(pN_mao, (v0_, vesc_, p))
             for v0_, vesc_ in zip(v0_set, vesc_set)
         }
+        print(N_dict)
+        time.sleep(5.)
         Ns = np.array([N_dict[v0_, vesc_] for v0_, vesc_ in zip(v0, vesc)])
         prob_den = pN_mao(v, v0, vesc, p) / Ns
     return prob_den
@@ -1734,6 +1736,8 @@ def fit_mao(vcut_type, df_source, update_values=False):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(result.best_fit)
+    #ax.plot(mao(vs_truth, 55. * (vcircs / 100.) ** 2.33, vescs, 2.3)) 
+    ax.plot(calc_p(vs_truth, vcircs, vescs, 55., 2.33, 2.3))
     ax.plot(ps_truth)
     plt.show()
 
