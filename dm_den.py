@@ -1406,7 +1406,12 @@ def make_v_over_v0_pdfs(
 
     with open(paths.data + fit_results_fname, 'rb') as f:
         fit_results = pickle.load(f)
-    v_by_v0_bins = np.linspace(0., maxv0, Nbins + 1)
+
+    # The bin width necessary so that we have 30 bins with the first bin's
+    # lower edge at 0 and the last bin's midpoint at maxv0
+    diff = 2. * maxv0 / (2. * (Nbins + 1.) - 3.)
+
+    v_by_v0_bins = np.arange(Nbins + 1) * diff
     vs_by_v0 = (v_by_v0_bins[1:] + v_by_v0_bins[:-1]) / 2.
     d, e = [fit_results[key]
             for key in ['d', 'e']]
