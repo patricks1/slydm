@@ -1731,6 +1731,12 @@ def fit_mao(vcut_type, df_source, update_values=False):
                            vescs=vescs,
                            method='nelder')
 
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(result.best_fit)
+    ax.plot(ps_truth)
+    plt.show()
+
     if update_values:
         # Save raw variables to data_raw.pkl
         data2save = {key: result.params[key].value
