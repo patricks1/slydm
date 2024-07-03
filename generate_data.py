@@ -84,9 +84,9 @@ read_mcmc.make_distrib_samples(
 read_mcmc.make_distrib_samples_by_v0(
         df_fname,
         mcmc_samples_fname,
-        mcmc_distrib_samples_by_v0_fname,
         maxv0=2.3,
-        Nvs=30
+        Nvs=30,
+        tgt_fname_override=mcmc_distrib_samples_by_v0_fname,
 )
 # And make the *actual distributions* for that v/v0 array
 dm_den.make_v_over_v0_pdfs(

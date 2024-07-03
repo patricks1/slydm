@@ -287,9 +287,9 @@ def make_distrib_samples(df_source, mcmc_samples_source, tgt_fname):
 def make_distrib_samples_by_v0(
         df_source, 
         mcmc_samples_source, 
-        tgt_fname,
         maxv0=2.3,
-        Nvs=30):
+        Nvs=30,
+        tgt_fname_override=None):
     '''
     Make speed distributions so that each galaxy's speed distribution has the
     same vs_gal / v0_gal, meaning vs_gal will be different for each galaxy.
@@ -313,13 +313,15 @@ def make_distrib_samples_by_v0(
         speed to use in determining v0_gal comes from here.
     mcmc_samples_source: str
         The name of the emcee results / samples file.
-    tgt_fname: str
-        The name of the file into which to save the speed distributions
-        resulting from the parameter samples in `mcmc_samples_source`.
     maxv0: float, default 2.3
         The highest multiple of v0_gal to evaluate.
     Nvs: int, default=30
         The number of speeds to evaluate between 0 and v0 * maxv0
+    tgt_fname_override: str, default None
+        If specified, the name of the file into which to save the distribution
+        samples. If the user doesn't specify a file name, the method will save
+        the distribution samples in 
+        'distrib_samples_' + today + '(' + mcmc_samples_source + ').h5'
 
     Returns
     -------
@@ -328,6 +330,7 @@ def make_distrib_samples_by_v0(
     import dm_den
     import h5py
     import paths
+    import datetime
     import numpy as np
     from progressbar import ProgressBar
 
@@ -345,6 +348,14 @@ def make_distrib_samples_by_v0(
     v_by_v0_bins = np.linspace(0., maxv0, Nvs + 1)
     vs_by_v0 = (v_by_v0_bins[1:] + v_by_v0_bins[:-1]) / 2.
 
+    today = datetime.datetime.today().strftime('%d%m%Y')
+    tgt_fname = (
+        'distrib_samples_by_v0_' 
+        + today 
+        + '(' 
+        + mcmc_samples_source.replace('.h5', '') 
+        + ').h5'
+    )
     with h5py.File(paths.data + tgt_fname, 'w') as f:
         f.create_dataset('v_v0', data=vs_by_v0)
         params_grp = f.create_group('params')

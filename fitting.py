@@ -3512,7 +3512,9 @@ def vs_into_bins(vs):
 def determine_systematics(
         df_source,
         distrib_samples_fname=('mcmc_distrib_samples'
-                               '_by_v0_narrower_uniform_prior_20240606.h5'), 
+                               '_by_v0_20240702'
+                               '(mcmc_samples_narrower_uniform_prior_20240606)'
+                               '.h5'), 
         v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl',
         verbose=False,
         update_paper=False):
