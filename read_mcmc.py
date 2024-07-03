@@ -353,7 +353,7 @@ def make_distrib_samples_by_v0(
         'distrib_samples_by_v0_' 
         + today 
         + '(' 
-        + mcmc_samples_source.replace('.h5', '') 
+        + mcmc_samples_source.replace('.h5', '').replace('mcmc_samples_', '')
         + ').h5'
     )
     with h5py.File(paths.data + tgt_fname, 'w') as f:
