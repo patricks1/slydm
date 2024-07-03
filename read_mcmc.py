@@ -182,7 +182,7 @@ def trace_plot(samples_fname):
 
     return None
 
-def estimate(samples_fname, result_fname=None):
+def estimate(samples_fname, result_fname=None, update_paper=False):
     '''
     Read an emcee samples file, calculate the best estimates and errors on
     the parameters, display those estimates and errors, and return a dictionary
@@ -205,8 +205,10 @@ def estimate(samples_fname, result_fname=None):
         The best estimates of the parameters from the chains.
     '''
     import dm_den
-    from IPython.display import display, Math
+    import staudt_utils
+    import UCI_tools.tools as uci
     import numpy as np
+    from IPython.display import display, Math
 
     samples = read(samples_fname)
     labels = ['d', 'e', 'h', 'j', 'k']
@@ -219,10 +221,21 @@ def estimate(samples_fname, result_fname=None):
         txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.4f}}}^{{+{2:.4f}}}"
         txt = txt.format(est[1], q[0], q[1], labels[i])
         display(Math(txt))
-        
         results_dict[labels[i]] = est[1]
+        results_dict['d' + labels[i]] = np.array([q[0], q[1]])
     if result_fname is not None:
         dm_den.save_var_raw(results_dict, result_fname) 
+    if update_paper:
+        for key in labels:
+            # Save strings to be used in paper.tex
+            y = results_dict[key]
+            DY = results_dict['d' + key]
+            # y_txt is a string. DY_TXT is an array of strings, or just an
+            # array of just one string. Either way, 
+            # type(DY_TXT) == np.ndarray, which is why we're denoting it in
+            # all caps.
+            y_txt, DY_TXT = staudt_utils.sig_figs(y, DY)
+            uci.save_prediction(key, y_txt,  DY_TXT)
     return results_dict 
 
 def make_gal_distrib_samples(df, gal, THETA, vs):
@@ -329,7 +342,8 @@ def make_distrib_samples_by_v0(
     nondisks = ['m12z', 'm12w']
     df = dm_den.load_data(df_source).drop(nondisks)
 
-    vs_by_v0 = np.linspace(0., maxv0, Nvs)
+    v_by_v0_bins = np.linspace(0., maxv0, Nvs + 1)
+    vs_by_v0 = (v_by_v0_bins[1:] + v_by_v0_bins[:-1]) / 2.
 
     with h5py.File(paths.data + tgt_fname, 'w') as f:
         f.create_dataset('v_v0', data=vs_by_v0)

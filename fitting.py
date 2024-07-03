@@ -66,14 +66,42 @@ def pN_mao(v, v0, vesc, p):
     return pN
 
 def mao(v, v0, vesc, p):
+    import collections
+    v0_is_arraylike = isinstance(v0, collections.abc.Iterable)
+    vesc_is_arraylike = isinstance(vesc, collections.abc.Iterable)
+    v_is_arraylike = isinstance(v, collections.abc.Iterable)
+    if (
+            (v0_is_arraylike or vesc_is_arraylike) 
+            and (not v_is_arraylike or len(v) != len(v0))
+    ):
+        raise ValueError('If v0 and vesc are arrays, v should be an array of'
+                         ' the same'
+                         ' size.')
+    if not v0_is_arraylike:
+        v0 = np.array([v0])
+    if not vesc_is_arraylike:
+        vesc = np.array([vesc])
+    if type(v) == list:
+        v = np.array(v)
+    if type(v0) == list:
+        v0 = np.array(v0)
+    if type(vesc) == list:
+        vesc = np.array(vesc)
+    if len(v0) != len(vesc):
+        raise ValueError('v0 and vesc should be the same length.')
+    N_vcs = len(v0) # Implied number of circular speeds
+    v0_set, vesc_set = np.unique([v0, vesc], axis=1)
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', 
                                 category=scipy.integrate.IntegrationWarning)
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        N = scipy.integrate.quad(pN_mao, 0., np.inf, 
-                                 (v0, vesc, p), limit=100)[0]
-        p = pN_mao(v, v0, vesc, p) / N
-    return p
+        N_dict = {
+            (v0_, vesc_): normalize(pN_mao, (v0_, vesc_, p))
+            for v0_, vesc_ in zip(v0_set, vesc_set)
+        }
+        Ns = np.array([N_dict[v0_, vesc_] for v0_, vesc_ in zip(v0, vesc)])
+        prob_den = pN_mao(v, v0, vesc, p) / Ns
+    return prob_den
 
 def pN_smooth_step_max(v, v0, vdamp, k):
     '''
@@ -1136,7 +1164,7 @@ def fit_vdamp(df_source, gals='discs',
             axs[i].plot(vs_postfit,
                         smooth_step_max(vs_postfit, result_max.params['v0'],
                                         vcut, np.inf),
-                        label='fit, Eq. 5, cut @ {0:s}'.format(
+                        label='fit, Maxwellian, cut @ {0:s}'.format(
                             dm_den_viz.vcut_labels[vcut_type]), 
                         c=dm_den_viz.max_fit_color)
 
@@ -1748,17 +1776,30 @@ def fit_mao(vcut_type, df_source, update_values=False):
     ###########################################################################
     return result
 
-def fit_mao_naive_aggp(vcut_type, df_source, update_values=False):
+def fit_mao_naive_aggp(
+        vcut_type, 
+        df_source, 
+        raw_results_fname=None):
     '''
     Find the best p parameter based on the aggregation of all twelve discs.
     v0 is assumed to be the circular speed.
     
     Parameters
-    ---------------------
-    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'} 
+    ----------
+    vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'}
         Specifies how to determine the speed distribution cutoff.
+    df_source: str
+        The name of the file containing the analysis DataFrame
+    raw_results_fname: str, default None
+        The name of the file where the raw, unrounded, float results should be
+        saved.
+
+    Returns
+    -------
+    result: lmfit.ModelResult
+        The result of the fit
     '''
-    if vcut_type != 'lim_fit' and update_values:
+    if vcut_type != 'lim_fit' and raw_results_fname is not None:
         raise ValueError('You should only update values if you\'re using'
                          ' vcut_type=\'lim_fit\'.')
     import dm_den
@@ -1824,11 +1865,12 @@ def fit_mao_naive_aggp(vcut_type, df_source, update_values=False):
                            method='nelder')
     ###########################################################################
 
-    if update_values and vcut_type == 'lim_fit':
+    if raw_results_fname is not None and vcut_type == 'lim_fit':
         # Save the best p value to our big raw data file.
         y = result.params['p'].value
         dm_den.save_var_raw({'p_mao_naive_agg': y},
-                            'data_raw.pkl')
+                            raw_results_fname)
+        # Also update the paper
         # For now, we're just going to save p with 1 decimal showing to match
         # the 1 decimal that shows when we carry out the full error analysis on
         # our full version of the Mao model
@@ -2525,6 +2567,84 @@ def save_rms_errs(rms_dict):
     with open(paths.data + 'rms_errs.pkl', 'wb') as f:
         pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
     return None
+
+def calc_rms_all_methods(
+        df_source,
+        pdfs_fname='v_pdfs_disc_dz1.0_20240606.pkl',
+        staudt_results_fname='results_mcmc.pkl',
+        mao_naive_aggp_results_fname='data_raw.pkl',
+        update_paper=False):
+    import dm_den
+    with open(paths.data + pdfs_fname, 'rb') as f:
+        pdfs = pickle.load(f)
+    with open(paths.data + mao_naive_aggp_results_fname, 'rb') as f:
+        p_naive = pickle.load(f)['p_mao_naive_agg']
+    with open(paths.data + staudt_results_fname, 'rb') as f:
+        staudt_results = pickle.load(f)
+    with open(paths.data + 'results_mao_lim_fit.pkl', 'rb') as f:
+        mao_ours_results = pickle.load(f)
+    df = dm_den.load_data(df_source)
+    vesc_dict = dm_den.load_vcuts('lim_fit', df)
+
+    galnames = df.drop(['m12z', 'm12w']).index
+    
+    for galname in galnames:
+        vc = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
+        vesc = vesc_dict[galname]
+        N = len(pdfs[galname]['vs'])
+        pdfs[galname]['vc'] = np.repeat(vc, N)
+        pdfs[galname]['vesc'] = np.repeat(vesc, N)
+    vs = np.concatenate([pdfs[galname]['vs'] for galname in galnames])
+    ys = np.concatenate([pdfs[galname]['ps'] for galname in galnames])
+    vcs = np.concatenate([pdfs[galname]['vc'] for galname in galnames])
+    vescs = np.concatenate([pdfs[galname]['vesc'] for galname in galnames])
+    
+    mao_naive_rms = calc_rms_err(vs, ys, mao, (vcs, vescs, p_naive))[0]
+
+    v0s_mao = mao_ours_results['d'] * (vcs / 100.) ** mao_ours_results['e']
+    mao_ours_rms = calc_rms_err(
+        vs, 
+        ys, 
+        mao, 
+        (v0s_mao, vescs, mao_ours_results['p'])
+    )[0]
+
+    v0s_staudt = staudt_results['d'] * (vcs / 100.) ** staudt_results['e']
+    vdamps = staudt_results['h'] * (vcs / 100.) ** staudt_results['j']
+    staudt_rms = calc_rms_err(
+        vs, 
+        ys,
+        smooth_step_max,
+        (v0s_staudt, vdamps, staudt_results['k'])
+    )[0]
+
+    if update_paper:
+        uci.save_var_latex(
+            'staudt_rms',
+            staudt_utils.mprint(
+                staudt_rms,
+                d=2,
+                show=False,
+                order_of_mag=-3).replace('$', '')
+        )
+        uci.save_var_latex(
+            'mao_naive_rms',
+            staudt_utils.mprint(
+                mao_naive_rms,
+                d=2,
+                show=False,
+                order_of_mag=-3).replace('$', '')
+        )
+        uci.save_var_latex(
+            'mao_ours_rms',
+            staudt_utils.mprint(
+                mao_ours_rms,
+                d=2,
+                show=False,
+                order_of_mag=-3).replace('$', '')
+        )
+        
+    return staudt_rms, mao_naive_rms, mao_ours_rms
 
 def extend(pdfs, df, result):
     '''
@@ -3391,17 +3511,55 @@ def vs_into_bins(vs):
 
 def determine_systematics(
         df_source,
-        samples_fname,
-        v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl'):
+        distrib_samples_fname=('mcmc_distrib_samples'
+                               '_by_v0_narrower_uniform_prior_20240606.h5'), 
+        v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl',
+        verbose=False,
+        update_paper=False):
     import dm_den
     import dm_den_viz
     import fitting
+    '''
+    Given a sample of parameters, which carry an implied statistical error,
+    determine the additional systematic error to explain the remainder of the
+    deviation of the prediction from the data.
+
+    Parameters
+    ----------
+    df_source: str
+        File name of the analysis results DataFrame.
+    distrib_samples_fname: str, default ('mcmc_distrib_samples'
+                                         '_by_v0_narrower_uniform_prior'
+                                         '_20240606.h5')
+        File name of the speed distribution samples from `emcee`.
+    v_by_v0_pdf_fname: str, default 'v_by_v0_pdfs_disc_dz1.0.pkl'
+        Name of the file 
+        containing probability densities of, as usual, speed, but with bins 
+        based on each
+        galaxy's v0. Each galaxy will have different bins in v but the same 
+        bins in
+        v/v0. The purpose of this is to be able to calculate systematic errors
+        of the final model as a function of v/v0.
+    verbose: bool, default False
+        Whether to print information about how dominant systematics are.
+    update_paper: bool, default False
+        Whether to update the csv that the paper reads.
+    
+    Returns
+    -------
+    vs_by_v0: np.ndarray
+        The one v/v0 array used by all galaxies in v_by_v0_fname.
+    tot_errs: np.ndarray
+        The total uncertainty corresponding to each v/v0.
+    sys_errs: np.ndarray
+        The systematic portion of the uncertainty at each v/v0.
+    '''
     
     df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
-    samples = load_samples(samples_fname)
+    samples = load_samples(distrib_samples_fname)
     d, e, h, j, k = (samples['params'][t] 
                      for t in ['d', 'e', 'h', 'j', 'k'])
-    vs_by_v0 = samples['v_v0']
+    vs_by_v0_distrib_samples = samples['v_v0']
 
     Y = [] # Probability densities from the data
     YHAT = [] # Predicted probablity densities from the fit
@@ -3412,8 +3570,7 @@ def determine_systematics(
     with open(paths.data + v_by_v0_pdf_fname, 'rb') as f:
         pdfs = pickle.load(f)
 
-    pbar = ProgressBar()
-    for i, galname in enumerate(pbar(df.index)):
+    for i, galname in enumerate(df.index):
         vc = df.loc[galname, 'v_dot_phihat_disc(T<=1e4)']
         v0 = d * (vc / 100.) ** e 
         vdamp = h * (vc / 100.) ** j
@@ -3421,11 +3578,19 @@ def determine_systematics(
         vs = samples[galname]['vs']
 
         pdf = pdfs[galname]
+        vs_by_v0_pdf = pdf['vs_by_v0']
+
+        if not np.array_equal(vs_by_v0_distrib_samples, vs_by_v0_pdf):
+            print(np.array([vs_by_v0_pdf, vs_by_v0_distrib_samples]).T)
+            raise ValueError(
+                'v/v0 array from the PDFs file does not match v/v0 from the'
+                ' distribution samples file.')
+
         ps = pdf['ps']
         Y.append(ps)
 
         lowers, uppers = gal_bands_from_samples(
-            vs_by_v0, 
+            vs_by_v0_distrib_samples, 
             samples[galname]['ps'], 
             plt.cm.viridis(0.5),
         )
@@ -3483,13 +3648,14 @@ def determine_systematics(
         min_mult = np.min(
             np.repeat(sys_errs[:, np.newaxis], 2, axis=1) / np.abs(STAT_ERR)
         )
-    print('Systematics are at a minimum {0:0.0f}x greater than statistics.'
-          .format(math.floor(min_mult)))
-    with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=RuntimeWarning)
-        print('Systematics make up at least {0:0.0f}% of the total'
-              ' uncertainty.'
-              .format(math.floor(np.min(sys_errs / tot_errs) * 100.)))
+    if verbose:
+        print('Systematics are at a minimum {0:0.0f}x greater than statistics.'
+              .format(math.floor(min_mult)))
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
+            print('Systematics make up at least {0:0.0f}% of the total'
+                  ' uncertainty.'
+                  .format(math.floor(np.min(sys_errs / tot_errs) * 100.)))
         
 
     ###########################################################################
@@ -3508,11 +3674,20 @@ def determine_systematics(
 
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
-        STAT_PERCENT_ERR = STAT_ERR / np.repeat(YHAT[:, :, np.newaxis], 2, axis=2)
+        STAT_PERCENT_ERR = STAT_ERR / np.repeat(YHAT[:, :, np.newaxis], 
+                                                2, 
+                                                axis=2)
     ###########################################################################
 
+    if update_paper:
+        np.savetxt(
+            paths.tables + 'errors.csv',
+            np.array([vs_by_v0_distrib_samples, tot_errs / 1.e-3]).T,
+            fmt='%0.2f,%0.2f'
+        )
+
     return (
-        vs_by_v0,
+        vs_by_v0_distrib_samples,
         tot_errs,
         sys_errs, 
     )

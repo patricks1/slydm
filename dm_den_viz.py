@@ -43,10 +43,13 @@ rcParams['legend.frameon'] = True
 rcParams['legend.facecolor']='white'
 rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
-max_naive_color = 'C0'
-max_fit_color = '#a903fc' 
+max_naive_color = 'C3'
+max_naive_color = 'red'
+max_fit_color = 'C0' 
 mao_prediction_color = 'c'
 mao_naive_color = '#8d8d8d'
+#staudt_color = '#a903fc'
+staudt_color = '#af08de'
 
 def plotter_old(gals, dat, gal_names, datloc, ylabel,
             yscale='linear', adjustment=None, figsize=(7,8)):
@@ -1942,9 +1945,12 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         #######################################################################
         # p(vc, vs_maxwell)
         #######################################################################
-        axs[i].plot(vs_maxwell, 
-                    fitting.smooth_step_max(vs_maxwell, vc, np.inf, np.inf),
-                    label = 'Maxwellian, $v_0=v_\mathrm{c}$')
+        axs[i].plot(
+            vs_maxwell, 
+            fitting.smooth_step_max(vs_maxwell, vc, np.inf, np.inf),
+            color=max_naive_color,
+            label = 'Maxwellian, $v_0=v_\mathrm{c}$'
+        )
 
         #######################################################################
         # p(vc, vs_maxwell) * [exponentially truncated @ vcut
@@ -2099,26 +2105,40 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
 
     return None
 
-def plt_universal_prefit(result, df_source, gals='discs', 
-                         ymax=None, show_bands=True, 
-                         show_sigmoid_hard=False,
-                         show_sigmoid_exp=False,
-                         show_max=False,
-                         show_max_hard=False,
-                         show_mao_prediction=False,
-                         show_mao_naive=False,
-                         xtickspace=None, show_rms=False,
-                         tgt_path=None, scale='linear', 
-                         prediction_vcut_type=None,
-                         std_vcut_type=None,
-                         sigmoid_damped_eqnum=None,
-                         mao_eqnum=None,
-                         show_plot=True,
-                         samples_fname='samples_dz1.0_sigmoid_damped.h5'):
+def plt_universal_prefit(
+        result,
+        df_source,
+        distrib_samples_fname,
+        gals='discs', 
+        ymax=None,
+        show_bands=True, 
+        show_sigmoid_hard=False,
+        show_sigmoid_exp=False,
+        show_max=False,
+        show_max_hard=False,
+        show_mao_prediction=False,
+        show_mao_naive=False,
+        xtickspace=None, show_rms=False,
+        tgt_path=None, scale='linear', 
+        prediction_vcut_type=None,
+        std_vcut_type=None,
+        sigmoid_damped_eqnum=None,
+        mao_eqnum=None,
+        show_plot=True,
+        analyze_systematics=True,
+        v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl'):
     '''
     Noteworthy parameters
     ---------------------
-    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
+    distrib_samples_fname: str
+        The filename of the distribution samples to use in determining the
+        error bands in the plot. If the user opts to set `show_bands=False` or
+        `analyze_systematics=False', they can set `distrib_samples_fname` to
+        None.
+    show_bands: bool, default True
+        Whether to show error bands.
+    prediction_vcut_type: 
+               {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                default: None
         Specifies how to determine the speed distribution cutoff for
         prediction distributions
@@ -2153,8 +2173,23 @@ def plt_universal_prefit(result, df_source, gals='discs',
         plot
     show_plot: bool, default True
         If True, display the plot.
-    samples_fname: str
-        The filename of the samples to use in the plot. 
+    analyze_systematics: bool, default True
+        Whether to determine uncertainties based on systematics, as opposed to
+        only considering statistics. This should be done when the statistical
+        error bands don't capture enough of the data.
+    v_by_v0_pdf_fname: str, default 'v_by_v0_pdfs_disc_dz1.0.pkl'
+        The name of the file 
+        containing probability densities of, as usual, speed, but with bins 
+        based on each
+        galaxy's v0. Each galaxy will have different bins in v but the same 
+        bins in
+        v/v0. The purpose of this is to be able to calculate systematic errors
+        of the final model as a function of v/v0.
+        Note: This gets used in determining the error bands but only if the 
+        user 
+        indicates that a systematic error
+        analysis should be done.
+
     '''
     import dm_den
     import fitting
@@ -2217,7 +2252,8 @@ def plt_universal_prefit(result, df_source, gals='discs',
                          for key in ['d', 'e', 'h', 'j', 'k']]
     else:
         raise ValueError('Unexpected data type provided for `params`')
-    samples = fitting.load_samples(samples_fname)
+    if distrib_samples_fname is not None:
+        distrib_samples = fitting.load_samples(distrib_samples_fname)
 
     fig, axs = setup_multigal_fig(gals)
 
@@ -2253,22 +2289,42 @@ def plt_universal_prefit(result, df_source, gals='discs',
 
         # Error bands
         if show_bands:
-            samples_color = plt.cm.viridis(0.5)
-            lowers, uppers = fitting.gal_bands_from_samples(samples['vs'],
-                                                            samples[gal],
-                                                            samples_color,
-                                                            axs[i])
-            band = np.array([lowers, uppers])
-            axs[i].fill_between(
-                    samples['vs'],
-                    lowers, 
-                    uppers, 
-                    color=plt.cm.viridis(1.), 
-                    alpha=0.9, 
-                    ec=samples_color, 
-                    zorder=1, 
-                    label='$1\sigma$ band'
-            )
+            if analyze_systematics:
+                vs_by_v0, tot_errs, _ = fitting.determine_systematics(
+                    df_source,
+                    distrib_samples_fname,
+                    v_by_v0_pdf_fname
+                )
+                vs_sys = vs_by_v0 * v0
+                ps_sys = fitting.smooth_step_max(vs_sys, v0, vdamp, k)
+                uppers = ps_sys + tot_errs
+                lowers = ps_sys - tot_errs
+                axs[i].fill_between(
+                        vs_sys,
+                        lowers, 
+                        uppers, 
+                        color='#cfc9c9',
+                        zorder=0
+                )
+            else:
+                samples_color = plt.cm.viridis(0.5)
+                lowers, uppers = fitting.gal_bands_from_samples(
+                    distrib_samples['vs'],
+                    distrib_samples[gal],
+                    samples_color,
+                    axs[i]
+                )
+                band = np.array([lowers, uppers])
+                axs[i].fill_between(
+                        distrib_samples['vs'],
+                        lowers, 
+                        uppers, 
+                        color=plt.cm.viridis(1.), 
+                        alpha=0.9, 
+                        ec=samples_color, 
+                        zorder=1, 
+                        label='$1\sigma$ band'
+                )
 
         # Plot data
         axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='k',
@@ -2282,7 +2338,10 @@ def plt_universal_prefit(result, df_source, gals='discs',
         axs[i].plot(vs_postfit,
                     ps_postfit,
                     '-',
-                    label=sigmoid_damped_label, color='C3', lw=1.5, zorder=10)
+                    label=sigmoid_damped_label, 
+                    #color='C3',
+                    color=staudt_color,
+                    lw=1.5, zorder=10)
         
         # Plot the prediction with a hard cut @ prediction_vcut
         if show_sigmoid_hard:
@@ -2342,7 +2401,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
                 sse_max_hard += sse_max_hard_add
 
         if show_mao_prediction:
-            v0_mao = fit_mao['d'] * (vc / 100.) ** fit_mao['e'],
+            v0_mao = fit_mao['d'] * (vc / 100.) ** fit_mao['e']
             if mao_eqnum is not None:
                 mao_prediction_label = 'Eqn. {0:0.0f} w/our method' \
                                        .format(mao_eqnum)
@@ -2404,7 +2463,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
             resids_extend = fitting.smooth_step_max(vs_extend, v0, vdamp, k)
             resids = np.append(resids, resids_extend, axis=0)
             axs[i + Ngals].plot(vs_resids, resids / 10.**order_of_mag, 
-                                color='C3')
+                                color=staudt_color)
             axs[i + Ngals].axhline(0., linestyle='--', color='k', alpha=0.5, 
                                    lw=1.)
             axs[i + Ngals].set_ylim(-resids_lim, resids_lim)
@@ -2467,6 +2526,8 @@ def plt_universal_prefit(result, df_source, gals='discs',
 
         if scale != 'linear':
             axs[i].set_yscale(scale)
+    for i in range(Ngals):
+        axs[i].set_ylim(bottom=0.)
     print('Done plotting galaxies. Finalizing figure.')
 
     label_axes(axs, fig, gals)
@@ -2477,7 +2538,7 @@ def plt_universal_prefit(result, df_source, gals='discs',
         ncol = 2
         legend_y = 0.
     handles, labels = axs[0].get_legend_handles_labels()
-    if show_bands:
+    if show_bands and not analyze_systematics:
         print('Plotting bands.')
         handles.append(mpl.lines.Line2D([0], [0], color=samples_color, lw=1.,
                                         label='rand samples'))
@@ -2574,7 +2635,7 @@ def plt_errs(
                 vdamp,
                 k
         )
-        axs[i].plot(vs_by_v0, yhats, color='C3')
+        axs[i].plot(vs_by_v0, yhats, color=staudt_color)
         axs[i].fill_between(
                 vs_by_v0,
                 yhats - tot_errs,
@@ -2676,12 +2737,26 @@ def plt_mao_bands(dfsource):
     plt.show()
     return None
 
-def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
-           sigmoid_damped_eqnum=None, show_vc=False, show_current_params=True,
-           show_shm=False):
+def plt_mw(
+        df_source,
+        vcut_type,
+        fit_results_fname,
+        distrib_samples_fname=('mcmc_distrib_samples'
+                               '_by_v0_narrower_uniform_prior_20240606.h5'),
+        v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl',
+        tgt_fname=None,
+        dvc=0.,
+        dpi=140, 
+        show_vcrit=False,
+        sigmoid_damped_eqnum=None,
+        show_vc=False,
+        show_current_params=True,
+        show_shm=False):
     '''
     Parameters
     ----------
+    df_source: str
+        The name of the file containing the analysis results DataFrame.
     vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
                default 'lim_fit'
         Specifies how to determine the speed distribution cutoff.
@@ -2696,6 +2771,23 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
             ideal: The final cutoff speed that would optimize the galaxy's halo
                 integral's fit when calculating the halo integral of a 
                 fitting.max_double_hard model
+    fit_results_fname: str
+        The name of the file containing the parameter values to use in
+        predicting the Milky Way.
+    distrib_samples_fname: str, 
+                           default ('mcmc_distrib_samples'
+                                    '_by_v0_narrower_uniform_prior'
+                                    '_20240606.h5')
+        The filename of the distribution samples to use in determining the
+        error bands in the plot. 
+    v_by_v0_pdf_fname: str, default 'v_by_v0_pdfs_disc_dz1.0.pkl'
+        The name of the file 
+        containing probability densities of, as usual, speed, but with bins 
+        based on each
+        galaxy's v0. Each galaxy will have different bins in v but the same 
+        bins in
+        v/v0. The purpose of this is to be able to calculate systematic errors
+        of the final model as a function of v/v0.
     tgt_fname: str
         File name of the plot image to save.
     dvc: float
@@ -2725,7 +2817,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
     import fitting
     df = staudt_tools.init_df()
     df.loc['mw', 'vesc'] = vesc_mw
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+    with open(paths.data + fit_results_fname, 'rb') as f:
         results = pickle.load(f)
     ddfrac, dhfrac = grid_eval.identify()
 
@@ -2744,14 +2836,20 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
             label = 'prediction from $v_\mathrm{c}$'
         ax.plot(vs, ps, label=label,
                 **kwargs)
-        lowers, uppers = fitting.gal_bands('mw', vs, df, results, ddfrac, 
-                                           dhfrac, 
-                                           ax=None, dvc=dvc)
-        ax.fill_between(vs, lowers, uppers, 
+        vs_by_v0, tot_errs, _ = fitting.determine_systematics(
+            df_source,
+            distrib_samples_fname,
+            v_by_v0_pdf_fname
+        )
+        vs_err = vs_by_v0 * v0
+        ps_err = fitting.smooth_step_max(vs_err, v0, vdamp, results['k'])
+        uppers = ps_err + tot_errs
+        lowers = ps_err - tot_errs
+        ax.fill_between(vs_err, lowers, uppers, 
                         alpha=0.7, 
                         lw=0.,
                         #color='#c0c0c0',
-                        color='pink',
+                        color='#cfc9c9',
                         zorder=1, 
                         label='$1\sigma$ band')
         return None
@@ -2764,6 +2862,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
     if show_current_params:
         ax.plot(vs, fitting.smooth_step_max(vs, vc, vesc_hat_dict['mw'], 
                                             np.inf),
+                color=max_naive_color,
                 ls='--',
                 label='Maxwellian,\n$v_0=v_\mathrm{c}$')
 
@@ -2774,7 +2873,7 @@ def plt_mw(vcut_type, tgt_fname=None, dvc=0., dpi=140, show_vcrit=False,
 
     #ax.plot(vs, fitting.exp_max(vs, vc, vesc_hat_dict['mw']))
     
-    predict(vc, ax, c='C3')
+    predict(vc, ax, c=staudt_color)
 
     if show_vcrit:
         with open(paths.data + 'vcrits_fr_distrib.pkl', 'rb') as f:
@@ -2978,7 +3077,7 @@ def plt_halo_integrals(gals,
         else:
             sigmoid_damped_label = 'prediction from $v_\mathrm{c}$'
         axs[i].plot(vs_hat, gs_hat, label=sigmoid_damped_label,
-                    color='C3', zorder=51)
+                    color=staudt_color, zorder=51)
         if show_rms:
             rms_staudt, _ = fitting.calc_rms_err(vs_truth, gs, 
                                                  fitting.g_smooth_step_max,
@@ -3005,7 +3104,7 @@ def plt_halo_integrals(gals,
                                                 vlim_fit)),
                         label='prediction from $v_\mathrm{c}$'
                               ', exp cut @ ' + vcut_labels['lim_fit'], 
-                        color='C3', ls=':', zorder=10)
+                        color=staudt_color, ls=':', zorder=10)
             
         # Plot the prediction with a final hard cutoff at vesc
         if show_sigmoid_hard:
@@ -3016,7 +3115,7 @@ def plt_halo_integrals(gals,
                                                 prediction_vcut)),
                         #label='prediction from $v_\mathrm{c}$'
                         #      ', cut @ ' + vcut_labels[prediction_vcut_type], 
-                        color='C3', ls='--', zorder=10)
+                        color=staudt_color, ls='--', zorder=10)
 
         # Plot simple maxwellian with v0 = vc
         gs_max = fitting.g_smooth_step_max(vs_hat, vc100 * 100.,
@@ -3024,13 +3123,13 @@ def plt_halo_integrals(gals,
         axs[i].plot(vs_hat,
                     gs_max,
                     label='Maxwellian$,\,v_0=v_\mathrm{c}$',
-                    color='C0', zorder=50)
+                    color=max_naive_color, zorder=50)
         
         # Plot Maxwellian with v0 = vc and an exponential cutoff at vesc
         if show_max_exp:
             axs[i].plot(vs_hat,
                         fitting.g_exp(vs_hat, vc100 * 100., std_vcut),
-                        color='C0', ls=':',
+                        color=max_naive_color, ls=':',
                         label=('$v_0=v_\mathrm{c}$, exp cut @ ' 
                                + vcut_labels[std_vcut_type]))
 
@@ -3041,7 +3140,7 @@ def plt_halo_integrals(gals,
                                                   std_vcut, np.inf),
                         #label=('$v_0=v\mathrm{c}$, cut @ ' 
                         #       + vcut_labels[std_vcut_type]),
-                        color='C0', ls='--' )
+                        color=max_naive_color, ls='--' )
 
         if show_mao_prediction or show_mao_naive:
             with open('./data/results_mao_' + prediction_vcut_type + '.pkl', 
@@ -3280,24 +3379,24 @@ def plt_halo_integrals_dblscale(gals, df_source,
             # Plot the prediction
             axs[i, j].plot(vs_hat, integrals[gal]['gs_staudt'],
                            label='prediction from $v_\mathrm{c}$',
-                           color='C3', zorder=10)
+                           color=staudt_color, zorder=10)
 
             # Plot the prediction with a hard cut
             if show_sigmoid_hard:
                 axs[i, j].plot(vs_hat, integrals[gal]['gs_staudt_hard'],
-                               '--', color='C3', zorder=10)
+                               '--', color=staudt_color, zorder=10)
             # Plot simple maxwellian with v0 = vc
             axs[i, j].plot(vs_hat,
                            integrals[gal]['gs_max'],
                            label='std assumption, $v_0=v\mathrm{c}$',
-                           color='C0')
+                           color=max_naive_color)
 
             # Plot maxwellian with v0 = vc, hard truncation @ vesc
             if show_max_hard:
                 axs[i, j].plot(
                         vs_hat, integrals[gal]['gs_max_hard'],
                         #label='$v_0=v\mathrm{c}$, cut @ $v_\mathrm{esc}$',
-                        color='C0', ls='--')
+                        color=max_naive_color, ls='--')
 
             # Plot the halo integral from using v0=vc with Mao
             if show_mao_naive:
@@ -3412,14 +3511,14 @@ def plt_halo_integral_mw(df_source,
         axs[i].plot(vmins, gs_sigmoid_damped, 
                     label=('$f(v) = {{\\rm Eqn. }}{0:s}$'
                            .format(str(sigmoid_damped_eqnum))),
-                    color='C3')
+                    color=staudt_color)
         if xtickspace is not None:
             axs[i].xaxis.set_major_locator(
                     mpl.ticker.MultipleLocator(base=xtickspace))
             axs[i].xaxis.set_minor_locator(plt.NullLocator())
-    axs[0].plot(vmins, gs_max_hard, '--', color='C0', 
+    axs[0].plot(vmins, gs_max_hard, '--', color=max_naive_color, 
                 label='cut @ $v_{\\rm esc}(v_{\\rm c})$')
-    axs[0].plot(vmins, gs_sigmoid_damped_hard, '--', color='C3',
+    axs[0].plot(vmins, gs_sigmoid_damped_hard, '--', color=staudt_color,
                 label='cut @ $v_{\\rm esc}(v_{\\rm c})$')
 
     axs[1].yaxis.set_major_locator(
@@ -3500,22 +3599,26 @@ def plt_halo_integral_mw_with_ratio(df_source,
 
     axs[axi_ratio].plot(
             vmins, (gs_sigmoid_damped / gs_max),
-            color='C3',
+            color=staudt_color,
             label='Eq. {0:s} / Maxwellian'.format(str(sigmoid_damped_eqnum))
     )
     axs[axi_ratio].plot(
             vmins, (gs_sigmoid_damped_hard / gs_max_hard),
-            color='C3', ls='--',
+            color=staudt_color, ls='--',
             label='cut Eq. {0:s} / cut Maxwellian'\
                   .format(str(sigmoid_damped_eqnum))
     )
     axs[axi_ratio].axhline(1., lw=1., ls='--', color='grey')
                     
-    axs[axi_linear].plot(vmins, gs_max, label='Maxwellian,\n$v_0=v_{\\rm c}$')
+    axs[axi_linear].plot(
+        vmins,
+        gs_max,
+        color=max_naive_color,
+        label='Maxwellian,\n$v_0=v_{\\rm c}$')
     axs[axi_linear].plot(vmins, gs_sigmoid_damped, 
                 label=('$f(v) = {{\\rm Eqn. }}{0:s}$'
                        .format(str(sigmoid_damped_eqnum))),
-                color='C3')
+                color=staudt_color)
 
     for i in [0, 1]:
         if xtickspace is not None:
