@@ -1725,12 +1725,12 @@ def fit_mao(vcut_type, df_source, update_values=False):
         Calculate probability density given velocity, circular velocity, and
         escape velocity
         '''
-        ps = [mao(v,
-                  d * (vc / 100.) ** e,
-                  vesc,
-                  p)
-              for v, vc, vesc in zip(vs, vcircs, vescs)]
-        ps = np.array(ps)
+        ps = mao(
+            vs,
+            d * (vcircs / 100.) ** e,
+            vescs,
+            p
+        )
         return ps
     
     model = lmfit.model.Model(calc_p,
@@ -1750,14 +1750,6 @@ def fit_mao(vcut_type, df_source, update_values=False):
                            vcircs=vcircs, 
                            vescs=vescs,
                            method='nelder')
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.plot(result.best_fit)
-    #ax.plot(mao(vs_truth, 55. * (vcircs / 100.) ** 2.33, vescs, 2.3)) 
-    ax.plot(calc_p(vs_truth, vcircs, vescs, 55., 2.33, 2.3))
-    ax.plot(ps_truth)
-    plt.show()
 
     if update_values:
         # Save raw variables to data_raw.pkl
@@ -1868,12 +1860,12 @@ def fit_mao_naive_aggp(
         Calculate probability density given velocity, circular velocity, and
         escape velocity
         '''
-        ps = [mao(v,
-                  vc,                  
-                  vesc,
-                  p)
-              for v, vc, vesc in zip(vs, vcircs, vescs)]
-        ps = np.array(ps)
+        ps = mao(
+            vs,
+            vcircs,                  
+            vescs,
+            p
+        )
         return ps
     
     model = lmfit.model.Model(calc_p,
@@ -1904,12 +1896,6 @@ def fit_mao_naive_aggp(
         # our full version of the Mao model
         uci.save_var_latex('p_mao_naive_agg', '{0:0.1f}'.format(y))
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.plot(result.best_fit)
-    ax.plot(ps_truth)
-    plt.show()
-
     return result
 
 def fit_mao_naive_indvp(gal):
@@ -1920,7 +1906,9 @@ def fit_mao_naive_indvp(gal):
     '''
     import dm_den
     import dm_den_viz
+
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
+    vcut_hat_dict = dm_den.load_vcuts('lim_fit', df)
 
     ###########################################################################
     ## Fitting 
@@ -1930,12 +1918,12 @@ def fit_mao_naive_indvp(gal):
         Calculate probability density given velocity, circular velocity, and
         escape velocity
         '''
-        ps = [mao(v,
-                  vc,
-                  vesc,
-                  p)
-              for v in vs]
-        ps = np.array(ps)
+        ps = mao(
+            vs,
+            vc,
+            vesc,
+            p
+        )
         return ps
     
     model = lmfit.model.Model(calc_p,
@@ -2949,7 +2937,7 @@ def make_samples_mao(N, vs, vc, vesc, d, e, p, ddfrac, dpfrac, dvc=0.):
 
     P = THETA[1]
 
-    ps_samples = np.array([mao(vs, v0, vesc, p) for v0, p in zip(V0HAT, P)])
+    ps_samples = mao(vs, V0HAT, vesc, P)
 
     return ps_samples
 
