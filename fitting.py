@@ -2053,6 +2053,12 @@ def plt_universal(gals='discs', update_values=False,
     '''
     Noteworthy Parameters
     ---------------------
+    update_values: bool, default False
+        Whether to update the raw data results, paper data, rms raw data, and
+        saved lmfit.model instance. If True, the user can also specify a
+        `raw_results_fname` where the raw data results will be stored. If the
+        user doesn't specify a `raw_results_fname` but does set `update_values`
+        to True, raw data results will be put in data_raw.pkl.
     err_method: {'sampling', 'std_err', None}, default 'sampling'
         The method to use to generate the error bands
     pdfs_fname: str
@@ -2166,7 +2172,7 @@ def plt_universal(gals='discs', update_values=False,
                 paths.data + 'sigmoid_damped_ls_result.sav'
         )
 
-        # Save raw variables to data_raw.pkl
+        # Save raw variables to `raw_results_fname`
         data2save = {key: result.params[key].value
                      for key in result.params.keys()}
         stderrs = {key+'_stderr': result.params[key].stderr
@@ -2190,9 +2196,9 @@ def plt_universal(gals='discs', update_values=False,
                 # Save strings to be used in paper.tex
                 y = result.params[key].value
                 stderr = result.params[key].stderr
-                if key == 'd':
+                if key == 'd' and err_method is not None:
                     dy = ddfrac * y
-                elif key == 'h':
+                elif key == 'h' and err_method is not None:
                     dy = dhfrac * y
                 else:
                     dy = stderr * tc
@@ -2213,6 +2219,7 @@ def plt_universal(gals='discs', update_values=False,
         dvdamp_mw = dhfrac * vdamp_mw
         vdamp_mw_txt, DVDAMP_MW_TXT = staudt_utils.sig_figs(vdamp_mw, 
                                                             dvdamp_mw)
+        # Save to LaTeX paper.
         uci.save_prediction('vdamp_mw', vdamp_mw_txt, DVDAMP_MW_TXT)
     ###########################################################################
 

@@ -3036,9 +3036,8 @@ def plt_halo_integrals(gals,
         gal_names = gals.copy()
 
     if show_mao_naive:
-        print('fitting mao naive')
+        print('Fitting mao naive.')
         fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
-    print(fit_mao_naive.params)
 
     fig, axs = setup_multigal_fig(gals, show_resids=False) 
 
@@ -3055,6 +3054,7 @@ def plt_halo_integrals(gals,
         vesc_y = 0.45
         legend_ncols = 2
 
+    print('Plotting each galaxy.')
     pbar = ProgressBar()
     for i, gal in enumerate(pbar(gal_names)):
         vc100 = df.loc[gal, 'vc100']
