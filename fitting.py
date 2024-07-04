@@ -99,10 +99,28 @@ def mao(v, v0, vesc, p):
             (v0_, vesc_): normalize(pN_mao, (v0_, vesc_, p))
             for v0_, vesc_ in zip(v0_set, vesc_set)
         }
-        print(N_dict)
-        time.sleep(5.)
         Ns = np.array([N_dict[v0_, vesc_] for v0_, vesc_ in zip(v0, vesc)])
         prob_den = pN_mao(v, v0, vesc, p) / Ns
+    if not v_is_arraylike and prob_den.shape == (1,):
+        # Best practice is probably for the shape/type of `prob_den` to match
+        # that of the `v` that the user provides. Therefore, if the user
+        # provides `v` as a single numeral, I'll return a single numeral,
+        # as opposed to an iterable of shape (1,), which I was previously
+        # doing and which caused big problems when fitting methods were
+        # run as list comprehensions.
+        # 
+        # It was a problem because the fit's
+        # target vector `y` had shape (N_data,) while, when run in a list
+        # comprehension, the fit `ys_hat` ended up with shape (N_data, 1). What
+        # happens in this case is numpy broadcasts both vectors to 
+        # (N_data, N_data) when performing `(ys_hat - y) ** 2.`. Then the SSE
+        # is a sum of N_data x N_data numbers instead of just N_data.
+        #
+        # As a side note, running a fitting method
+        # as a list comprehension is inefficient and unnecessary now that
+        # I've implemented the `N_dict`. However, it's better to make it
+        # so that, if done that way, the fitting results are not wrong.
+        prob_den = prob_den[0]
     return prob_den
 
 def pN_smooth_step_max(v, v0, vdamp, k):
