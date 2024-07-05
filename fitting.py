@@ -3045,6 +3045,10 @@ def gal_bands(gal, vs, df, result, ddfrac=0.1, dhfrac=0.18,
     ax: matplotlib.axes
         Subplot object into which individual sample distributions are drawn.
         If not provided, individual samples are not draw
+    samples_color: str or tuple, default matplotlib.pyplot.cm.viridis(0.5)
+        The color to use for the distribution samples
+    dvc: float, default 0.
+        The uncertainty to assume in the circular speed, in km/s.
 
     Returns
     -------

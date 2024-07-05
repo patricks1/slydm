@@ -197,7 +197,11 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
         The name of the file where emcee stored its chains
     result_fname: str, default None
         Where to save the parameter estimates. It should have a '.pkl' 
-        extension.
+        extension. Milky Way estimates do not get saved here. Only the
+        fit parameters that other methods can use to calculate the MW's v0 and
+        vdamp.
+    update_paper: bool, default False
+        Whether to update the LaTeX paper in paths.paper
 
     Returns
     -------
@@ -205,6 +209,7 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
         The best estimates of the parameters from the chains.
     '''
     import dm_den
+    import dm_den_viz
     import staudt_utils
     import UCI_tools.tools as uci
     import numpy as np
@@ -236,6 +241,56 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
             # all caps.
             y_txt, DY_TXT = staudt_utils.sig_figs(y, DY)
             uci.save_prediction(key, y_txt,  DY_TXT)
+        
+        vc_mw = dm_den_viz.vc_eilers
+        dvc_mw = dm_den_viz.dvc_eilers
+
+        def calc_param(scale, scale_samples, slope, slope_samples):
+            '''
+            Given y = scale * (vc_mw / 100) ^ slope, determine y and its 
+            error dy.
+            '''
+            
+            y = scale * (vc_mw / 100.) ** slope
+
+            y_8416 = np.percentile(
+                scale_samples * (vc_mw / 100.) ** slope_samples,
+                [84, 16]
+            )
+            dy_fit = np.array([
+                y_8416[0] - y, 
+                y - y_8416[1]
+            ])
+
+            dy_dvc = scale * slope * vc_mw ** (slope - 1.) / 100. ** slope
+            dy = np.sqrt(
+                dy_fit ** 2.
+                + (dy_dvc * dvc_mw) ** 2.
+            )
+            return y, dy
+            
+
+        v0_mw, dv0_mw = calc_param(
+            results_dict['d'], 
+            samples[:, 0],
+            results_dict['e'],
+            samples[:, 1]
+        )
+        vdamp_mw, dvdamp_mw = calc_param(
+            results_dict['h'],
+            samples[:, 2],
+            results_dict['j'],
+            samples[:, 3]
+        )
+
+
+        # Save to the LaTeX paper
+        v0_mw_txt, DV0_MW_TXT = staudt_utils.sig_figs(v0_mw, dv0_mw)
+        uci.save_prediction('v0_mw', v0_mw_txt, DV0_MW_TXT)
+
+        vdamp_mw_txt, DVDAMP_MW_TXT = staudt_utils.sig_figs(vdamp_mw, 
+                                                            dvdamp_mw)
+        uci.save_prediction('vdamp_mw', vdamp_mw_txt, DVDAMP_MW_TXT)
     return results_dict 
 
 def make_gal_distrib_samples(df, gal, THETA, vs):

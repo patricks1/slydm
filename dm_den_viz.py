@@ -50,6 +50,7 @@ mao_prediction_color = 'c'
 mao_naive_color = '#8d8d8d'
 #staudt_color = '#a903fc'
 staudt_color = '#af08de'
+staudt_band_color = '#d8c9da'
 
 def plotter_old(gals, dat, gal_names, datloc, ylabel,
             yscale='linear', adjustment=None, figsize=(7,8)):
@@ -2303,7 +2304,7 @@ def plt_universal_prefit(
                         vs_sys,
                         lowers, 
                         uppers, 
-                        color='#cfc9c9',
+                        color=staudt_band_color,
                         zorder=0
                 )
             else:
@@ -2741,12 +2742,12 @@ def plt_mw(
         df_source,
         vcut_type,
         fit_results_fname,
+        dvc,
         distrib_samples_fname=('mcmc_distrib_samples'
                                '_by_v0_20240702'
                                '(narrower_uniform_prior_20240606).h5'),
         v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl',
         tgt_fname=None,
-        dvc=0.,
         dpi=140, 
         show_vcrit=False,
         sigmoid_damped_eqnum=None,
@@ -2775,6 +2776,8 @@ def plt_mw(
     fit_results_fname: str
         The name of the file containing the parameter values to use in
         predicting the Milky Way.
+    dvc: float
+        Uncertainty in the MW's circular speed.
     distrib_samples_fname: str, 
                            default ('mcmc_distrib_samples'
                                     '_by_v0_narrower_uniform_prior'
@@ -2791,8 +2794,6 @@ def plt_mw(
         of the final model as a function of v/v0.
     tgt_fname: str
         File name of the plot image to save.
-    dvc: float
-        Uncertainty in the MW's circular speed.
     dpi: int
         Dots per inch for the displayed figure.
     show_vcrit: bool
@@ -2820,39 +2821,73 @@ def plt_mw(
     df.loc['mw', 'vesc'] = vesc_mw
     with open(paths.data + fit_results_fname, 'rb') as f:
         results = pickle.load(f)
-    ddfrac, dhfrac = grid_eval.identify()
 
     vc = vc_eilers
     vs = np.linspace(0., 700., 300)
 
-    def predict(vc, ax, **kwargs):
-        df = dm_den.load_data('dm_stats_20221208.h5')
-        df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc
+    def calc_v0(vc):
         v0 = results['d'] * (vc / 100.) ** results['e']
+        return v0
+    def calc_vdamp(vc):
         vdamp = results['h'] * (vc / 100.) ** results['j']
+        return vdamp
+    def predict(vc, dvc, ax, show_band=True, **kwargs):
+        v0 = calc_v0(vc)
+        vdamp = calc_vdamp(vc)
         ps = fitting.smooth_step_max(vs, v0, vdamp, results['k'])
         if sigmoid_damped_eqnum is not None:
             label = 'Eqn. {0:s}'.format(str(sigmoid_damped_eqnum))
         else:
             label = 'prediction from $v_\mathrm{c}$'
-        ax.plot(vs, ps, label=label,
-                **kwargs)
-        vs_by_v0, tot_errs, _ = fitting.determine_systematics(
-            df_source,
-            distrib_samples_fname,
-            v_by_v0_pdf_fname
+        ax.plot(
+            vs, 
+            ps, 
+            label=label,
+            **kwargs
         )
-        vs_err = vs_by_v0 * v0
-        ps_err = fitting.smooth_step_max(vs_err, v0, vdamp, results['k'])
-        uppers = ps_err + tot_errs
-        lowers = ps_err - tot_errs
-        ax.fill_between(vs_err, lowers, uppers, 
-                        alpha=0.7, 
-                        lw=0.,
-                        #color='#c0c0c0',
-                        color='#cfc9c9',
-                        zorder=1, 
-                        label='$1\sigma$ band')
+        if show_band:
+            vs_by_v0, tot_errs, _ = fitting.determine_systematics(
+                df_source,
+                distrib_samples_fname,
+                v_by_v0_pdf_fname
+            )
+            vs4band = vs_by_v0 * v0
+
+            # Determine the lower and upper bounds from uncertainty in vc
+            ps_lowvc = fitting.smooth_step_max(
+                vs4band,
+                calc_v0(vc - dvc),
+                calc_vdamp(vc - dvc),
+                results['k']
+            )
+            ps_highvc = fitting.smooth_step_max(
+                vs4band,
+                calc_v0(vc + dvc),
+                calc_vdamp(vc + dvc),
+                results['k']
+            )
+            highs_from_dvc = np.array([ps_lowvc, ps_highvc]).max(axis=0)
+            lows_from_dvc = np.array([ps_lowvc, ps_highvc]).min(axis=0)
+
+            uppers = highs_from_dvc + tot_errs
+            lowers = lows_from_dvc - tot_errs
+            ax.fill_between(
+                vs4band,
+                lows_from_dvc,
+                highs_from_dvc,
+                color=staudt_color,
+                ec=None,
+                alpha=0.3,
+                label='$v_\mathrm{c}$ variation',
+                zorder=3
+            )
+            ax.fill_between(vs4band, lowers, uppers, 
+                            alpha=0.7, 
+                            lw=0.,
+                            #color='#c0c0c0',
+                            color=staudt_band_color,
+                            zorder=2, 
+                            label='$v_\mathrm{c}$ var + model err')
         return None
     
     fig = plt.figure(figsize = (5., 2.5), dpi=dpi,
@@ -2872,10 +2907,8 @@ def plt_mw(
                 ls='--',
                 label='SHM')
 
-    #ax.plot(vs, fitting.exp_max(vs, vc, vesc_hat_dict['mw']))
+    predict(vc, dvc, ax, c=staudt_color, zorder=99)
     
-    predict(vc, ax, c=staudt_color)
-
     if show_vcrit:
         with open(paths.data + 'vcrits_fr_distrib.pkl', 'rb') as f:
             vcrits = pickle.load(f)

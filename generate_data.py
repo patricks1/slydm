@@ -109,4 +109,3 @@ _ = fitting.calc_rms_all_methods(
     mao_naive_aggp_results_fname=mao_naive_aggp_results_fname,
     update_paper=True
 )
-
