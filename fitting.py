@@ -2063,7 +2063,7 @@ def plt_universal(gals='discs', update_values=False,
         The method to use to generate the error bands
     pdfs_fname: str
         The filename from which to get the galaxies' true probability densities
-    raw_results_fname: str, default 'data_raw.pkl'
+    raw_results_fname: str, default None
         Filename to which the program will save its raw data results in float
         format with no rounding
     '''
@@ -2087,8 +2087,6 @@ def plt_universal(gals='discs', update_values=False,
     if not update_values and raw_results_fname is not None:
         raise ValueError('Only specify the raw_results_fname if you are'
                          'updating values.')
-    if update_values and raw_results_fname is None:
-        raw_results_fname = 'data_raw.pkl'
 
     import dm_den
     import dm_den_viz
@@ -2191,36 +2189,41 @@ def plt_universal(gals='discs', update_values=False,
         # critical 2-tailed t value  
         tc = scipy.stats.t.ppf(q=1.-forecast_sig/2., df=N-p)
 
-        for key in result.params.keys():
-            if result.params[key].vary: 
-                # Save strings to be used in paper.tex
-                y = result.params[key].value
-                stderr = result.params[key].stderr
-                if key == 'd' and err_method is not None:
-                    dy = ddfrac * y
-                elif key == 'h' and err_method is not None:
-                    dy = dhfrac * y
-                else:
-                    dy = stderr * tc
-                # y_txt is a string. DY_TXT is an array of strings, or just an
-                # array of just one string. Either way, 
-                # type(DY_TXT) == np.ndarray, which is why we're denoting it in
-                # all caps.
-                y_txt, DY_TXT = staudt_utils.sig_figs(y, dy)
-                uci.save_prediction(key, y_txt,  DY_TXT)
-        vc_mw = dm_den_viz.vc_eilers 
+        if update_paper:
+            for key in result.params.keys():
+                if result.params[key].vary: 
+                    # Save strings to be used in paper.tex
+                    y = result.params[key].value
+                    stderr = result.params[key].stderr
+                    if key == 'd' and err_method is not None:
+                        dy = ddfrac * y
+                    elif key == 'h' and err_method is not None:
+                        dy = dhfrac * y
+                    else:
+                        dy = stderr * tc
+                    # y_txt is a string. DY_TXT is an array of strings, or just 
+                    # an
+                    # array of just one string. Either way, 
+                    # type(DY_TXT) == np.ndarray, which is why we're denoting 
+                    # it in
+                    # all caps.
+                    y_txt, DY_TXT = staudt_utils.sig_figs(y, dy)
+                    uci.save_prediction(key, y_txt,  DY_TXT)
+            vc_mw = dm_den_viz.vc_eilers 
 
-        v0_mw = result.params['d'] * (vc_mw / 100.) ** result.params['e']
-        dv0_mw = ddfrac * v0_mw
-        v0_mw_txt, DV0_MW_TXT = staudt_utils.sig_figs(v0_mw, dv0_mw)
-        uci.save_prediction('v0_mw', v0_mw_txt, DV0_MW_TXT)
+            v0_mw = result.params['d'] * (vc_mw / 100.) ** result.params['e']
+            dv0_mw = ddfrac * v0_mw
+            v0_mw_txt, DV0_MW_TXT = staudt_utils.sig_figs(v0_mw, dv0_mw)
+            uci.save_prediction('v0_mw', v0_mw_txt, DV0_MW_TXT)
 
-        vdamp_mw = result.params['h'] * (vc_mw / 100.) ** result.params['j']
-        dvdamp_mw = dhfrac * vdamp_mw
-        vdamp_mw_txt, DVDAMP_MW_TXT = staudt_utils.sig_figs(vdamp_mw, 
-                                                            dvdamp_mw)
-        # Save to LaTeX paper.
-        uci.save_prediction('vdamp_mw', vdamp_mw_txt, DVDAMP_MW_TXT)
+            vdamp_mw = (
+                result.params['h'] * (vc_mw / 100.) ** result.params['j']
+            )
+            dvdamp_mw = dhfrac * vdamp_mw
+            vdamp_mw_txt, DVDAMP_MW_TXT = staudt_utils.sig_figs(vdamp_mw, 
+                                                                dvdamp_mw)
+            # Save to LaTeX paper.
+            uci.save_prediction('vdamp_mw', vdamp_mw_txt, DVDAMP_MW_TXT)
     ###########################################################################
 
     if err_method == 'std_err':
@@ -2356,8 +2359,6 @@ def plt_universal(gals='discs', update_values=False,
         axs[i].grid(False)
         if ymax is not None:
             axs[i].set_ylim(top=ymax)
-    if update_values:
-        save_rms_errs({'universal': rms_dict})
 
     dm_den_viz.label_axes(axs, fig, gals)
     if fig.Nrows == 3:
@@ -2585,17 +2586,6 @@ def calc_rms_err(xs, ys, fcn, args):
     sse = np.sum((ys_hat - ys)**2.)
     rms = np.sqrt( sse / N )
     return rms, sse 
-
-def save_rms_errs(rms_dict):
-    try:
-        with open(paths.data + 'rms_errs.pkl', 'rb') as f:
-            dict_last = pickle.load(f)
-    except FileNotFoundError:
-        dict_last = {}  
-    d = dict_last | rms_dict
-    with open(paths.data + 'rms_errs.pkl', 'wb') as f:
-        pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
-    return None
 
 def calc_rms_all_methods(
         df_source,
@@ -3484,52 +3474,6 @@ def find_68_uncertainty(method, assume_corr=False, diff_fcn=diff_fr68,
     print('{0:0.0f}min, {1:0.1f}s taken to optimize.'.format(minutes, sec)) 
 
     return minimizer_result
-
-def compare_methods(save_fname=None, verbose=False):
-    import dm_den
-    with open(paths.data + 'rms_errs.pkl', 'rb') as f:
-        rms_dict = pickle.load(f)
-    df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
-    df_rms = pd.DataFrame.from_dict(rms_dict)
-    df = pd.concat([df, df_rms], axis=1).drop(['m12w', 'm12z'])
-    if verbose:
-        df['diff'] = df['sigma_vc'] - df['universal']
-        df.sort_values('diff', inplace=True)
-        display(df[['diff']].T)
-
-    fig = plt.figure(figsize=(4.7,3))
-    ax = fig.add_subplot(111)
-    df[['true_sigma', 
-        #'sigma_vc', 
-        'universal']].plot.bar(ax=ax, 
-                               color=['C0', 
-                                      #'orange', 
-                                      'C3'],
-                               width=0.7)
-    tick_labels = ax.xaxis.get_majorticklabels()
-    ax.set_xticklabels(tick_labels, rotation=40, ha='right', 
-                       rotation_mode='anchor')
-    ax.set_ylabel('RMS error $[\mathrm{km^{-1}\,s}]$')
-    # Put y-axis in scientific notation
-    order_of_mag = -4
-    ax.ticklabel_format(style='sci', axis='y', 
-                        scilimits=(order_of_mag,
-                                   order_of_mag),
-                        useMathText=True)
-    plt.tight_layout()
-    handles, labels = ax.get_legend_handles_labels()
-    #labels[0] = '$\sigma(v_\mathrm{c})$'
-    labels[0] = '$v_0=\sqrt{2/3}\sigma_\mathrm{meas}$'
-    labels[1] = 'prediction from $v_\mathrm{c}$'
-    ax.legend(labels=labels, bbox_transform=fig.transFigure, 
-              bbox_to_anchor=(0.5, -0.0), loc='upper center', 
-              ncol=3, fontsize=13)
-
-    if save_fname is not None:
-        plt.savefig(paths.figures + save_fname, bbox_inches='tight', dpi=140)
-    plt.show()
-
-    return None 
 
 ###############################################################################
 def vs_into_bins(vs):

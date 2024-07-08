@@ -2081,8 +2081,6 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
 
             if i == 0:
                 axs[i+2].set_ylabel('resids')
-    if update_vals:
-        fitting.save_rms_errs(rms_dict)
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.,hspace=0.)
     if Ncols > 2:
