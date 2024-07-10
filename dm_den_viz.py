@@ -1895,10 +1895,6 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
 
     # velocities to use when plotting the functional form attempts
     vs_maxwell = np.linspace(0., 800., 700) 
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
-        # Strength at which to truncate the distribution
-        # I'm probably not going to use this here, though
-        k = pickle.load(f)['k'] 
 
     rms_dict = {}
     rms_dict['sigma_vc'] = {}
