@@ -2695,10 +2695,10 @@ def plt_universal_prefit_with_mcmc(
                                pd.core.indexes.base.Index))
     if not islist and gals != 'discs':
         raise ValueError('Unexpected value provided for gals arg')
-    plotting_prediction = (show_mao_prediction or show_sigmoid_hard)
+    plotting_prediction = show_sigmoid_hard
     if plotting_prediction and prediction_vcut_type is None:
         raise ValueError('You must specify a prediction_vcut_type if you want'
-                         ' to show_mao_prediction or show_sigmoid_hard.')
+                         ' to show_sigmoid_hard.')
     if (show_mao_naive or show_max_hard) and std_vcut_type is None:
         raise ValueError('You must specify a std_vcut_type if you want'
                          ' to show_mao_naive.')
