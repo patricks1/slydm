@@ -1752,7 +1752,7 @@ def fit_mao(vcut_type, df_source, update_values=False):
                            method='nelder')
 
     if update_values:
-        # Save raw variables to data_raw.pkl
+        # Save raw variables
         data2save = {key: result.params[key].value
                      for key in result.params.keys()}
         stderrs = {key+'_stderr': result.params[key].stderr
@@ -2027,7 +2027,7 @@ def fit_universal_sigmoid_exp(update_values=False,
                            method=method, **kwargs)
 
     if update_values:
-        # Save raw variables to data_raw.pkl
+        # Save raw variables
         data2save = {key: result.params[key].value
                      for key in result.params.keys()}
         stderrs = {key+'_stderr': result.params[key].stderr
@@ -2049,16 +2049,15 @@ def plt_universal(gals='discs', update_values=False,
                   samples_color=plt.cm.viridis(0.5), ymax=None, show_rms=False,
                   pdfs_fname='v_pdfs_disc_dz1.0_20240606.pkl',
                   raw_results_fname=None,
+                  update_paper=False,
                   **kwargs):
     '''
     Noteworthy Parameters
     ---------------------
     update_values: bool, default False
-        Whether to update the raw data results, paper data, rms raw data, and
-        saved lmfit.model instance. If True, the user can also specify a
-        `raw_results_fname` where the raw data results will be stored. If the
-        user doesn't specify a `raw_results_fname` but does set `update_values`
-        to True, raw data results will be put in data_raw.pkl.
+        Whether to update the raw data results and
+        saved lmfit.model instance. If True, the user must also specify a
+        `raw_results_fname` where the raw data results will be stored. 
     err_method: {'sampling', 'std_err', None}, default 'sampling'
         The method to use to generate the error bands
     pdfs_fname: str
@@ -2066,6 +2065,12 @@ def plt_universal(gals='discs', update_values=False,
     raw_results_fname: str, default None
         Filename to which the program will save its raw data results in float
         format with no rounding
+    update_paper, bool, default False
+        Whether to update the paper with least-squares-optimized sigmoid-damped
+        parameters. This will only have an effect if `update_values` is also
+        True. `update_paper` should probably *never* be True at this point, 
+        since
+        we use MCMC.
     '''
     if err_method not in ['sampling', 'std_err', None]:
         raise ValueError('Unexpected argument for `err_method`.')
@@ -2084,9 +2089,26 @@ def plt_universal(gals='discs', update_values=False,
     if update_values and gals != 'discs':
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
+    if update_values and raw_results_fname is None:
+        raise ValueError(
+            'If the sets `update_values` to `True`, they also must specify'
+            ' a `raw_results_fname`.'
+        )
     if not update_values and raw_results_fname is not None:
         raise ValueError('Only specify the raw_results_fname if you are'
                          'updating values.')
+    if update_paper:
+        warn_txt = (
+            'WARNING: You have set `update_paper` to `True`, meaning you will'
+            ' overwrite existing values in the paper wth values determined'
+            ' here via least-squares minimization. You probably do NOT want to'
+            ' do this. If you do indeed want to do this, please type "yes".'
+            ' Otherwise, type "no".'
+        )
+        answer = input(warn_txt)
+        while answer.lower() not in ['yes', 'no']:
+            print('\nPlease type only "yes" or "no".')
+            answer = input(warn_txt)
 
     import dm_den
     import dm_den_viz

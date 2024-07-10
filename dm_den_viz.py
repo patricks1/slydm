@@ -912,14 +912,24 @@ def draw_shades(ax, ycol, vc, dvc, xmult=1.):
     draw_xshade(ax, vc, dvc, xmult)
     return None
 
-def plt_vesc_vc_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11, 
-                   adjust_text_kwargs={}, formula_y=-0.3, dpi_show=120,
-                   xtickspace=None, ytickspace=None, label_overrides={},
-                   marker_label_size=11,
-                   show_formula=True,
-                   update_values=False, tgt_fname=None, verbose=False,
-                   show_vesc=False):
+def plt_vlim_vs_vc(
+        dfsource, figsize=(4.5, 4.8), labelsize=11, 
+        adjust_text_kwargs={}, formula_y=-0.3, dpi_show=120,
+        xtickspace=None, ytickspace=None, label_overrides={},
+        marker_label_size=11,
+        show_formula=True,
+        update_values=False, tgt_fname=None, verbose=False,
+        show_vesc=False,
+        raw_data_tgt='data_raw.pkl'):
     import dm_den
+    '''
+    Noteworthy parameters
+    ---------------------
+    raw_data_tgt: str, default 'data_raw.pkl'
+        The name of the file in which to save the raw values of ve0 and eps
+        from vesc(vc) = ve0 * (vc / 100) ^ eps. This only gets used if the user
+        also specifies `update_values=True`.
+    '''
     df = dm_den.load_data(dfsource)
 
     vcut_d = dm_den.find_last_v()
@@ -1058,6 +1068,12 @@ def plt_vesc_vc_vs_vc(dfsource, figsize=(4.5, 4.8), labelsize=11,
         slope_str, dslope_str = staudt_utils.sig_figs(slope, dbeta[1][0])
         uci.save_prediction('veschat_slope', slope_str, dslope_str)
 
+        # Save the results to the raw data file.
+        dm_den.save_var_raw(
+            {'vesc_amp': amp, 'vesc_slope': slope},
+            raw_data_tgt
+        )
+                
         # Save the vesc(vc) predictions
         df = dm_den.load_data(df_source)
         if xadjustment in ['logreg_linaxunits', 'log'] \

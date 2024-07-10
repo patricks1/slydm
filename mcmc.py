@@ -131,24 +131,36 @@ def calc_log_uniform_prior(theta, theta_ranges):
 
     return np.log(p)
 
-def calc_log_post(theta, X, ys, dys, log_prior_function, log_prior_args=()):
+def calc_log_post(
+        theta,
+        X,
+        ys,
+        dys,
+        log_prior_function,
+        log_prior_args=(),
+        log_likelihood_function=calc_log_likelihood):
     '''
     Calculate the log posterior
 
     Parameters
     ----------
-    theta: np.ndarray, shape = (5,)
-        Possible model parameters [d, e, h, j, k]
-    X: np.ndarray, shape = (N, 2)
-        Feature matrix where N is the number of data rows, the 0 column is 
+    theta: np.ndarray 
+        Possible model parameters
+    X: np.ndarray, shape = (N, -1)
+        Feature matrix where N is the number of data rows. The columns must be
+        oranized in th order that `log_likelihood_function` expects. The 0 
+        column is 
         circular speed of a galaxy, and 
-        the 1 column
-        is particle speeds in the speed distribution.
+        the -1 column
+        is particle speeds in the speed distribution. Depending on the log
+        likelihood used (i.e. what model we're fitting), the 1 column may be
+        the 
+        vesc(vc) prediction.
     ys: np.ndarray, shape = (N,)
         Target vector 4*pi*v^2 * f(v) probability density of a DM particle 
         having 
         a given
-        speed v, where f(v) is our sigmoid-damped speed distribution.
+        speed v, where f(v) is the speed distribution model we're fitting.
     dys: np.ndarray, shape = (N,)
         Errors in y
     log_prior_function: function
@@ -158,11 +170,13 @@ def calc_log_post(theta, X, ys, dys, log_prior_function, log_prior_args=()):
     log_prior_args: tuple, default ()
         Args that should be passed to the log prior function, other than the
         `theta` vector
+    log_likelihood_function: function, default mcmc.calc_log_likelihood
+        The log likelihood_function to use.
     '''
     import numpy as np
 
     log_prior_value = log_prior_function(theta, *log_prior_args)
-    log_likelihood_value = calc_log_likelihood(theta, X, ys, dys)
+    log_likelihood_value = log_likelihood_function(theta, X, ys, dys)
     log_posterior_value = log_prior_value + log_likelihood_value
 
     return log_posterior_value
@@ -192,9 +206,6 @@ def run(log_prior_function, df_source, tgt_fname,
         mu = np.array([ls_result[param] 
                        for param in ['d', 'e', 'h', 'j', 'k']])
 
-        # Purposefully starting off in the wrong place to see what happens
-        #mu = np.array([90., 1., 250., 1., 0.01])
-         
     nondisks = ['m12z', 'm12w']
     with open(paths.data + pdfs_source, 'rb') as f:
         pdfs = pickle.load(f)
