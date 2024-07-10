@@ -9,8 +9,10 @@ import dm_den
 date_str = datetime.today().strftime('%Y%m%d')
 vescphi_dict_fname = date_str + '_vescs(phi)_rot.pkl'
 df_fname = date_str + '_dm_stats_dz1.0.h5'
+
 # Results from the simpler fits (dispersion, density, vesc)
 simple_fits_fname = date_str + 'simple_fits_results.pkl'
+
 pdfs_fname = date_str + '_v_pdfs_disc_dz1.0.pkl'
 pdfs4systematics_fname = date_str + '_v_by_v0_pdfs_disc_dz1.0.pkl'
 ls_results_fname = date_str + '_ls_results_raw.pkl' # least-squares results
