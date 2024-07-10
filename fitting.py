@@ -983,7 +983,9 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
 
     return vesc_fits
 
-def fit_vdamp(df_source, gals='discs', 
+def fit_vdamp(df_source, 
+              k_source,
+              gals='discs', 
               vcut_type=None,
               show_max=False,
               show_max_fit=False,
@@ -1003,6 +1005,9 @@ def fit_vdamp(df_source, gals='discs',
     ----------
     df_source: str
         File name for the analysis results to use
+    k_source: str
+        The name of the results file from which to get the value of the k
+        parameter.
     gals: str or list-like of str
         Galaxies to plot
     show_max: bool
@@ -1058,7 +1063,7 @@ def fit_vdamp(df_source, gals='discs',
         raise ValueError('Unexpected value provided for gals arg')
     Ngals = len(df)    
 
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+    with open(paths.data + k_source, 'rb') as f:
         results_universal = pickle.load(f)
     vcut_dict = dm_den.load_vcuts(vcut_type, df)
 
@@ -1674,7 +1679,7 @@ def fit_universal_no_uncert(gals='discs', method='leastsq', update_vals=False,
 
     return result_dehjk
 
-def fit_mao(vcut_type, df_source, update_values=False):
+def fit_mao(vcut_type, df_source, update_values=False, update_paper=False):
     '''
     Find a universal d, e, and p for the Mao parameterization where
     v0 = d * vc ^ e.
@@ -1684,9 +1689,26 @@ def fit_mao(vcut_type, df_source, update_values=False):
     vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'vesc', 'ideal'},
                default 'lim_fit'
         Specifies how to determine the speed distribution cutoff.
-    update_values: bool, default True
-        Whether to save parameters to the LaTeX data and a raw .pkl file.
+    df_source: str
+        The name of the analysis dataframe file to use.
+    update_values: bool, default False
+        Whether to save parameters to a raw .pkl file.
+    update_paper: bool, default False
+        Whether to update the values in the LaTeX paper. This only takes effect
+        if `update_values` is also True
     '''
+    if update_paper:
+        warn_txt = (
+            'WARNING: You have set `update_paper` to `True`, meaning you will'
+            ' overwrite existing values in the paper wth values determined'
+            ' here via least-squares minimization. You probably do NOT want to'
+            ' do this. If you do indeed want to do this, please type "yes".'
+            ' Otherwise, type "no".'
+        )
+        answer = input(warn_txt)
+        while answer.lower() not in ['yes', 'no']:
+            print('\nPlease type only "yes" or "no".')
+            answer = input(warn_txt)
     import dm_den
     import dm_den_viz
     df = dm_den.load_data(df_source).drop(['m12w', 'm12z'])
@@ -1761,37 +1783,41 @@ def fit_mao(vcut_type, df_source, update_values=False):
         data2save = data2save | stderrs | covar #combine dictionaries
         dm_den.save_var_raw(data2save, 'results_mao_' + vcut_type + '.pkl')
 
-        # Save to the LaTeX data file
-        for key in result.params.keys():
-            if result.params[key].vary: 
-                # Save strings to be used in paper.tex
-                y = result.params[key].value
-                stderr = result.params[key].stderr
-                ddfrac, dpfrac = grid_eval_mao.identify('grid_mao.h5')
-                if key == 'd':
-                    dy = ddfrac * y
-                elif key == 'p':
-                    dy = dpfrac * y
-                else:
-                    #Number of parameters we're estimating
-                    p = result.covar.shape[0] 
+        if update_paper:
+            # Save to the LaTeX data file
+            for key in result.params.keys():
+                if result.params[key].vary: 
+                    # Save strings to be used in paper.tex
+                    y = result.params[key].value
+                    stderr = result.params[key].stderr
+                    ddfrac, dpfrac = grid_eval_mao.identify('grid_mao.h5')
+                    if key == 'd':
+                        dy = ddfrac * y
+                    elif key == 'p':
+                        dy = dpfrac * y
+                    else:
+                        #Number of parameters we're estimating
+                        p = result.covar.shape[0] 
 
-                    N = 600 #There's 600 data points (50 bins for each disc) 
-                    z = 1. #Number of std deviations in forecast_sig
-                    P = scipy.special.erf(z / np.sqrt(2)) 
-                    forecast_sig = 1. - P
+                        #There's 600 data points (50 bins for each disc) 
+                        N = 600 
+                        z = 1. #Number of std deviations in forecast_sig
+                        P = scipy.special.erf(z / np.sqrt(2)) 
+                        forecast_sig = 1. - P
 
-                    # critical 2-tailed t value  
-                    tc = scipy.stats.t.ppf(q=1.-forecast_sig/2., df=N-p)
+                        # critical 2-tailed t value  
+                        tc = scipy.stats.t.ppf(q=1.-forecast_sig/2., df=N-p)
 
-                    dy = stderr * tc
-                # y_txt is a string. DY_TXT is an array of strings, or just an
-                # array of just one string. Either way, 
-                # type(DY_TXT) == np.ndarray, which is why we're denoting it in
-                # all caps.
-                y_txt, DY_TXT = staudt_utils.sig_figs(y, dy)
-                uci.save_prediction(key + '_mao_' + vcut_type, 
-                                       y_txt,  DY_TXT)
+                        dy = stderr * tc
+                    # y_txt is a string. DY_TXT is an array of strings, or just 
+                    # an
+                    # array of just one string. Either way, 
+                    # type(DY_TXT) == np.ndarray, which is why we're denoting 
+                    # it in
+                    # all caps.
+                    y_txt, DY_TXT = staudt_utils.sig_figs(y, dy)
+                    uci.save_prediction(key + '_mao_' + vcut_type, 
+                                           y_txt,  DY_TXT)
         
     ###########################################################################
     return result
@@ -2614,6 +2640,7 @@ def calc_rms_all_methods(
         pdfs_fname='v_pdfs_disc_dz1.0_20240606.pkl',
         staudt_results_fname='results_mcmc.pkl',
         mao_naive_aggp_results_fname='data_raw.pkl',
+        mao_ours_results_fname='mcmc_mao_ours_results.pkl',
         update_paper=False):
     import dm_den
     with open(paths.data + pdfs_fname, 'rb') as f:
@@ -2622,7 +2649,7 @@ def calc_rms_all_methods(
         p_naive = pickle.load(f)['p_mao_naive_agg']
     with open(paths.data + staudt_results_fname, 'rb') as f:
         staudt_results = pickle.load(f)
-    with open(paths.data + 'results_mao_lim_fit.pkl', 'rb') as f:
+    with open(paths.data + mao_ours_results_fname, 'rb') as f:
         mao_ours_results = pickle.load(f)
     df = dm_den.load_data(df_source)
     vesc_dict = dm_den.load_vcuts('lim_fit', df)

@@ -115,7 +115,7 @@ def run(df_source,
     ys = ys[isfinite]
     dys = dys[isfinite]
 
-    #return calc_log_likelihood(np.array([100., 1., 0.5]), X, ys, dys)
+    #return calc_log_likelihood(np.array([101., 1., 0.5]), X, ys, dys)
 
     nwalkers = 64 
     ndim = len(theta_ranges) # number of parameters
@@ -152,3 +152,64 @@ def run(df_source,
                     )
 
         sampler.run_mcmc(pos, int(7e4), progress=True)
+
+def estimate(samples_fname, result_fname=None, update_paper=False):
+    '''
+    Read an emcee samples file, calculate the best estimates and errors on
+    the parameters, display those estimates and errors, and return a dictionary
+    of the
+    best estimates. The best estimates are the medians. The positive and
+    negative errors represent the distances of the 84th and 16th percentiles
+    from the median.
+
+    Parameters
+    ----------
+    samples_fname: str
+        The name of the file where emcee stored its chains
+    result_fname: str, default None
+        Where to save the parameter estimates. It should have a '.pkl' 
+        extension. 
+    update_paper: bool, default False
+        Whether to update the LaTeX paper in paths.paper
+
+    Returns
+    -------
+    results_dict: dict
+        The best estimates of the parameters from the chains.
+    '''
+    import dm_den
+    import dm_den_viz
+    import staudt_utils
+    import read_mcmc
+    import UCI_tools.tools as uci
+    import numpy as np
+    from IPython.display import display, Math
+
+    param_keys = ['d', 'e', 'p']
+
+    samples = read_mcmc.read(samples_fname)
+
+    ndim = samples.shape[1]
+    results_dict = {}
+    for i in range(ndim):
+        est = np.percentile(samples[:, i], [16, 50, 84])
+        q = np.diff(est)
+        txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.4f}}}^{{+{2:.4f}}}"
+        txt = txt.format(est[1], q[0], q[1], param_keys[i])
+        display(Math(txt))
+        results_dict[param_keys[i]] = est[1]
+        results_dict['d' + param_keys[i]] = np.array([q[0], q[1]])
+    if result_fname is not None:
+        dm_den.save_var_raw(results_dict, result_fname) 
+    if update_paper:
+        for key in param_keys:
+            # Save strings to be used in paper.tex
+            y = results_dict[key]
+            DY = results_dict['d' + key]
+            # y_txt is a string. DY_TXT is an array of strings, or just an
+            # array of just one string. Either way, 
+            # type(DY_TXT) == np.ndarray, which is why we're denoting it in
+            # all caps.
+            y_txt, DY_TXT = staudt_utils.sig_figs(y, DY)
+            uci.save_prediction(key + '_mao_lim_fit', y_txt,  DY_TXT)
+    return results_dict

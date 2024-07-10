@@ -2241,7 +2241,493 @@ def plt_universal_prefit(
                   'rb') as f:
             fit_mao = pickle.load(f)
     if show_mao_naive:
-        #fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
+        fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
+        p_mao_naive_agg = fit_mao_naive.params['p'].value
+    if islist:
+        galnames = copy.deepcopy(gals)
+    elif gals == 'discs':
+        pdfs.pop('m12z')
+        pdfs.pop('m12w')
+        galnames = pdfs.keys() 
+    Ngals = len(galnames) 
+    N_postfit = 300
+    vs_postfit = np.linspace(0., 700., N_postfit)
+    
+    if type(result) in [lmfit.model.ModelResult, 
+                        lmfit.minimizer.MinimizerResult]:
+        d, e, h, j, k = [result.params[key] 
+                         for key in ['d', 'e', 'h', 'j', 'k']]
+    elif type(result) == dict:
+        d, e, h, j, k = [result[key]
+                         for key in ['d', 'e', 'h', 'j', 'k']]
+    else:
+        raise ValueError('Unexpected data type provided for `params`')
+    if distrib_samples_fname is not None:
+        distrib_samples = fitting.load_samples(distrib_samples_fname)
+
+    fig, axs = setup_multigal_fig(gals)
+
+    sse_mao_full = 0. # SSE for the fully predictive Mao model
+    sse_mao_naive = 0. # SSE for Mao using v0=vc
+    sse_staudt = 0. # SSE for our predictive model
+    sse_sigmoid_hard = 0. # SSE for our predictive model with a hard final cut
+    sse_max_hard = 0. # SSE for the maxwellian with a hard card
+    N_data = 0. # Number of truth datapoints evaluated, for agg RMS calculation
+
+    pbar = ProgressBar()
+    O_rms = -3. # Order of magnite for RMS shows in the plots
+    for i, gal in enumerate(pbar(galnames)):
+        vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']
+        if prediction_vcut_type is not None:
+            prediction_vcut = prediction_vcut_dict[gal]
+        if std_vcut_type is not None:
+            std_vcut = std_vcut_dict[gal]
+        v0 = d * (vc / 100.) ** e
+        vdamp = h * (vc / 100.) ** j
+        ps_postfit = fitting.smooth_step_max(vs_postfit,
+                                             v0, vdamp,
+                                             k)
+        if show_rms:
+            vs_truth = pdfs[gal]['vs']
+            N_data += len(vs_truth)
+            ps_truth = pdfs[gal]['ps']
+            rms_staudt, sse_staudt_add = fitting.calc_rms_err(
+                    vs_truth, ps_truth,
+                    fitting.smooth_step_max,
+                    args=[v0, vdamp, k])
+            sse_staudt += sse_staudt_add
+
+        # Error bands
+        if show_bands:
+            if analyze_systematics:
+                vs_by_v0, tot_errs, _ = fitting.determine_systematics(
+                    df_source,
+                    distrib_samples_fname,
+                    v_by_v0_pdf_fname
+                )
+                vs_sys = vs_by_v0 * v0
+                ps_sys = fitting.smooth_step_max(vs_sys, v0, vdamp, k)
+                uppers = ps_sys + tot_errs
+                lowers = ps_sys - tot_errs
+                axs[i].fill_between(
+                        vs_sys,
+                        lowers, 
+                        uppers, 
+                        color=staudt_band_color,
+                        zorder=0
+                )
+            else:
+                samples_color = plt.cm.viridis(0.5)
+                lowers, uppers = fitting.gal_bands_from_samples(
+                    distrib_samples['vs'],
+                    distrib_samples[gal],
+                    samples_color,
+                    axs[i]
+                )
+                band = np.array([lowers, uppers])
+                axs[i].fill_between(
+                        distrib_samples['vs'],
+                        lowers, 
+                        uppers, 
+                        color=plt.cm.viridis(1.), 
+                        alpha=0.9, 
+                        ec=samples_color, 
+                        zorder=1, 
+                        label='$1\sigma$ band'
+                )
+
+        # Plot data
+        axs[i].stairs(pdfs[gal]['ps'], pdfs[gal]['bins'], color='k',
+                      label='data')
+        # Plot prediction
+        if sigmoid_damped_eqnum is not None:
+            sigmoid_damped_label = 'Eqn. {0:s}' \
+                                   .format(str(sigmoid_damped_eqnum))
+        else:
+            sigmoid_damped_label = 'prediction from $v_\mathrm{c}$'
+        axs[i].plot(vs_postfit,
+                    ps_postfit,
+                    '-',
+                    label=sigmoid_damped_label, 
+                    #color='C3',
+                    color=staudt_color,
+                    lw=1.5, zorder=10)
+        
+        # Plot the prediction with a hard cut @ prediction_vcut
+        if show_sigmoid_hard:
+            axs[i].plot(vs_postfit,
+                        fitting.max_double_hard(vs_postfit, v0, vdamp, k,
+                                                prediction_vcut),
+                        label=('prediction, hard cut @ '
+                               + vcut_labels[prediction_vcut_type]))
+            if show_rms:
+                _, sse_sigmoid_hard_add = fitting.calc_rms_err(
+                    vs_truth, ps_truth, fitting.max_double_hard,
+                    args=(v0, vdamp, k, prediction_vcut))
+                sse_sigmoid_hard += sse_sigmoid_hard_add
+
+        # Plot the prediction with an exponential cut @ vlim_fit
+        if show_sigmoid_exp:
+            with open(paths.data + 'params_sigmoid_exp.pkl', 'rb') as f:
+                params_sigmoid_exp = pickle.load(f)
+            d_exp = params_sigmoid_exp['d']
+            e_exp = params_sigmoid_exp['e']
+            h_exp = params_sigmoid_exp['h']
+            j_exp = params_sigmoid_exp['j']
+            k_exp = params_sigmoid_exp['k']
+            v0_exp = d_exp * (vc / 100.) ** e_exp
+            vdamp_exp = h_exp * (vc / 100.) ** j_exp
+            vlim_fit = dm_den.load_vcuts('lim_fit', df)[gal]
+            axs[i].plot(vs_postfit,
+                        fitting.max_double_exp(vs_postfit,
+                                               v0_exp, vdamp_exp, k_exp,
+                                               vlim_fit),
+                        label=('prediction, exp cut @ ' 
+                               + vcut_labels['lim_fit']))
+
+        if show_max:
+            axs[i].plot(
+                vs_postfit,
+                fitting.smooth_step_max(
+                    vs_postfit,
+                    vc,
+                    np.inf,
+                    np.inf
+                ),
+                label='Maxwellian, $v_0=v_{\\rm c}$', color=max_naive_color
+            )
+
+        if show_max_hard:
+            axs[i].plot(vs_postfit, 
+                        fitting.smooth_step_max(vs_postfit,
+                                                vc, std_vcut, np.inf),
+                        label=('Maxwellian, $v_0=v_{\\rm c}$, cut @ ' 
+                               + vcut_labels[std_vcut_type]))
+            if show_rms:
+                rms_max, sse_max_hard_add = fitting.calc_rms_err(
+                        vs_truth, ps_truth,
+                        fitting.smooth_step_max,
+                        args=(vc, std_vcut, np.inf))
+                sse_max_hard += sse_max_hard_add
+
+        if show_mao_prediction:
+            v0_mao = fit_mao['d'] * (vc / 100.) ** fit_mao['e']
+            if mao_eqnum is not None:
+                mao_prediction_label = 'Eqn. {0:0.0f} w/our method' \
+                                       .format(mao_eqnum)
+            else:
+                mao_prediction_label = 'Mao w/our method'
+            axs[i].plot(vs_postfit,
+                        fitting.mao(vs_postfit, 
+                                    v0_mao,
+                                    prediction_vcut,
+                                    fit_mao['p']),
+                        label=mao_prediction_label,
+                        color=mao_prediction_color)
+            if show_rms:
+                rms_mao, sse_mao_full_add = fitting.calc_rms_err(
+                        vs_truth, ps_truth,
+                        fitting.mao,
+                        args=[v0_mao,
+                              prediction_vcut,
+                              fit_mao['p']])
+                sse_mao_full += sse_mao_full_add
+                                                                 
+        if show_mao_naive:
+            if mao_eqnum is not None:
+                mao_naive_label = 'Eqn. {0:0.0f}, $v_0=v_\mathrm{{c}}$' \
+                                  .format(mao_eqnum)
+            else:
+                mao_naive_label = 'Mao, $v_0=v_\mathrm{c}$'
+            axs[i].plot(vs_postfit,
+                        fitting.mao(vs_postfit,
+                                    vc, std_vcut, 
+                                    p_mao_naive_agg),
+                        label=mao_naive_label, color=mao_naive_color)
+            rms_mao_naive, sse_mao_naive_add = fitting.calc_rms_err(
+                    vs_truth, ps_truth,
+                    fitting.mao,
+                    args=(vc, std_vcut, p_mao_naive_agg))
+            sse_mao_naive += sse_mao_naive_add
+        # Make ticks on both sides of the x-axis:
+        axs[i].tick_params(axis='x', direction='inout', length=6)
+
+        order_of_mag = -3
+        if scale == 'linear':
+            make_sci_y(axs, i, order_of_mag)
+
+        if Ngals < 5:
+            # Remove the 0 tick label because of overlap
+            y0, y1 = axs[i].get_ylim()
+            visible_ticks = np.array([t for t in axs[i].get_yticks() \
+                                      if t>=y0 and t<=y1])
+            new_ticks = visible_ticks[visible_ticks > 0.]
+            axs[i].set_yticks(new_ticks)
+
+            # Draw residual plot
+            vs_resids = copy.deepcopy(pdfs[gal]['vs'])
+            vs_extend = np.linspace(vs_resids.max(), vs_postfit.max(), 20)
+            vs_resids = np.append(vs_resids, vs_extend, axis=0)
+            ps_hat = fitting.smooth_step_max(pdfs[gal]['vs'], v0, vdamp, k)
+            resids = ps_hat - pdfs[gal]['ps']
+            resids_extend = fitting.smooth_step_max(vs_extend, v0, vdamp, k)
+            resids = np.append(resids, resids_extend, axis=0)
+            axs[i + Ngals].plot(vs_resids, resids / 10.**order_of_mag, 
+                                color=staudt_color)
+            axs[i + Ngals].axhline(0., linestyle='--', color='k', alpha=0.5, 
+                                   lw=1.)
+            axs[i + Ngals].set_ylim(-resids_lim, resids_lim)
+            if i == 0:
+                axs[i + Ngals].set_ylabel('resids')
+        loc = [0.97,0.95]
+        if Ngals == 12:
+            namefs = 13. #Font size for galaxy name
+            detail_fontsize = 8. #Font size for metrics shown on panels
+            spacing = 0.16
+        else:
+            namefs = 16. #Font size for galaxy name
+            detail_fontsize = 11. #Font size for metrics shown on panels 
+            spacing = 0.12
+        kwargs_txt = dict(fontsize=namefs, xycoords='axes fraction',
+                          va='top', ha='right',
+                          bbox=dict(facecolor='white', alpha=0.8, 
+                                    edgecolor='none', pad=0.))
+        axs[i].annotate(gal, loc,
+                        **kwargs_txt)
+        if show_rms:
+            loc[1] -= spacing
+            kwargs_txt['fontsize'] = detail_fontsize 
+            if show_max_hard:
+                rms_txt_max = '\nRMS$_{{\\rm Max}}={4:0.2f}$'
+            else:
+                rms_txt_max = ''
+            if show_mao_naive:
+                rms_txt_mao_naive = '\nRMS$_{{\mathrm{{M}}v_\mathrm{{c}}}}' \
+                                    '={3:0.2f}$'
+            else:
+                rms_txt_mao_naive = ''
+            if show_mao_prediction:
+                rms_txt_mao = '\nRMS$_\mathrm{{Mao}}={2:0.2f}$' 
+            else:
+                rms_txt_mao = ''
+            txt_rms = (#'\n$v_\mathrm{{c}}={0:0.0f}\,\mathrm{{km\,s^{{-1}}}}$'
+                       'RMS$_{{{5:s}}}={1:0.2f}$' 
+                       + rms_txt_mao_naive
+                       + rms_txt_mao
+                       + rms_txt_max)
+            axs[i].annotate(
+                txt_rms.format(
+                    vc, 
+                    rms_staudt / 10. ** O_rms,
+                    rms_mao / 10. ** O_rms if show_mao_prediction else None,
+                    rms_mao_naive / 10. ** O_rms if show_mao_naive else None,
+                    rms_max / 10. ** O_rms if show_max_hard else None,
+                    str(sigmoid_damped_eqnum)
+                ),
+                loc, zorder=0, **kwargs_txt)
+        axs[i].grid(False)
+        if ymax is not None:
+            axs[i].set_ylim(top=ymax)
+
+        if xtickspace is not None:
+            axs[i].xaxis.set_major_locator(
+                    mpl.ticker.MultipleLocator(base=xtickspace))
+            axs[i].xaxis.set_minor_locator(plt.NullLocator())
+
+        if scale != 'linear':
+            axs[i].set_yscale(scale)
+    for i in range(Ngals):
+        axs[i].set_ylim(bottom=0.)
+    print('Done plotting galaxies. Finalizing figure.')
+
+    label_axes(axs, fig, gals)
+    if fig.Nrows == 3:
+        ncol = 4 
+        legend_y = 0.03
+    else:
+        ncol = 2
+        legend_y = 0.
+    handles, labels = axs[0].get_legend_handles_labels()
+    if show_bands and not analyze_systematics:
+        print('Plotting bands.')
+        handles.append(mpl.lines.Line2D([0], [0], color=samples_color, lw=1.,
+                                        label='rand samples'))
+    axs[0].legend(handles=handles,
+                  bbox_to_anchor=(0.5, legend_y), 
+                  loc='upper center', ncol=ncol,
+                  bbox_transform=fig.transFigure,
+                  borderaxespad=1.5)
+
+    if tgt_path is not None:
+        plt.savefig(tgt_path,
+                    bbox_inches='tight',
+                    dpi=350)
+    if show_plot:
+        plt.show()
+    else:
+        plt.close()
+
+    if show_rms:
+        d = 2
+        if show_mao_prediction:
+            txt = staudt_utils.mprint(
+                    np.sqrt(sse_mao_full / N_data),
+                    d=d, 
+                    show=False).replace('$','')
+            display(Latex('$\mathrm{{RMS_{{Mao, prediction}}}}={0:s}$'
+                          .format(txt)))
+        if show_mao_naive:
+            txt = staudt_utils.mprint(np.sqrt(sse_mao_naive / N_data),
+                                      d=d, show=False).replace('$', '')
+            display(Latex('$\mathrm{{RMS}}_{{\mathrm{{Mao}},v_\mathrm{{c}}}}'
+                          '={0:s}$'
+                          .format(txt)))
+        if show_max_hard:
+            txt = staudt_utils.mprint(np.sqrt(sse_max_hard / N_data),
+                                      d=d, show=False).replace('$', '')
+            display(Latex('$\mathrm{{RMS}}_{{\mathrm{{Max}}}}={0:s}$'
+                          .format(txt)))
+
+        txt = staudt_utils.mprint(
+                np.sqrt(sse_staudt / N_data),
+                d=d, 
+                show=False).replace('$','')
+        display(Latex('$\mathrm{{RMS_{{Staudt, prediction}}}}={0:s}$' 
+                      .format(txt)))
+
+        if show_sigmoid_hard:
+            txt = staudt_utils.mprint(np.sqrt(sse_sigmoid_hard / N_data),
+                                      d=d, show=False).replace('$', '')
+            display(Latex('$\mathrm{{RMS_{{Sigmoid, hard}}}}={0:s}$'
+                          .format(txt)))
+
+    return None
+
+def plt_universal_prefit_with_mcmc(
+        result,
+        df_source,
+        distrib_samples_fname,
+        gals='discs', 
+        ymax=None,
+        show_bands=True, 
+        show_sigmoid_hard=False,
+        show_sigmoid_exp=False,
+        show_max=False,
+        show_max_hard=False,
+        show_mao_prediction=False,
+        show_mao_naive=False,
+        xtickspace=None, show_rms=False,
+        tgt_path=None, scale='linear', 
+        prediction_vcut_type=None,
+        std_vcut_type=None,
+        sigmoid_damped_eqnum=None,
+        mao_eqnum=None,
+        show_plot=True,
+        analyze_systematics=True,
+        v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl'):
+    '''
+    Noteworthy parameters
+    ---------------------
+    distrib_samples_fname: str
+        The filename of the distribution samples to use in determining the
+        error bands in the plot. If the user opts to set `show_bands=False` or
+        `analyze_systematics=False', they can set `distrib_samples_fname` to
+        None.
+    show_bands: bool, default True
+        Whether to show error bands.
+    prediction_vcut_type: 
+               {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
+               default: None
+        Specifies how to determine the speed distribution cutoff for
+        prediction distributions
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
+    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
+               default: None
+        Specifies how to determine the speed distribution cutoff for standard-
+        assumption distributions
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
+    tgt_path: str, default None
+        If specified, the path to which the user wants to save the resulting
+        plot
+    show_plot: bool, default True
+        If True, display the plot.
+    analyze_systematics: bool, default True
+        Whether to determine uncertainties based on systematics, as opposed to
+        only considering statistics. This should be done when the statistical
+        error bands don't capture enough of the data.
+    v_by_v0_pdf_fname: str, default 'v_by_v0_pdfs_disc_dz1.0.pkl'
+        The name of the file 
+        containing probability densities of, as usual, speed, but with bins 
+        based on each
+        galaxy's v0. Each galaxy will have different bins in v but the same 
+        bins in
+        v/v0. The purpose of this is to be able to calculate systematic errors
+        of the final model as a function of v/v0.
+        Note: This gets used in determining the error bands but only if the 
+        user 
+        indicates that a systematic error
+        analysis should be done.
+
+    '''
+    import dm_den
+    import fitting
+    islist = isinstance(gals, (list, np.ndarray, 
+                               pd.core.indexes.base.Index))
+    if not islist and gals != 'discs':
+        raise ValueError('Unexpected value provided for gals arg')
+    plotting_prediction = (show_mao_prediction or show_sigmoid_hard)
+    if plotting_prediction and prediction_vcut_type is None:
+        raise ValueError('You must specify a prediction_vcut_type if you want'
+                         ' to show_mao_prediction or show_sigmoid_hard.')
+    if (show_mao_naive or show_max_hard) and std_vcut_type is None:
+        raise ValueError('You must specify a std_vcut_type if you want'
+                         ' to show_mao_naive.')
+
+    # I realized that this "prefit" method loads samples that were already
+    # generated with ddfrac and dhfrac assumptions, so this block of code
+    # doesn't do anything. I'm also now removing these kwargs from the function
+    # definition.
+    #if show_bands and (ddfrac is None or dhfrac is None):
+    #    grid_results = grid_eval.identify()
+    #    if ddfrac is None:
+    #        ddfrac = grid_results[0]
+    #        print('Using ddfrac = {0:0.5f}'.format(ddfrac))
+    #    if dhfrac is None:
+    #        dhfrac = grid_results[1]
+    #        print('Using dhfrac = {0:0.5f}'.format(dhfrac))
+    df = dm_den.load_data(df_source)
+    with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
+        pdfs=pickle.load(f)
+    if prediction_vcut_type is not None or std_vcut_type is not None:
+        if prediction_vcut_type is not None:
+            prediction_vcut_dict = dm_den.load_vcuts(prediction_vcut_type, df)
+        if std_vcut_type is not None:
+            std_vcut_dict = dm_den.load_vcuts(std_vcut_type, df)
+    if show_mao_prediction:
+        with open(paths.data + 'mcmc_mao_ours_results.pkl',
+                  'rb') as f:
+            fit_mao = pickle.load(f)
+    if show_mao_naive:
         with open(paths.data + 'data_raw.pkl', 'rb') as f:
             p_mao_naive_agg = pickle.load(f)['p_mao_naive_agg']
     if islist:
@@ -3339,6 +3825,379 @@ def plt_halo_integrals(gals,
 
     return None 
 
+def plt_halo_integrals_with_mcmc(
+        gals, 
+        df_source,
+        sigmoid_damped_fit_fname,
+        mao_ours_fit_fname,
+        show_sigmoid_hard=False, show_sigmoid_exp=False,
+        show_max_hard=False, show_max_exp=False,
+        show_mao_prediction=False,
+        show_mao_naive=False,
+        show_std_vcut=False, show_prediction_vcut=False,
+        show_vcrit=False,
+        std_vcut_type=None, prediction_vcut_type=None,
+        xmax=None,
+        ymin=1.e-6, ymax=None,
+        xtickspace=None, 
+        scale='log',
+        tgt_fname=None, show_rms=False,
+        sigmoid_damped_eqnum=None):
+    '''
+    Noteworthy parameters
+    ---------------------
+    show_std_vcut: bool
+        Whether to show a vertical line at the location of the vcut we use for
+        standard-assumption/naive distributions
+    show_prediction_vcut: bool
+        Whether to show a vertical line at the location of the vcut we use for
+        prediction distributions
+    show_vcrit: bool
+        Whether to draw a vertical line where this work's prediction for the
+        speed distribution (not the halo integral) makes its final drop beneath
+        the standard Maxwellian assumption (v0=vc, cut @ vesc_hat(vc))
+    std_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
+                   default: None
+        Specifies how to determine the speed distribution cutoff for standard
+        assumption distributions like the standard Maxwellian and the naive 
+        Mao,
+        where v0=vc for both.
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
+    prediction_vcut_type: {'lim_fit', 'lim', 'vesc_fit', 'veschatphi', 'ideal'},
+                          default: None
+        Specifies how to determine the speed distribution cutoff for prediction
+        distributions like the universally fit damped sigmoid and Mao.
+            lim: The true escape speed v_esc -- The speed of the fastest DM 
+                particle in 
+                the solar ring.
+            lim_fit: \hat{v}_{esc}(v_c) -- A regression of v_esc to vc
+            veschatphi: \hat{v}_{esc}(Phi) -- An estimate of the escape speed
+                based on gravitational potential Phi
+            vesc_fit: \hat{v}_{esc}(Phi-->v_c) -- A regression of veschatphi
+                to vc
+            ideal: The final cutoff speed that would optimize the galaxy's halo
+                integral's fit when calculating the halo integral of a 
+                fitting.max_double_hard model
+    ymax: float; default: 9.e-3 for log scale, None for linear scale
+        Upper limit for the y-axis. 
+    '''
+    import dm_den
+    import fitting
+
+    if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
+        raise ValueError('Unexpected value provided for gals arg')
+    plotting_a_cut_prediction = show_mao_prediction
+    if plotting_a_cut_prediction and prediction_vcut_type is None:
+        raise ValueError('You must specify a prediction_vcut_type if you want'
+                         ' to show_sigmoid_hard.')
+    plotting_a_cut_std = (show_max_hard or show_max_exp or show_mao_naive)
+    if plotting_a_cut_std and std_vcut_type is None:
+        raise ValueError('You must specify a std_vcut_type if you want to'
+                         ' show_max_hard, show_max_exp, or show_mao_naive.')
+    if show_std_vcut and std_vcut_type is None:
+        raise ValueError('You must specify a std_vcut_type if you want to'
+                         ' show_std_vcut.')
+    if show_prediction_vcut and prediction_vcut_type is None:
+        raise ValueError('You must specify a prediction_vcut_type if you want'
+                         ' to show_prediction_vcut.')
+    if ymax is None and scale == 'log':
+        ymax = 9.e-3
+    df = dm_den.load_data(df_source)
+
+    if std_vcut_type is not None:
+        std_vcut_dict = dm_den.load_vcuts(std_vcut_type, df)
+        if std_vcut_type == 'veschatphi':
+            std_vcut_dict['mw'] = vesc_mw
+    if prediction_vcut_type is not None:
+        prediction_vcut_dict = dm_den.load_vcuts(prediction_vcut_type, df)
+
+    if gals == ['mw']:
+        df.loc['mw', 'v_dot_phihat_disc(T<=1e4)'] = vc_eilers
+        df.loc['mw', 'vc100'] = vc_eilers / 100.
+
+    with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
+        pdfs=pickle.load(f)
+    with open(paths.data + sigmoid_damped_fit_fname, 'rb') as f:
+        params = pickle.load(f)
+    with open('./data/vcrits_fr_distrib.pkl', 'rb') as f:
+        vcrits = pickle.load(f)
+    if gals == 'discs':
+        gal_names = list(pdfs.keys())
+        for gal in ['m12z', 'm12w']:
+            gal_names.remove(gal)
+    else:
+        gal_names = gals.copy()
+
+    if show_mao_naive:
+        print('Fitting mao naive.')
+        fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
+
+    fig, axs = setup_multigal_fig(gals, show_resids=False) 
+
+    # Setting some figure parameters that should differ based on how big the
+    # figure is / how many galaxies we're showing
+    if fig.Ncols > 3:
+        vesc_fs = 12.
+        vesc_y = 0.4
+        legend_ncols = 3 
+    elif fig.Ncols == 1:
+        legend_ncols = 1
+    else:
+        vesc_fs = 15.
+        vesc_y = 0.45
+        legend_ncols = 2
+
+    print('Plotting each galaxy.')
+    pbar = ProgressBar()
+    for i, gal in enumerate(pbar(gal_names)):
+        vc100 = df.loc[gal, 'vc100']
+        if std_vcut_type is not None:
+            std_vcut = std_vcut_dict[gal]
+        if prediction_vcut_type is not None:
+            prediction_vcut = prediction_vcut_dict[gal]
+
+        # Plot data
+        if gal != 'mw':
+            vs_truth = pdfs[gal]['vs']
+            gs = fitting.numeric_halo_integral(pdfs[gal]['bins'], 
+                                               pdfs[gal]['ps'])
+            axs[i].stairs(gs, pdfs[gal]['bins'], color='k',
+                          label='data', baseline=None)
+
+        # Plot the prediction
+        vs_hat = np.linspace(0., 820., 400)
+        v0 = params['d'] * vc100 ** params['e']
+        vdamp = params['h'] * vc100 ** params['j']
+        gs_hat = fitting.g_smooth_step_max(vs_hat, v0, vdamp, params['k'])
+        if sigmoid_damped_eqnum is not None:
+            sigmoid_damped_label = '$f(v)=\mathrm{{Eqn.}}\,{0:s}$' \
+                                   .format(str(sigmoid_damped_eqnum))
+        else:
+            sigmoid_damped_label = 'prediction from $v_\mathrm{c}$'
+        axs[i].plot(vs_hat, gs_hat, label=sigmoid_damped_label,
+                    color=staudt_color, zorder=51)
+        if show_rms:
+            rms_staudt, _ = fitting.calc_rms_err(vs_truth, gs, 
+                                                 fitting.g_smooth_step_max,
+                                                 (v0, vdamp, params['k']))
+
+        # Plot the prediction with an additional exponential cutoff 
+        # reaching
+        # 0 at vesc
+        if show_sigmoid_exp:
+            with open(paths.data + 'params_sigmoid_exp.pkl', 'rb') as f:
+                params_sigmoid_exp = pickle.load(f)
+            d_exp = params_sigmoid_exp['d']
+            e_exp = params_sigmoid_exp['e']
+            h_exp = params_sigmoid_exp['h']
+            j_exp = params_sigmoid_exp['j']
+            k_exp = params_sigmoid_exp['k']
+            v0_exp = d_exp * vc100 ** e_exp
+            vdamp_exp = h_exp * vc100 ** j_exp
+            vlim_fit = dm_den.load_vcuts('lim_fit', df)[gal]
+            axs[i].plot(vs_hat, 
+                        fitting.calc_g_general(vs_hat,
+                                               fitting.pN_max_double_exp,
+                                               (v0_exp, vdamp_exp, k_exp,
+                                                vlim_fit)),
+                        label='prediction from $v_\mathrm{c}$'
+                              ', exp cut @ ' + vcut_labels['lim_fit'], 
+                        color=staudt_color, ls=':', zorder=10)
+            
+        # Plot the prediction with a final hard cutoff at vesc
+        if show_sigmoid_hard:
+            axs[i].plot(vs_hat, 
+                        fitting.calc_g_general(vs_hat,
+                                               fitting.pN_max_double_hard,
+                                               (v0, vdamp, params['k'], 
+                                                prediction_vcut)),
+                        #label='prediction from $v_\mathrm{c}$'
+                        #      ', cut @ ' + vcut_labels[prediction_vcut_type], 
+                        color=staudt_color, ls='--', zorder=10)
+
+        # Plot simple maxwellian with v0 = vc
+        gs_max = fitting.g_smooth_step_max(vs_hat, vc100 * 100.,
+                                           np.inf, np.inf)
+        axs[i].plot(vs_hat,
+                    gs_max,
+                    label='Maxwellian$,\,v_0=v_\mathrm{c}$',
+                    color=max_naive_color, zorder=50)
+        
+        # Plot Maxwellian with v0 = vc and an exponential cutoff at vesc
+        if show_max_exp:
+            axs[i].plot(vs_hat,
+                        fitting.g_exp(vs_hat, vc100 * 100., std_vcut),
+                        color=max_naive_color, ls=':',
+                        label=('$v_0=v_\mathrm{c}$, exp cut @ ' 
+                               + vcut_labels[std_vcut_type]))
+
+        # Plot maxwellian with v0 = vc, hard truncation @ vesc
+        if show_max_hard:
+            axs[i].plot(vs_hat,
+                        fitting.g_smooth_step_max(vs_hat, vc100 * 100.,
+                                                  std_vcut, np.inf),
+                        #label=('$v_0=v\mathrm{c}$, cut @ ' 
+                        #       + vcut_labels[std_vcut_type]),
+                        color=max_naive_color, ls='--' )
+
+        if show_mao_prediction or show_mao_naive:
+            with open(paths.data + mao_ours_fit_fname,
+                      'rb') as f:
+                results_mao = pickle.load(f)
+        if show_mao_prediction:
+            # Plot the halo integral resulting from a universal Mao fit
+            v0_mao = results_mao['d'] * vc100 ** results_mao['e']
+            axs[i].plot(vs_hat,
+                        fitting.calc_g_general(vs_hat,
+                                               fitting.pN_mao,
+                                               (v0_mao, prediction_vcut, 
+                                                results_mao['p'])),
+                        label='Mao w/our method',
+                        color=mao_prediction_color)
+        if show_mao_naive:
+            # Plot the halo integral from using v0=vc with Mao
+            axs[i].plot(vs_hat,
+                        fitting.calc_g_general(
+                            vs_hat,
+                            fitting.pN_mao,
+                            (vc100 * 100., std_vcut,
+                            fit_mao_naive.params['p'].value)),
+                        label='Mao, $v_0=v_\mathrm{c}$',
+                        color=mao_naive_color)
+            if show_rms:
+                rms_mao_naive, _ = fitting.calc_rms_err(
+                        vs_truth, gs,
+                        fitting.calc_g_general,
+                        (fitting.pN_mao,
+                         (vc100 * 100., 
+                          std_vcut,
+                          results_mao['p'])))
+
+        loc = [0.97,0.95]
+        if fig.Nrows == 3:
+            namefs = 13.
+        else:
+            namefs = 16. 
+        kwargs_txt = dict(fontsize=namefs, xycoords='axes fraction',
+                          va='top', ha='right',
+                          bbox=dict(facecolor='white', alpha=0.8, 
+                                    edgecolor='none'))
+        if gal == 'mw':
+            galtxt = 'Milky Way'
+        else:
+            galtxt = gal
+        axs[i].annotate(galtxt, loc,
+                        **kwargs_txt)
+        if show_rms:
+            step = 0.15
+            loc[1] -= step 
+            kwargs_txt['fontsize'] = 9.
+            axs[i].annotate('RMS$_\mathrm{{Staudt}}={0:0.2e}$'.format(
+                                rms_staudt),
+                            loc, **kwargs_txt)
+            if show_mao_naive:
+                loc[1] -= step
+                axs[i].annotate('RMS$_\mathrm{{Mao}}={0:0.2e}$'.format(
+                                    rms_mao_naive),
+                                loc, **kwargs_txt)
+        if show_std_vcut:
+            # Draw vesc line
+            axs[i].axvline(std_vcut, ls='--', c='grey', alpha=0.5)
+            trans = mpl.transforms.blended_transform_factory(axs[i].transData,
+                                                             axs[i].transAxes)
+            #axs[i].text(std_vcut + 20., vesc_y, 
+            #            '$\hat{v}_\mathrm{esc}(v_\mathrm{c})$', 
+            #            transform=trans,
+            #            fontsize=vesc_fs, rotation=90., color='gray', 
+            #            horizontalalignment='left')
+        if show_prediction_vcut and std_vcut_type != prediction_vcut_type:
+            axs[i].axvline(prediction_vcut, ls='--', c='k', alpha=0.5)
+
+        if show_vcrit:
+            # Draw vcrit line
+            axs[i].axvline(vcrits[gal], ls='--', c='grey', alpha=0.5)
+
+        axs[i].set_yscale(scale)
+        if scale == 'linear':
+            order_of_mag = -3
+            if gals == 'discs' and i < 8 and i > 3:
+                fac = 3.
+            else:
+                fac = 2.
+            axs[i].yaxis.set_major_locator(
+                    mpl.ticker.MultipleLocator(
+                            base=fac * 10. ** order_of_mag))
+            make_sci_y(axs, i, order_of_mag)
+        if xtickspace is not None:
+            axs[i].xaxis.set_major_locator(
+                    mpl.ticker.MultipleLocator(base=xtickspace))
+            axs[i].xaxis.set_minor_locator(plt.NullLocator())
+        if scale == 'log':
+            axs[i].yaxis.set_major_locator(mpl.ticker.LogLocator(
+                numticks=999))
+            axs[i].yaxis.set_minor_locator(mpl.ticker.LogLocator(
+                numticks=999, subs="auto"))
+
+    if xmax is not None or ymin is not None or ymax is not None:
+        plt.draw()
+        # Need to draw everything before going back and doing this because
+        # otherwise we'll lock in the upper y limit (x limit) for each row with
+        # the
+        # automatically determined upper limit for the galaxy in the first
+        # column (row) of that row (column).
+        for ax in axs:
+            if xmax is not None:
+                ax.set_xlim(right=xmax)
+            if ymin is not None:
+                ax.set_ylim(bottom=ymin)
+            if ymax is not None:
+                ax.set_ylim(top=ymax)
+    if gals == 'discs':
+        ax_ylabel = axs[4]
+        xlabel_y = 0.05
+        legend_y = -0.02
+    else:
+        ax_ylabel = axs[0]
+        xlabel_y = 0.
+        legend_y = -0.1
+    ax_ylabel.set_ylabel('$g(v_\mathrm{min})'
+                         '\,/\,\mathrm{\left[km^{-1}\,s\\right]}$')
+    axs[-1].set_xlabel(
+        '$v_\mathrm{min}\,/\,\mathrm{\left[km\,s^{-1}\\right]}$')
+    # Put the x-axis label where we want it:
+    axs[-1].xaxis.set_label_coords(0.5, xlabel_y, transform=fig.transFigure) 
+    handles, labels = axs[-1].get_legend_handles_labels()
+    if show_std_vcut:
+        handles.append(mpl.lines.Line2D(
+            [0], [0], color='grey', 
+            ls='--', alpha=0.5,
+            label=vcut_labels[std_vcut_type]))
+    if show_prediction_vcut and prediction_vcut_type != std_vcut_type:
+        handles.append(mpl.lines.Line2D(
+            [0], [0], color='k', 
+            ls='--', alpha=0.5,
+            label=vcut_labels[prediction_vcut_type]))
+    axs[-1].legend(handles=handles, loc='upper center', 
+                   bbox_to_anchor=(.5, legend_y),
+                   bbox_transform=fig.transFigure, ncols=legend_ncols)
+
+    if tgt_fname is not None:
+        plt.savefig(paths.figures + tgt_fname,
+                    bbox_inches='tight',
+                    dpi=350)
+    plt.show()
+
+    return None 
 def plt_halo_integrals_dblscale(gals, df_source,
                                 std_vcut_type=None,
                                 prediction_vcut_type=None,
@@ -3607,13 +4466,16 @@ def plt_halo_integral_mw(df_source,
 
     return None
 
-def plt_halo_integral_mw_with_ratio(df_source, 
-                         tgt_fname=None, sigmoid_damped_eqnum=None,
-                         xtickspace=None,
-                         dpi=150):
+def plt_halo_integral_mw_with_ratio(
+        df_source, 
+        fit_results_fname,
+        tgt_fname=None, 
+        sigmoid_damped_eqnum=None,
+        xtickspace=None,
+        dpi=150):
     import fitting
     import dm_den
-    with open(paths.data + 'data_raw.pkl', 'rb') as f:
+    with open(paths.data + fit_results_fname, 'rb') as f:
         params = pickle.load(f)
     df = dm_den.load_data(df_source)
 

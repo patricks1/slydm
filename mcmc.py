@@ -87,10 +87,10 @@ def calc_log_gaussian_prior(theta, multiplier, ls_results_source):
         cov = cov * multiplier 
     return scipy.stats.multivariate_normal.logpdf(theta, mean=mu, cov=cov)
 
-def calc_log_fat_gaussian_prior(theta, ls_results_source='data_raw.pkl'):
+def calc_log_fat_gaussian_prior(theta, ls_results_source):
     return calc_log_gaussian_prior(theta, 50.**2., ls_results_source)
 
-def calc_log_wide_gaussian_prior(theta, ls_results_source='data_raw.pkl'):
+def calc_log_wide_gaussian_prior(theta, ls_results_source):
     return calc_log_gaussian_prior(theta, 5.**2., ls_results_source)
 
 def calc_log_wide_uniform_prior(theta):
@@ -181,9 +181,8 @@ def calc_log_post(
 
     return log_posterior_value
 
-def run(log_prior_function, df_source, tgt_fname, 
+def run(log_prior_function, df_source, tgt_fname, ls_results_source,
         pdfs_source='v_pdfs_disc_dz1.0_20240606.pkl',
-        ls_results_source='data_raw.pkl',
         log_prior_args=()):
     import emcee
     import pickle

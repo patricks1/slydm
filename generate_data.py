@@ -1,5 +1,6 @@
 import datetime
 import mcmc
+import mcmc_mao_ours
 import read_mcmc
 import paths
 import fitting
@@ -14,10 +15,14 @@ pdfs_fname = date_str + '_v_pdfs_disc_dz1.0.pkl'
 pdfs4systematics_fname = date_str + '_v_by_v0_pdfs_disc_dz1.0.pkl'
 ls_results_fname = date_str + '_ls_results_raw.pkl' # least-squares results
 mao_naive_aggp_results_fname = date_str + '_mao_naive_aggp_data_raw.pkl'
+
 mcmc_samples_fname = date_str + '_mcmc_samples.h5'
 mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples.h5'
 mcmc_distrib_samples_by_v0_fname = date_str + '_mcmc_distrib_samples_by_v0.h5'
 mcmc_results_fname = date_str + '_mcmc_results.pkl'
+
+mcmc_mao_ours_samples_fname = date_str + '_mcmc_mao_ours_samples.h5'
+mcmc_mao_ours_results_fname = date_str + '_mcmc_mao_ours_results.pkl'
 
 ###############################################################################
 # Generate galaxy properties dataframe
@@ -80,12 +85,16 @@ mcmc.run(
     mcmc.calc_log_gaussian_prior,
     df_fname, 
     mcmc_samples_fname,
-    pdfs_fname,
     ls_results_source=ls_results_fname,
+    pdfs_source=pdfs_fname,
     log_prior_args=(ls_results_fname,) 
 )
 # Generate best parameter estimates from the MCMC
-read_mcmc.estimate(mcmc_samples_fname, mcmc_results_fname, update_paper=True)
+read_mcmc.estimate(
+    mcmc_samples_fname,
+    mcmc_results_fname, 
+    update_paper=True
+)
 # Sample the `THETA` posteior to make speed distribution samples.
 read_mcmc.make_distrib_samples(
         df_fname,
@@ -110,6 +119,22 @@ dm_den.make_v_over_v0_pdfs(
         r=8.3,
         dr=1.5,
         dz=1.)
+
+###############################################################################
+# Run MCMC on Mao with our method
+###############################################################################
+mcmc_mao_ours.run(
+    df_fname,
+    mcmc_mao_ours_samples_fname,
+    pdfs_source,
+    vesc_fit_source=simple_fits_fname
+)
+
+mcmc_mao_ours.estimate(
+    mcmc_mao_ours_samples_fname, 
+    result_fname=mcmc_mao_ours_results_fname,
+    update_paper=True
+)
 
 ###############################################################################
 # Calculate RMS's and save them to the paper
