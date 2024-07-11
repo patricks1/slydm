@@ -211,5 +211,5 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
             # type(DY_TXT) == np.ndarray, which is why we're denoting it in
             # all caps.
             y_txt, DY_TXT = staudt_utils.sig_figs(y, DY)
-            uci.save_prediction(key + '_mao_lim_fit', y_txt,  DY_TXT)
+            uci.save_prediction(key + '_mao_naive_agg', y_txt,  DY_TXT)
     return results_dict
