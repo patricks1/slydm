@@ -20,7 +20,7 @@ def calc_log_likelihood(theta, X, ys, dys):
         Target vector 4*pi*v^2 * f(v) probability density of a DM particle 
         having 
         a given
-        speed v, where f(v) is our sigmoid-damped speed distribution.
+        speed v, where f(v) is the Mao speed distribution.
     dys: np.ndarray, shape = (N,)
         Errors in y
     '''
@@ -114,8 +114,6 @@ def run(df_source,
     X = X[isfinite]
     ys = ys[isfinite]
     dys = dys[isfinite]
-
-    #return calc_log_likelihood(np.array([101., 1., 0.5]), X, ys, dys)
 
     nwalkers = 64 
     ndim = len(theta_ranges) # number of parameters

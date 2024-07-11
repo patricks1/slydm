@@ -48,7 +48,8 @@ def corner_plot(
         log_prior_function=None,
         log_prior_function_args=(),
         make_thin=True,
-        rng=None):
+        rng=None,
+        **kwargs):
     import corner
     import scipy
     import copy
@@ -67,7 +68,7 @@ def corner_plot(
     flat_samples = samples.reshape(-1, samples.shape[-1])
     ndim = flat_samples.shape[1]
     fig = corner.corner(flat_samples, labels=param_keys,
-                        range=rng)
+                        range=rng, **kwargs)
     axs = np.array(fig.axes).reshape((ndim, ndim))
 
     if log_prior_function is not None:
@@ -84,7 +85,7 @@ def corner_plot(
                                             args=log_prior_function_args,
                                             pool=pool)
             print('\nSampling prior')
-            sampler.run_mcmc(pos, int(1e4), progress=True)
+            sampler.run_mcmc(pos, int(7e3), progress=True)
             tau = sampler.get_autocorr_time(quiet=True)
             burnin = int(2 * np.max(tau))
             samples = sampler.get_chain(flat=True, discard=burnin)
@@ -110,23 +111,43 @@ def trace_plot(samples_fname, param_keys):
     flat_samples = samples.reshape(-1, samples.shape[-1])
     ndim = flat_samples.shape[1]
     
+    N_samples = len(flat_samples)
+    maxN = int(5e3) 
+    late_start = 50000
+    if N_samples <= late_start:
+        late_start = int(0.35 * N_samples)
+    indices = np.linspace(1, N_samples, min(N_samples, maxN), dtype=int)
+
     trace = [flat_samples[:x].mean(axis=0) 
-             for x in range(1, len(flat_samples))]
+             for x in indices]
     trace = np.array(trace)
 
+
     ndim = samples.shape[-1]
-    fig, axs = plt.subplots(ndim, 2, figsize=(8, 12), sharey=False,
-                            sharex='col')
+    fig, axs = plt.subplots(
+        ndim,
+        2,
+        figsize=(8, 12. / 5. * ndim),
+        sharey=False,
+        sharex='col'
+    )
+    if ndim == 1:
+        axs = np.array([axs])
     fig.subplots_adjust(wspace=.3, hspace=0.)
     for i in range(ndim):
-        axs[i, 0].plot(trace[:, i])
+        axs[i, 0].plot(indices, trace[:, i])
         axs[i, 0].set_ylabel(param_keys[i])
 
-        xs = range(int(5e3), len(trace))
-        axs[i, 1].plot(xs, trace[int(5e3):, i])
+        axs[i, 1].plot(
+            indices[indices > late_start], 
+            trace[indices > late_start, i]
+        )
 
     axs[0, 0].set_title('All samples')
-    axs[0, 1].set_title('Starting @ 5000')
+    if N_samples <= late_start:
+        axs[0, 1].set_title('Too few samples to make a late plot.')
+    else:
+        axs[0, 1].set_title('Starting @ {0:0.0f}'.format(late_start))
 
     plt.show()
 

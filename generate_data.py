@@ -25,6 +25,8 @@ mcmc_results_fname = date_str + '_mcmc_results.pkl'
 
 mcmc_mao_ours_samples_fname = date_str + '_mcmc_mao_ours_samples.h5'
 mcmc_mao_ours_results_fname = date_str + '_mcmc_mao_ours_results.pkl'
+mcmc_mao_naive_samples_fname = date_str + '_mcmc_mao_naive_samples.h5'
+mcmc_mao_naive_results_fname = date_str + '_mcmc_mao_naive_results.pkl'
 
 ###############################################################################
 # Generate galaxy properties dataframe
@@ -102,7 +104,7 @@ read_mcmc.make_distrib_samples(
         df_fname,
         mcmc_distrib_samples_fname
 )
-# Also generate speed distribution *samples* for a universal array of v/v0 
+# Also generate speed distribution samples for a universal array of v/v0 
 # values
 read_mcmc.make_distrib_samples_by_v0(
         df_fname,
@@ -123,7 +125,7 @@ dm_den.make_v_over_v0_pdfs(
         dz=1.)
 
 ###############################################################################
-# Run MCMC on Mao with our method
+# Run MCMC on Mao
 ###############################################################################
 mcmc_mao_ours.run(
     df_fname,
@@ -135,6 +137,18 @@ mcmc_mao_ours.run(
 mcmc_mao_ours.estimate(
     mcmc_mao_ours_samples_fname, 
     result_fname=mcmc_mao_ours_results_fname,
+    update_paper=True
+)
+
+mcmc_mao_naive.run(
+    df_fname,
+    mcmc_mao_naive_samples_fname,
+    pdfs_source,
+    vesc_fit_source=simple_fits_fname
+)
+mcmc_mao_naive.estimate(
+    mcmc_mao_naive_samples_fname,
+    result_fname=mcmc_mao_naive_results_fname,
     update_paper=True
 )
 

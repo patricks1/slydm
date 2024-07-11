@@ -2605,6 +2605,8 @@ def plt_universal_prefit(
 
 def plt_universal_prefit_with_mcmc(
         result,
+        mao_ours_result_fname,
+        mao_naive_result_fname,
         df_source,
         distrib_samples_fname,
         gals='discs', 
@@ -2628,6 +2630,15 @@ def plt_universal_prefit_with_mcmc(
     '''
     Noteworthy parameters
     ---------------------
+    result: str
+        Name of the file where the mcmc results for our sigmoid damped model 
+        are.
+    mao_ours_result_fname: str
+        Name of the file where the mcmc results for our implementation of the
+        Mao model are.
+    mao_naive_result_fname: str
+        Name of the file where the mcmc results for the standard v0=vc Mao
+        model are.
     distrib_samples_fname: str
         The filename of the distribution samples to use in determining the
         error bands in the plot. If the user opts to set `show_bands=False` or
@@ -2699,22 +2710,10 @@ def plt_universal_prefit_with_mcmc(
     if plotting_prediction and prediction_vcut_type is None:
         raise ValueError('You must specify a prediction_vcut_type if you want'
                          ' to show_sigmoid_hard.')
-    if (show_mao_naive or show_max_hard) and std_vcut_type is None:
+    if show_max_hard and std_vcut_type is None:
         raise ValueError('You must specify a std_vcut_type if you want'
-                         ' to show_mao_naive.')
+                         ' to show_max_hard.')
 
-    # I realized that this "prefit" method loads samples that were already
-    # generated with ddfrac and dhfrac assumptions, so this block of code
-    # doesn't do anything. I'm also now removing these kwargs from the function
-    # definition.
-    #if show_bands and (ddfrac is None or dhfrac is None):
-    #    grid_results = grid_eval.identify()
-    #    if ddfrac is None:
-    #        ddfrac = grid_results[0]
-    #        print('Using ddfrac = {0:0.5f}'.format(ddfrac))
-    #    if dhfrac is None:
-    #        dhfrac = grid_results[1]
-    #        print('Using dhfrac = {0:0.5f}'.format(dhfrac))
     df = dm_den.load_data(df_source)
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs=pickle.load(f)
@@ -2724,12 +2723,12 @@ def plt_universal_prefit_with_mcmc(
         if std_vcut_type is not None:
             std_vcut_dict = dm_den.load_vcuts(std_vcut_type, df)
     if show_mao_prediction:
-        with open(paths.data + 'mcmc_mao_ours_results.pkl',
+        with open(paths.data + mao_ours_result_fname,
                   'rb') as f:
             fit_mao = pickle.load(f)
     if show_mao_naive:
-        with open(paths.data + 'data_raw.pkl', 'rb') as f:
-            p_mao_naive_agg = pickle.load(f)['p_mao_naive_agg']
+        with open(paths.data + mao_naive_result_fname, 'rb') as f:
+            p_mao_naive_agg = pickle.load(f)['p']
     if islist:
         galnames = copy.deepcopy(gals)
     elif gals == 'discs':
@@ -3830,6 +3829,7 @@ def plt_halo_integrals_with_mcmc(
         df_source,
         sigmoid_damped_fit_fname,
         mao_ours_fit_fname,
+        mao_naive_fit_fname,
         show_sigmoid_hard=False, show_sigmoid_exp=False,
         show_max_hard=False, show_max_exp=False,
         show_mao_prediction=False,
@@ -3846,6 +3846,15 @@ def plt_halo_integrals_with_mcmc(
     '''
     Noteworthy parameters
     ---------------------
+    sigmoid_damped_fit_fname: str
+        Name of the file where the mcmc results for our sigmoid damped model 
+        are.
+    mao_ours_fit_fname: str
+        Name of the file where the mcmc results for our implementation of the
+        Mao model are.
+    mao_naive_fit_fname: str
+        Name of the file where the mcmc results for the standard v0=vc Mao
+        model are.
     show_std_vcut: bool
         Whether to show a vertical line at the location of the vcut we use for
         standard-assumption/naive distributions
@@ -3939,8 +3948,8 @@ def plt_halo_integrals_with_mcmc(
         gal_names = gals.copy()
 
     if show_mao_naive:
-        print('Fitting mao naive.')
-        fit_mao_naive = fitting.fit_mao_naive_aggp(std_vcut_type, df_source)
+        with open(paths.data + mao_naive_fit_fname, 'rb') as f:
+            fit_mao_naive = pickle.load(f)
 
     fig, axs = setup_multigal_fig(gals, show_resids=False) 
 
@@ -4071,7 +4080,7 @@ def plt_halo_integrals_with_mcmc(
                             vs_hat,
                             fitting.pN_mao,
                             (vc100 * 100., std_vcut,
-                            fit_mao_naive.params['p'].value)),
+                            fit_mao_naive['p'])),
                         label='Mao, $v_0=v_\mathrm{c}$',
                         color=mao_naive_color)
             if show_rms:
@@ -4198,6 +4207,7 @@ def plt_halo_integrals_with_mcmc(
     plt.show()
 
     return None 
+
 def plt_halo_integrals_dblscale(gals, df_source,
                                 std_vcut_type=None,
                                 prediction_vcut_type=None,

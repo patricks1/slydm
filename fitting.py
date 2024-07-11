@@ -2639,14 +2639,14 @@ def calc_rms_all_methods(
         df_source,
         pdfs_fname='v_pdfs_disc_dz1.0_20240606.pkl',
         staudt_results_fname='results_mcmc.pkl',
-        mao_naive_aggp_results_fname='data_raw.pkl',
+        mao_naive_aggp_results_fname='results_mcmc_mao_naive.pkl',
         mao_ours_results_fname='mcmc_mao_ours_results.pkl',
         update_paper=False):
     import dm_den
     with open(paths.data + pdfs_fname, 'rb') as f:
         pdfs = pickle.load(f)
     with open(paths.data + mao_naive_aggp_results_fname, 'rb') as f:
-        p_naive = pickle.load(f)['p_mao_naive_agg']
+        p_naive = pickle.load(f)['p']
     with open(paths.data + staudt_results_fname, 'rb') as f:
         staudt_results = pickle.load(f)
     with open(paths.data + mao_ours_results_fname, 'rb') as f:
