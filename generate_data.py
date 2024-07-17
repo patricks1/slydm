@@ -41,7 +41,7 @@ _ = dm_den.gen_data(
 )
 
 ###############################################################################
-# Generate the vesc fit, which gets used by Mao functions
+# Generate the vesc fit, which Mao functions use.
 ###############################################################################
 plt_vlim_vs_vc(
     df_fname, 
