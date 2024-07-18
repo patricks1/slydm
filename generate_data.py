@@ -59,7 +59,7 @@ _ = dm_den.make_v_pdfs(r=8.3, dr=1.5, dz=1., fname=pdfs_fname)
 ###############################################################################
 # Run the MCMC.
 mcmc.run(
-    mcmc.calc_narrower_uniform_prior,
+    mcmc.calc_log_narrower_uniform_prior,
     df_fname, 
     mcmc_samples_fname,
     pdfs_source=pdfs_fname,
