@@ -159,6 +159,6 @@ _ = fitting.calc_rms_all_methods(
     df_fname,
     pdfs_fname,
     staudt_results_fname=mcmc_results_fname, 
-    mao_naive_aggp_results_fname=mao_naive_aggp_results_fname,
+    mao_naive_aggp_results_fname=mcmc_mao_naive_results_fname,
     update_paper=True
 )
