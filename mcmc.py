@@ -183,7 +183,8 @@ def calc_log_post(
 
 def run(log_prior_function, df_source, tgt_fname, ls_results_source,
         pdfs_source='v_pdfs_disc_dz1.0_20240606.pkl',
-        log_prior_args=()):
+        log_prior_args=(),
+        nsteps=int(3e4)):
     import emcee
     import pickle
     import paths
@@ -269,6 +270,6 @@ def run(log_prior_function, df_source, tgt_fname, ls_results_source,
             #                nwalkers
             #        )
 
-        sampler.run_mcmc(pos, int(7e4), progress=True)
+        sampler.run_mcmc(pos, nsteps, progress=True)
 
     return None

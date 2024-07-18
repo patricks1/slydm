@@ -55,7 +55,8 @@ def calc_log_likelihood(theta, X, ys, dys):
 def run(df_source,
         tgt_fname,
         pdfs_source='v_pdfs_disc_dz1.0_20240606.pkl',
-        vesc_fit_source='data_raw.pkl'):
+        vesc_fit_source='data_raw.pkl',
+        nsteps=int(3e4)):
     import dm_den
     import mcmc
     import os
@@ -149,7 +150,7 @@ def run(df_source,
                             nwalkers
                     )
 
-        sampler.run_mcmc(pos, int(7e4), progress=True)
+        sampler.run_mcmc(pos, nsteps, progress=True)
 
 def estimate(samples_fname, result_fname=None, update_paper=False):
     '''
