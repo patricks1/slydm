@@ -382,8 +382,8 @@ def make_distrib_samples_by_v0(
 
     today = datetime.datetime.today().strftime('%Y%m%d')
     tgt_fname = (
-        'mcmc_distrib_samples_by_v0_' 
-        + today 
+        today 
+        + 'mcmc_distrib_samples_by_v0' 
         + '(' 
         + mcmc_samples_source.replace('.h5', '').replace('mcmc_samples_', '')
         + ').h5'

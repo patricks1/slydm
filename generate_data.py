@@ -1,6 +1,7 @@
 import datetime
 import mcmc
 import mcmc_mao_ours
+import mcmc_mao_naive
 import read_mcmc
 import paths
 import fitting
