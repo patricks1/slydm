@@ -101,7 +101,7 @@ dm_den.make_v_over_v0_pdfs(
 mcmc_mao_ours.run(
     df_fname,
     mcmc_mao_ours_samples_fname,
-    pdfs_source,
+    pdfs_fname,
     vesc_fit_source=simple_fits_fname
 )
 
@@ -114,7 +114,7 @@ mcmc_mao_ours.estimate(
 mcmc_mao_naive.run(
     df_fname,
     mcmc_mao_naive_samples_fname,
-    pdfs_source,
+    pdfs_fname,
     vesc_fit_source=simple_fits_fname
 )
 mcmc_mao_naive.estimate(
