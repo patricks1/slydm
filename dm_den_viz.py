@@ -3247,9 +3247,7 @@ def plt_mw(
         vcut_type,
         fit_results_fname,
         dvc,
-        distrib_samples_fname=('mcmc_distrib_samples'
-                               '_by_v0_20240702'
-                               '(narrower_uniform_prior_20240606).h5'),
+        distrib_samples_fname,
         v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl',
         tgt_fname=None,
         dpi=140, 
@@ -3282,10 +3280,7 @@ def plt_mw(
         predicting the Milky Way.
     dvc: float
         Uncertainty in the MW's circular speed.
-    distrib_samples_fname: str, 
-                           default ('mcmc_distrib_samples'
-                                    '_by_v0_narrower_uniform_prior'
-                                    '_20240606.h5')
+    distrib_samples_fname: str
         The filename of the distribution samples to use in determining the
         error bands in the plot. 
     v_by_v0_pdf_fname: str, default 'v_by_v0_pdfs_disc_dz1.0.pkl'
