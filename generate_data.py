@@ -6,7 +6,7 @@ import paths
 import fitting
 import dm_den
 
-date_str = datetime.today().strftime('%Y%m%d')
+date_str = datetime.datetime.today().strftime('%Y%m%d')
 vescphi_dict_fname = date_str + '_vescs(phi)_rot.pkl'
 df_fname = date_str + '_dm_stats_dz1.0.h5'
 
