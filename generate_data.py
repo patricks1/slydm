@@ -16,7 +16,6 @@ simple_fits_fname = date_str + 'simple_fits_results.pkl'
 pdfs_fname = date_str + '_v_pdfs_disc_dz1.0.pkl'
 pdfs4systematics_fname = date_str + '_v_by_v0_pdfs_disc_dz1.0.pkl'
 ls_results_fname = date_str + '_ls_results_raw.pkl' # least-squares results
-mao_naive_aggp_results_fname = date_str + '_mao_naive_aggp_data_raw.pkl'
 
 mcmc_samples_fname = date_str + '_mcmc_samples.h5'
 mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples.h5'
@@ -67,19 +66,6 @@ _ = fitting.plt_universal(
     pdfs_fname=pdfs_fname,
     raw_results_fname=ls_results_fname,
 )
-#_ = fitting.save_samples(df_fname, N=5000)
-
-# Mao
-#_ = fitting.fit_mao_naive_aggp(
-#    vcut_type='lim_fit', 
-#    df_source=df_fname, 
-#    raw_results_fname=mao_naive_aggp_results_fname
-#)
-#_ = fitting.fit_mao(
-#    vcut_type='lim_fit',
-#    df_source=df_fname,
-#    update_values=True
-#)
 
 ###############################################################################
 # MCMC
@@ -160,5 +146,6 @@ _ = fitting.calc_rms_all_methods(
     pdfs_fname,
     staudt_results_fname=mcmc_results_fname, 
     mao_naive_aggp_results_fname=mcmc_mao_naive_results_fname,
+    mao_ours_results_fname=mcmc_mao_ours_results_fname,
     update_paper=True
 )
