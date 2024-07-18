@@ -2317,16 +2317,25 @@ def plt_universal_prefit(
                         zorder=0
                 )
             else:
+                if 'vs' in distrib_samples:
+                    vs = distrib_samples['vs']
+                    ps = distrib_samples[gal]
+                else:
+                    # It must be a distribution file where vs are not the same
+                    # for all gals, in which case, I put the vs in the galaxy
+                    # key.
+                    vs = distrib_samples[gal]['vs']
+                    ps = distrib_samples[gal]['ps']
                 samples_color = plt.cm.viridis(0.5)
                 lowers, uppers = fitting.gal_bands_from_samples(
-                    distrib_samples['vs'],
-                    distrib_samples[gal],
+                    vs,
+                    ps,
                     samples_color,
                     axs[i]
                 )
                 band = np.array([lowers, uppers])
                 axs[i].fill_between(
-                        distrib_samples['vs'],
+                        vs,
                         lowers, 
                         uppers, 
                         color=plt.cm.viridis(1.), 
