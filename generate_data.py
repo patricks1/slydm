@@ -70,16 +70,16 @@ _ = fitting.plt_universal(
 #_ = fitting.save_samples(df_fname, N=5000)
 
 # Mao
-_ = fitting.fit_mao_naive_aggp(
-    vcut_type='lim_fit', 
-    df_source=df_fname, 
-    raw_results_fname=mao_naive_aggp_results_fname
-)
-_ = fitting.fit_mao(
-    vcut_type='lim_fit',
-    df_source=df_fname,
-    update_values=True
-)
+#_ = fitting.fit_mao_naive_aggp(
+#    vcut_type='lim_fit', 
+#    df_source=df_fname, 
+#    raw_results_fname=mao_naive_aggp_results_fname
+#)
+#_ = fitting.fit_mao(
+#    vcut_type='lim_fit',
+#    df_source=df_fname,
+#    update_values=True
+#)
 
 ###############################################################################
 # MCMC
