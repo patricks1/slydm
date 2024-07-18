@@ -15,7 +15,6 @@ simple_fits_fname = date_str + 'simple_fits_results.pkl'
 
 pdfs_fname = date_str + '_v_pdfs_disc_dz1.0.pkl'
 pdfs4systematics_fname = date_str + '_v_by_v0_pdfs_disc_dz1.0.pkl'
-ls_results_fname = date_str + '_ls_results_raw.pkl' # least-squares results
 
 mcmc_samples_fname = date_str + '_mcmc_samples.h5'
 mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples.h5'
@@ -56,28 +55,14 @@ plt_vlim_vs_vc(
 _ = dm_den.make_v_pdfs(r=8.3, dr=1.5, dz=1., fname=pdfs_fname)
 
 ###############################################################################
-# Generate least squares fit results
-###############################################################################
-# Staudt
-_ = fitting.plt_universal(
-    gals='discs', 
-    err_method=None,
-    update_values=False,
-    pdfs_fname=pdfs_fname,
-    raw_results_fname=ls_results_fname,
-)
-
-###############################################################################
 # MCMC
 ###############################################################################
 # Run the MCMC.
 mcmc.run(
-    mcmc.calc_log_gaussian_prior,
+    mcmc.calc_narrower_uniform_prior,
     df_fname, 
     mcmc_samples_fname,
-    ls_results_source=ls_results_fname,
     pdfs_source=pdfs_fname,
-    log_prior_args=(ls_results_fname,) 
 )
 # Generate best parameter estimates from the MCMC
 read_mcmc.estimate(

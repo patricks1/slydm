@@ -181,7 +181,7 @@ def calc_log_post(
 
     return log_posterior_value
 
-def run(log_prior_function, df_source, tgt_fname, ls_results_source,
+def run(log_prior_function, df_source, tgt_fname,
         pdfs_source='v_pdfs_disc_dz1.0_20240606.pkl',
         log_prior_args=(),
         nsteps=int(3e4)):
@@ -199,12 +199,12 @@ def run(log_prior_function, df_source, tgt_fname, ls_results_source,
     
     backend = emcee.backends.HDFBackend(paths.data + tgt_fname) 
 
-    with open(paths.data + ls_results_source, 'rb') as f:
-        ls_result = pickle.load(f)
+    #with open(paths.data + ls_results_source, 'rb') as f:
+    #    ls_result = pickle.load(f)
 
-        # Best estimate of the parameters from least squares minimization
-        mu = np.array([ls_result[param] 
-                       for param in ['d', 'e', 'h', 'j', 'k']])
+    #    # Best estimate of the parameters from least squares minimization
+    #    mu = np.array([ls_result[param] 
+    #                   for param in ['d', 'e', 'h', 'j', 'k']])
 
     nondisks = ['m12z', 'm12w']
     with open(paths.data + pdfs_source, 'rb') as f:
@@ -238,7 +238,7 @@ def run(log_prior_function, df_source, tgt_fname, ls_results_source,
     dys = dys[isfinite]
 
     nwalkers = 64 
-    ndim = len(mu) # number of parameters
+    ndim = len(theta_ranges) # number of parameters
 
     with multiprocessing.Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
@@ -259,16 +259,16 @@ def run(log_prior_function, df_source, tgt_fname, ls_results_source,
         else:
             # Set the initial positions to a tiny Gaussian ball around the 
             # best estimate from least-squares minimization.
-            pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
+            #pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
 
             # Generate initial positions within the valid ranges
-            #pos = np.zeros((nwalkers, ndim))
-            #for i, key in enumerate(theta_ranges):
-            #        pos[:, i] = np.random.uniform(
-            #                theta_ranges[key][0], 
-            #                theta_ranges[key][1], 
-            #                nwalkers
-            #        )
+            pos = np.zeros((nwalkers, ndim))
+            for i, key in enumerate(theta_ranges):
+                    pos[:, i] = np.random.uniform(
+                            theta_ranges[key][0], 
+                            theta_ranges[key][1], 
+                            nwalkers
+                    )
 
         sampler.run_mcmc(pos, nsteps, progress=True)
 
