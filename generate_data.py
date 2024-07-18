@@ -18,7 +18,7 @@ pdfs_fname = date_str + '_v_pdfs_disc_dz1.0.pkl'
 pdfs4systematics_fname = date_str + '_v_by_v0_pdfs_disc_dz1.0.pkl'
 
 mcmc_samples_fname = date_str + '_mcmc_samples.h5'
-mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples.h5'
+#mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples.h5'
 mcmc_distrib_samples_by_v0_fname = date_str + '_mcmc_distrib_samples_by_v0.h5'
 mcmc_results_fname = date_str + '_mcmc_results.pkl'
 
@@ -74,10 +74,11 @@ if __name__ == '__main__':
         update_paper=True
     )
     # Sample the `THETA` posteior to make speed distribution samples.
-    read_mcmc.make_distrib_samples(
-            df_fname,
-            mcmc_distrib_samples_fname
-    )
+    #read_mcmc.make_distrib_samples(
+    #        df_fname,
+    #        mcmc_distrib_samples_fname
+    #)
+
     # Also generate speed distribution samples for a universal array of v/v0 
     # values
     read_mcmc.make_distrib_samples_by_v0(
