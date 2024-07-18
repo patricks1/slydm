@@ -60,7 +60,7 @@ def calc_log_likelihood(theta, X, ys, dys):
         # k values. These aren't allowed anyway, so just return -np.inf.
         return -np.inf
 
-    log_likelihood = -chi2
+    log_likelihood = -chi2 / 2.
     return log_likelihood
 
 def calc_log_gaussian_prior(theta, multiplier, ls_results_source):

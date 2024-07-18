@@ -49,7 +49,7 @@ def calc_log_likelihood(theta, X, ys, dys):
         # These aren't allowed anyway, so just return -np.inf.
         return -np.inf
 
-    log_likelihood = -chi2
+    log_likelihood = -chi2 / 2.
     return log_likelihood
 
 def run(df_source,
