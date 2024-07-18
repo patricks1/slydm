@@ -8,7 +8,6 @@ import staudt_utils
 import copy
 import time
 import grid_eval
-import grid_eval_mao
 import h5py
 import itertools
 import numpy as np
@@ -1711,6 +1710,7 @@ def fit_mao(vcut_type, df_source, update_values=False, update_paper=False):
             answer = input(warn_txt)
     import dm_den
     import dm_den_viz
+    import grid_eval_mao
     df = dm_den.load_data(df_source).drop(['m12w', 'm12z'])
     pdfs = copy.deepcopy(pdfs_v)
     galnames = list(pdfs.keys())
@@ -3017,6 +3017,7 @@ def save_samples(df_source, N=5000):
 
 def save_samples_mao(df_source, N=5000):
     import dm_den
+    import grid_eval_mao
     df = dm_den.load_data(df_source)
     gals = list(df.index)
     for gal_ in ['m12z', 'm12w']:
