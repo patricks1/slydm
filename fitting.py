@@ -1210,7 +1210,7 @@ def fit_vdamp(df_source,
                 res_v0_vesc.params['v0'], 
                 res_v0_vesc.params['vdamp'],
                 res_v0_vesc.params['k']),
-                label=label_this, color='C2')
+                label=label_this, color=dm_den_viz.staudt_indv_color)
         if show_exp:
             params_exp = lmfit.Parameters()
             params_exp.add('v0', value=220., vary=True, min=100., max=400.)
@@ -1441,7 +1441,7 @@ def fit_vdamp(df_source,
                           res_v0_vesc.params['vdamp'].value,
                           res_v0_vesc.params['k'].value))
             axs[i+Ngals].plot(vs_resids, resids / 10.**order_of_mag, 
-                              color='C2')
+                              color=dm_den_viz.staudt_indv_color)
             if show_mao_fixed:
                 resids_mao_fixed = calc_resids(
                         mao,

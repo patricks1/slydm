@@ -48,9 +48,10 @@ max_naive_color = 'red'
 max_fit_color = 'C0' 
 mao_prediction_color = 'c'
 mao_naive_color = '#8d8d8d'
+staudt_indv_color = 'C2'
 #staudt_color = '#a903fc'
-staudt_color = '#af08de'
-staudt_band_color = '#d8c9da'
+staudt_color = '#af08de' # purple
+staudt_band_color = '#d8c9da' # greyish purple
 
 def plotter_old(gals, dat, gal_names, datloc, ylabel,
             yscale='linear', adjustment=None, figsize=(7,8)):
