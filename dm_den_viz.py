@@ -1671,7 +1671,7 @@ def plt_disc_diffs(df_source,
     if tgt_fname:
         plt.savefig(paths.figures+tgt_fname,
                     bbox_inches='tight',
-                    dpi=350)
+                    dpi=475)
 
     plt.show()
     
