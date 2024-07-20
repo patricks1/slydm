@@ -18,7 +18,6 @@ pdfs_fname = date_str + '_v_pdfs_disc_dz1.0.pkl'
 pdfs4systematics_fname = date_str + '_v_by_v0_pdfs_disc_dz1.0.pkl'
 
 mcmc_samples_fname = date_str + '_mcmc_samples.h5'
-#mcmc_distrib_samples_fname = date_str + '_mcmc_distrib_samples.h5'
 mcmc_distrib_samples_by_v0_fname = date_str + '_mcmc_distrib_samples_by_v0.h5'
 mcmc_results_fname = date_str + '_mcmc_results.pkl'
 
@@ -28,9 +27,7 @@ mcmc_mao_naive_samples_fname = date_str + '_mcmc_mao_naive_samples.h5'
 mcmc_mao_naive_results_fname = date_str + '_mcmc_mao_naive_results.pkl'
 
 if __name__ == '__main__':
-    ###########################################################################
     # Generate galaxy properties dataframe
-    ###########################################################################
     _ = dm_den.get_v_escs(vescphi_dict_fname, rotate=True)
     _ = dm_den.gen_data(
             df_fname, 
@@ -40,9 +37,7 @@ if __name__ == '__main__':
             vescphi_dict_fname=vescphi_dict_fname
     )
 
-    ###########################################################################
     # Generate the vesc fit, which Mao functions use.
-    ###########################################################################
     plt_vlim_vs_vc(
         df_fname, 
         show_formula=False,
@@ -50,11 +45,9 @@ if __name__ == '__main__':
         raw_data_tgt=simple_fits_fname
     )
 
-    ###########################################################################
     # Generate probability densities p(v) = 4 pi v^2 f(v) where f(v) is the 
-    #speed
+    # speed
     # distribution
-    ###########################################################################
     _ = dm_den.make_v_pdfs(r=8.3, dr=1.5, dz=1., fname=pdfs_fname)
 
     ###########################################################################
@@ -67,17 +60,13 @@ if __name__ == '__main__':
         mcmc_samples_fname,
         pdfs_source=pdfs_fname,
     )
-    # Generate best parameter estimates from the MCMC
+    # Generate best parameter estimates from the MCMC, including the resulting
+    # v0(vc_MW) and vdamp(vc_MW)
     read_mcmc.estimate(
         mcmc_samples_fname,
         mcmc_results_fname, 
         update_paper=True
     )
-    # Sample the `THETA` posteior to make speed distribution samples.
-    #read_mcmc.make_distrib_samples(
-    #        df_fname,
-    #        mcmc_distrib_samples_fname
-    #)
 
     # Also generate speed distribution samples for a universal array of v/v0 
     # values
@@ -98,6 +87,14 @@ if __name__ == '__main__':
             r=8.3,
             dr=1.5,
             dz=1.)
+    # Then use those sampled distributions and the true distribution to
+    # calculate total and systematic errors.
+    _ = fitting.determine_systematics(
+        df_source,
+        mcmc_distrib_samples_by_v0_fname,
+        pdfs4systematics_fname,
+        update_paper=True
+    )
 
     ###########################################################################
     # Run MCMC on Mao
