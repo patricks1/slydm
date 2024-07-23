@@ -1197,7 +1197,7 @@ def fit_vdamp(df_source,
 
         # Set label for the line from this work
         if sigmoid_damped_eqnum is not None:
-            label_this = 'fit, Eq. ' + str(sigmoid_damped_eqnum)
+            label_this = 'fit, Eqn. ' + str(sigmoid_damped_eqnum)
         elif show_mao_fixed or show_mao_free or show_exp:
             label_this = 'fit, sigmoid damped'
         else:
