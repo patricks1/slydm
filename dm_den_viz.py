@@ -2560,8 +2560,15 @@ def plt_universal_prefit(
     handles, labels = axs[0].get_legend_handles_labels()
     if show_bands and not analyze_systematics:
         print('Plotting bands.')
-        handles.append(mpl.lines.Line2D([0], [0], color=samples_color, lw=1.,
-                                        label='rand samples'))
+        handles.append(
+            mpl.lines.Line2D(
+                [0], 
+                [0],
+                color=samples_color,
+                lw=1.,
+                label='rand samples'
+            )
+        )
     axs[0].legend(handles=handles,
                   bbox_to_anchor=(0.5, legend_y), 
                   loc='upper center', ncol=ncol,
