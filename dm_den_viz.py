@@ -3854,7 +3854,8 @@ def plt_halo_integrals_with_mcmc(
         xtickspace=None, 
         scale='log',
         tgt_fname=None, show_rms=False,
-        sigmoid_damped_eqnum=None):
+        sigmoid_damped_eqnum=None,
+        height_override=None):
     '''
     Noteworthy parameters
     ---------------------
@@ -3911,6 +3912,8 @@ def plt_halo_integrals_with_mcmc(
                 fitting.max_double_hard model
     ymax: float; default: 9.e-3 for log scale, None for linear scale
         Upper limit for the y-axis. 
+    height_override: bool, default None
+        The user can specify this to force the figure to have this height.
     '''
     import dm_den
     import fitting
@@ -3963,7 +3966,11 @@ def plt_halo_integrals_with_mcmc(
         with open(paths.data + mao_naive_fit_fname, 'rb') as f:
             fit_mao_naive = pickle.load(f)
 
-    fig, axs = setup_multigal_fig(gals, show_resids=False) 
+    fig, axs = setup_multigal_fig(
+        gals,
+        show_resids=False,
+        height_override=height_override
+    )
 
     # Setting some figure parameters that should differ based on how big the
     # figure is / how many galaxies we're showing
@@ -4710,7 +4717,11 @@ def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False,
                     bbox_inches='tight', dpi=350)
     plt.show()
 
-def setup_multigal_fig(gals, show_resids=True, sharey='row'):
+def setup_multigal_fig(
+        gals,
+        show_resids=True,
+        sharey='row',
+        height_override=None):
     islist = isinstance(gals, (list, np.ndarray, 
                                pd.core.indexes.base.Index))
     if islist:
@@ -4731,6 +4742,8 @@ def setup_multigal_fig(gals, show_resids=True, sharey='row'):
         height_ratios = [4,1]
     else:
         height_ratios = None
+    if height_override is not None:
+        yfigsize = height_override
     fig,axs=plt.subplots(Nrows, Ncols, figsize=(xfigsize, yfigsize), 
                          sharey=sharey,
                          sharex=True, dpi=140, height_ratios=height_ratios)
