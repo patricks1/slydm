@@ -60,7 +60,7 @@ def calc_log_likelihood(theta, X, ys, dys):
         # k values. These aren't allowed anyway, so just return -np.inf.
         return -np.inf
 
-    log_likelihood = -chi2
+    log_likelihood = -chi2 / 2.
     return log_likelihood
 
 def calc_log_gaussian_prior(theta, multiplier, ls_results_source):
@@ -87,10 +87,10 @@ def calc_log_gaussian_prior(theta, multiplier, ls_results_source):
         cov = cov * multiplier 
     return scipy.stats.multivariate_normal.logpdf(theta, mean=mu, cov=cov)
 
-def calc_log_fat_gaussian_prior(theta, ls_results_source='data_raw.pkl'):
+def calc_log_fat_gaussian_prior(theta, ls_results_source):
     return calc_log_gaussian_prior(theta, 50.**2., ls_results_source)
 
-def calc_log_wide_gaussian_prior(theta, ls_results_source='data_raw.pkl'):
+def calc_log_wide_gaussian_prior(theta, ls_results_source):
     return calc_log_gaussian_prior(theta, 5.**2., ls_results_source)
 
 def calc_log_wide_uniform_prior(theta):
@@ -181,10 +181,10 @@ def calc_log_post(
 
     return log_posterior_value
 
-def run(log_prior_function, df_source, tgt_fname, 
+def run(log_prior_function, df_source, tgt_fname,
         pdfs_source='v_pdfs_disc_dz1.0_20240606.pkl',
-        ls_results_source='data_raw.pkl',
-        log_prior_args=()):
+        log_prior_args=(),
+        nsteps=int(3e4)):
     import emcee
     import pickle
     import paths
@@ -199,12 +199,12 @@ def run(log_prior_function, df_source, tgt_fname,
     
     backend = emcee.backends.HDFBackend(paths.data + tgt_fname) 
 
-    with open(paths.data + ls_results_source, 'rb') as f:
-        ls_result = pickle.load(f)
+    #with open(paths.data + ls_results_source, 'rb') as f:
+    #    ls_result = pickle.load(f)
 
-        # Best estimate of the parameters from least squares minimization
-        mu = np.array([ls_result[param] 
-                       for param in ['d', 'e', 'h', 'j', 'k']])
+    #    # Best estimate of the parameters from least squares minimization
+    #    mu = np.array([ls_result[param] 
+    #                   for param in ['d', 'e', 'h', 'j', 'k']])
 
     nondisks = ['m12z', 'm12w']
     with open(paths.data + pdfs_source, 'rb') as f:
@@ -238,7 +238,7 @@ def run(log_prior_function, df_source, tgt_fname,
     dys = dys[isfinite]
 
     nwalkers = 64 
-    ndim = len(mu) # number of parameters
+    ndim = len(theta_ranges) # number of parameters
 
     with multiprocessing.Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, calc_log_post,
@@ -259,17 +259,17 @@ def run(log_prior_function, df_source, tgt_fname,
         else:
             # Set the initial positions to a tiny Gaussian ball around the 
             # best estimate from least-squares minimization.
-            pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
+            #pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
 
             # Generate initial positions within the valid ranges
-            #pos = np.zeros((nwalkers, ndim))
-            #for i, key in enumerate(theta_ranges):
-            #        pos[:, i] = np.random.uniform(
-            #                theta_ranges[key][0], 
-            #                theta_ranges[key][1], 
-            #                nwalkers
-            #        )
+            pos = np.zeros((nwalkers, ndim))
+            for i, key in enumerate(theta_ranges):
+                    pos[:, i] = np.random.uniform(
+                            theta_ranges[key][0], 
+                            theta_ranges[key][1], 
+                            nwalkers
+                    )
 
-        sampler.run_mcmc(pos, int(7e4), progress=True)
+        sampler.run_mcmc(pos, nsteps, progress=True)
 
     return None

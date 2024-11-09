@@ -41,8 +41,15 @@ def plot_chains(samples_fname):
     plt.show()
     return None
 
-def corner_plot(samples_fname, consider_burnin=True, log_prior_function=None,
-                make_thin=True, rng=None):
+def corner_plot(
+        samples_fname,
+        param_keys,
+        consider_burnin=True,
+        log_prior_function=None,
+        log_prior_function_args=(),
+        make_thin=True,
+        rng=None,
+        **kwargs):
     import corner
     import scipy
     import copy
@@ -60,86 +67,31 @@ def corner_plot(samples_fname, consider_burnin=True, log_prior_function=None,
           .format(str(samples.shape)))
     flat_samples = samples.reshape(-1, samples.shape[-1])
     ndim = flat_samples.shape[1]
-    fig = corner.corner(flat_samples, labels=['D', 'e', 'H', 'j', 'k'],
-                        range=rng)
+    fig = corner.corner(flat_samples, labels=param_keys,
+                        range=rng, **kwargs)
     axs = np.array(fig.axes).reshape((ndim, ndim))
 
     if log_prior_function is not None:
-        with open(paths.data + 'data_raw.pkl', 'rb') as f:
+        with open(paths.data + 'ls_results_raw.pkl', 'rb') as f:
             ls_result = pickle.load(f)
 
             # Best estimate of the parameters from least squares minimization
             mu = np.array([ls_result[param] 
-                           for param in ['d', 'e', 'h', 'j', 'k']])
+                           for param in param_keys])
         nwalkers = 32
         pos = mu + 1.e-4 * np.random.randn(nwalkers, ndim)
         with multiprocessing.Pool() as pool:
             sampler = emcee.EnsembleSampler(nwalkers, ndim, log_prior_function,
+                                            args=log_prior_function_args,
                                             pool=pool)
             print('\nSampling prior')
-            sampler.run_mcmc(pos, int(1e4), progress=True)
+            sampler.run_mcmc(pos, int(7e3), progress=True)
             tau = sampler.get_autocorr_time(quiet=True)
             burnin = int(2 * np.max(tau))
             samples = sampler.get_chain(flat=True, discard=burnin)
     
-        ## For each plot on the diagonal, marginalize over all the other
-        ## parameters.
-
-        ## Initialize a placeholder for the ranges that the corner plot 
-        ## currently shows for each of i
-        ## the 
-        ## parameters
-        #xranges = np.zeros((ndim, 2))
-
-        ## Initialize a placeholder for all parameter values that the corner 
-        ## plot currently shows for each 
-        ## of the 
-        ## parameters
-        #Xs = []
-
-        #for i in range(ndim):
-        #    # For each parameter, get the values that the corner plot
-        #    # currently shows.
-        #    ax = axs[i, i]
-        #    patches = ax.patches
-        #    polygon = patches[0]
-        #    vertices = polygon.get_path().vertices
-        #    xs = vertices[:, 0] # All theta[i] values
-        #    Xs.append(xs)
-        #    
-        #    # Min and max theta[i] values
-        #    xranges[i] = np.array([xs.min(), xs.max()]) 
-
         for i in range(ndim):
-        #    def func(n0, n1, n2, n3, ti):
-        #        '''
-        #        Convert the log_prior_function so the nuicance parameters are
-        #        the first four args and the parameter of interest is last so
-        #        scipy.integrate.nquad can integrate over the nuicance
-        #        parameters
-        #        '''
-        #        theta = np.array([n0, n1, n2, n3])
-        #        theta = np.insert(theta, i, ti)
-        #        return log_prior_function(theta)
-
-
             ax = axs[i, i]
-        #    xs = Xs[i]
-        #    logys = np.zeros(len(xs))
-
-        #    # Our integration bounds correspond only to the nuicance parameters
-        #    # i.e. not the i'th parameter
-        #    nuicance_ranges = np.delete(xranges, i, axis=0)
-
-        #    # Perform the marginalization.
-        #    pbar = ProgressBar()
-        #    for j, x in enumerate(pbar(xs)):
-        #        logys[j] = scipy.integrate.nquad(
-        #                func, nuicance_ranges, args=(x,)
-        #        )[0]
-        #    ys = np.exp(np.array(logys))
-
-            
             ax_twin = ax.twinx()
             ax_twin.hist(samples[:, i], bins=150, density=True, 
                          histtype='step')
@@ -148,7 +100,7 @@ def corner_plot(samples_fname, consider_burnin=True, log_prior_function=None,
 
     return None
 
-def trace_plot(samples_fname):
+def trace_plot(samples_fname, param_keys):
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -159,24 +111,43 @@ def trace_plot(samples_fname):
     flat_samples = samples.reshape(-1, samples.shape[-1])
     ndim = flat_samples.shape[1]
     
+    N_samples = len(flat_samples)
+    maxN = int(5e3) 
+    late_start = 50000
+    if N_samples <= late_start:
+        late_start = int(0.35 * N_samples)
+    indices = np.linspace(1, N_samples, min(N_samples, maxN), dtype=int)
+
     trace = [flat_samples[:x].mean(axis=0) 
-             for x in range(1, len(flat_samples))]
+             for x in indices]
     trace = np.array(trace)
 
-    labels = ['D', 'e', 'H', 'j', 'k']
+
     ndim = samples.shape[-1]
-    fig, axs = plt.subplots(ndim, 2, figsize=(8, 12), sharey=False,
-                            sharex='col')
+    fig, axs = plt.subplots(
+        ndim,
+        2,
+        figsize=(8, 12. / 5. * ndim),
+        sharey=False,
+        sharex='col'
+    )
+    if ndim == 1:
+        axs = np.array([axs])
     fig.subplots_adjust(wspace=.3, hspace=0.)
     for i in range(ndim):
-        axs[i, 0].plot(trace[:, i])
-        axs[i, 0].set_ylabel(labels[i])
+        axs[i, 0].plot(indices, trace[:, i])
+        axs[i, 0].set_ylabel(param_keys[i])
 
-        xs = range(int(5e3), len(trace))
-        axs[i, 1].plot(xs, trace[int(5e3):, i])
+        axs[i, 1].plot(
+            indices[indices > late_start], 
+            trace[indices > late_start, i]
+        )
 
     axs[0, 0].set_title('All samples')
-    axs[0, 1].set_title('Starting @ 5000')
+    if N_samples <= late_start:
+        axs[0, 1].set_title('Too few samples to make a late plot.')
+    else:
+        axs[0, 1].set_title('Starting @ {0:0.0f}'.format(late_start))
 
     plt.show()
 
@@ -215,8 +186,10 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
     import numpy as np
     from IPython.display import display, Math
 
+
+    param_keys = ['d', 'e', 'h', 'j', 'k']
+
     samples = read(samples_fname)
-    labels = ['d', 'e', 'h', 'j', 'k']
 
     ndim = samples.shape[1]
     results_dict = {}
@@ -224,14 +197,14 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
         est = np.percentile(samples[:, i], [16, 50, 84])
         q = np.diff(est)
         txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.4f}}}^{{+{2:.4f}}}"
-        txt = txt.format(est[1], q[0], q[1], labels[i])
+        txt = txt.format(est[1], q[0], q[1], param_keys[i])
         display(Math(txt))
-        results_dict[labels[i]] = est[1]
-        results_dict['d' + labels[i]] = np.array([q[0], q[1]])
+        results_dict[param_keys[i]] = est[1]
+        results_dict['d' + param_keys[i]] = np.array([q[0], q[1]])
     if result_fname is not None:
         dm_den.save_var_raw(results_dict, result_fname) 
     if update_paper:
-        for key in labels:
+        for key in param_keys:
             # Save strings to be used in paper.tex
             y = results_dict[key]
             DY = results_dict['d' + key]
@@ -409,8 +382,8 @@ def make_distrib_samples_by_v0(
 
     today = datetime.datetime.today().strftime('%Y%m%d')
     tgt_fname = (
-        'mcmc_distrib_samples_by_v0_' 
-        + today 
+        today 
+        + 'mcmc_distrib_samples_by_v0' 
         + '(' 
         + mcmc_samples_source.replace('.h5', '').replace('mcmc_samples_', '')
         + ').h5'
