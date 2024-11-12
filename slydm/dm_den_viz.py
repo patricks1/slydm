@@ -1864,7 +1864,7 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
     from . import dm_den
-    import fitting
+    from . import fitting
     
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs_v=pickle.load(f)
@@ -2214,7 +2214,7 @@ def plt_universal_prefit(
 
     '''
     from . import dm_den
-    import fitting
+    from . import fitting
     islist = isinstance(gals, (list, np.ndarray, 
                                pd.core.indexes.base.Index))
     if not islist and gals != 'discs':
@@ -2728,7 +2728,7 @@ def plt_universal_prefit_with_mcmc(
 
     '''
     from . import dm_den
-    import fitting
+    from . import fitting
     islist = isinstance(gals, (list, np.ndarray, 
                                pd.core.indexes.base.Index))
     if not islist and gals != 'discs':
@@ -3123,7 +3123,7 @@ def plt_errs(
         mcmc_results_fname='results_mcmc.pkl',
         v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl'):
     from . import dm_den
-    import fitting
+    from . import fitting
 
     df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
     with open(paths.data + v_by_v0_pdf_fname, 'rb') as f:
@@ -3195,7 +3195,7 @@ def plt_errs(
 
 def plt_mao_bands(dfsource):
     from . import dm_den
-    import fitting
+    from . import fitting
 
     with open(paths.data + 'results_mao_lim_fit.pkl', 'rb') as f:
         params = pickle.load(f)
@@ -3333,7 +3333,7 @@ def plt_mw(
     '''
     from . import grid_eval
     from . import dm_den
-    import fitting
+    from . import fitting
     df = staudt_tools.init_df()
     df.loc['mw', 'vesc'] = vesc_mw
     with open(paths.data + fit_results_fname, 'rb') as f:
@@ -3538,7 +3538,7 @@ def plt_halo_integrals(gals,
         Upper limit for the y-axis. 
     '''
     from . import dm_den
-    import fitting
+    from . import fitting
 
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
@@ -3926,7 +3926,7 @@ def plt_halo_integrals_with_mcmc(
         The user can specify this to force the figure to have this height.
     '''
     from . import dm_den
-    import fitting
+    from . import fitting
 
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
@@ -4253,7 +4253,7 @@ def plt_halo_integrals_dblscale(gals, df_source,
     if (show_max_hard or show_mao_naive) and std_vcut_type is None:
         raise ValueError('You must specify the std_vcut_type if you show_mao'
                          '_naive or show_max_hard.')
-    import fitting
+    from . import fitting
     from . import dm_den
     df = dm_den.load_data(df_source)
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
@@ -4422,7 +4422,7 @@ def plt_halo_integral_mw(df_source,
                          tgt_fname=None, ymin=1.e-6, sigmoid_damped_eqnum=None,
                          xtickspace=None,
                          dpi=150):
-    import fitting
+    from . import fitting
     from . import dm_den
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         params = pickle.load(f)
@@ -4512,7 +4512,7 @@ def plt_halo_integral_mw_with_ratio(
         sigmoid_damped_eqnum=None,
         xtickspace=None,
         dpi=150):
-    import fitting
+    from . import fitting
     from . import dm_den
     with open(paths.data + fit_results_fname, 'rb') as f:
         params = pickle.load(f)

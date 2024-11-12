@@ -3544,7 +3544,7 @@ def determine_systematics(
         update_paper=False):
     from . import dm_den
     from . import dm_den_viz
-    import fitting
+    from . import fitting
     '''
     Given a sample of parameters, which carry an implied statistical error,
     determine the additional systematic error to explain the remainder of the

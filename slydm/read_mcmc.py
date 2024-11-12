@@ -267,7 +267,7 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
     return results_dict 
 
 def make_gal_distrib_samples(df, gal, THETA, vs):
-    import fitting
+    from . import fitting
     import numpy as np
 
     vc = df.loc[gal, 'v_dot_phihat_disc(T<=1e4)']

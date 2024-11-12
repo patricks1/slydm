@@ -1,10 +1,10 @@
 import datetime
-import mcmc
-import mcmc_mao_ours
-import mcmc_mao_naive
-import read_mcmc
+from . import mcmc
+from . import mcmc_mao_ours
+from . import mcmc_mao_naive
+from . import read_mcmc
 import paths
-import fitting
+from . import fitting
 from . import dm_den
 
 date_str = datetime.datetime.today().strftime('%Y%m%d')

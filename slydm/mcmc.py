@@ -34,7 +34,7 @@ def calc_log_likelihood(theta, X, ys, dys):
         Errors in y
     '''
     import numpy as np
-    import fitting
+    from . import fitting
 
     Ndimy = ys.ndim
     if Ndimy != 1 or dys.ndim != 1:

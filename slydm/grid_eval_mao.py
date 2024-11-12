@@ -1,4 +1,4 @@
-import fitting
+from . import fitting
 import pickle
 import paths
 import h5py

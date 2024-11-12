@@ -1734,7 +1734,7 @@ def mlr(fsource, xcols, ycol, xscales=None, yscale='log', dropgals=None,
     return tuple(results) 
 
 def find_vcrits_fr_halo_int():
-    import fitting
+    from . import fitting
 
     df = load_data('dm_stats_dz1.0_20230626.h5')
     gals = list(df.index)
@@ -1791,7 +1791,7 @@ def find_vcrits_fr_distrib(df_source, method='direct', update_values=False):
     the
     standard assumption
     '''
-    import fitting
+    from . import fitting
     from . import dm_den_viz
 
     if method not in ['direct', 'derivative']:

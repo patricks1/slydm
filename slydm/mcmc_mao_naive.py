@@ -22,7 +22,7 @@ def calc_log_likelihood(theta, X, ys, dys):
     dys: np.ndarray, shape = (N,)
         Errors in y
     '''
-    import fitting
+    from . import fitting
     import numpy as np
 
     Ndimy = ys.ndim
@@ -58,7 +58,7 @@ def run(df_source,
         vesc_fit_source='data_raw.pkl',
         nsteps=int(1.3e5)):
     from . import dm_den
-    import mcmc
+    from . import mcmc
     import os
     import emcee
     import pickle
@@ -181,7 +181,7 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
     from . import dm_den
     from . import dm_den_viz
     import staudt_utils
-    import read_mcmc
+    from . import read_mcmc
     import UCI_tools.tools as uci
     import numpy as np
     from IPython.display import display, Math
