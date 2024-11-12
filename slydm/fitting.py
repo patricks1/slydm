@@ -7,6 +7,8 @@ import paths
 import staudt_utils
 import copy
 import time
+import os
+import paths
 from . import grid_eval
 import h5py
 import itertools
@@ -27,11 +29,11 @@ rcParams['axes.titlepad']=15
 rcParams['legend.frameon'] = True
 rcParams['figure.facecolor'] = (1., 1., 1., 1.) #white with alpha=1.
 
-with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
+with open(os.path.join(paths.data, 'v_pdfs_disc_dz1.0.pkl'), 'rb') as f:
     pdfs_v=pickle.load(f)
-with open('./data/vescs_rot_20230514.pkl', 'rb') as f:
+with open(os.path.join(paths.data, 'vescs_rot_20230514.pkl'), 'rb') as f:
     vesc_dict = pickle.load(f)
-with open('./data/v_pdfs_incl_ve_20220205.pkl','rb') as f:
+with open(os.path.join(paths.data, 'v_pdfs_incl_ve_20220205.pkl'), 'rb') as f:
     pdfs_v_incl_vearth=pickle.load(f)
 #with open(paths.data + 'vcut_hat_dict.pkl', 'rb') as f:
 #    vcut_hat_dict = pickle.load(f)
