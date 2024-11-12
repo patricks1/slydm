@@ -188,7 +188,7 @@ def run(log_prior_function, df_source, tgt_fname,
     import emcee
     import pickle
     import paths
-    import dm_den
+    from . import dm_den
     import argparse
     import os
     import multiprocessing

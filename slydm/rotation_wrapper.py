@@ -1,5 +1,5 @@
 from UCI_tools import rotate_galaxy
-import dm_den
+from . import dm_den
 import pickle
 import os
 import numpy as np

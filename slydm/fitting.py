@@ -7,7 +7,7 @@ import paths
 import staudt_utils
 import copy
 import time
-import grid_eval
+from . import grid_eval
 import h5py
 import itertools
 import numpy as np
@@ -449,7 +449,7 @@ def fit_g(galaxy='discs', limit=None, update_values=False, parallel=False):
     ** based on the LOG halo integral. **
     *************************************
     '''
-    import dm_den
+    from . import dm_den
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     pdfs = copy.deepcopy(pdfs_v)
     pdfs.pop('m12z')
@@ -599,7 +599,7 @@ def fit_second_cut(df_source, limit=None,
     so early that the sse gets driven up to the point where the lowest sse
     happens when there's no cut at all.
     '''
-    import dm_den
+    from . import dm_den
     with open(paths.data + '/data_raw.pkl', 'rb') as f:
         speed_dist_params = pickle.load(f)
     df = dm_den.load_data(df_source)
@@ -726,7 +726,7 @@ def calc_cut_integral_gal(vmins, vc, d, e, h, j, k, vesc, parallel=False):
 
 def fit_vesc_indv(df_source, limit=1.e-5,
                   update_values=False):
-    import dm_den
+    from . import dm_den
     with open(paths.data + '/data_raw.pkl', 'rb') as f:
         speed_dist_params = pickle.load(f)
     df = dm_den.load_data(df_source)
@@ -791,8 +791,8 @@ def fit_v0(gals='discs', show_exp=False, tgt_fname=None):
     '''
     Plot a simple Maxwellian with the best-fit v0
     '''
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     if gals == 'discs':
         df = df.drop(['m12w', 'm12z'])
@@ -1051,8 +1051,8 @@ def fit_vdamp(df_source,
     if (show_mao_free or show_mao_fixed or show_exp) and vcut_type is None:
         raise ValueError('You must specify a vcut_type if you want to show'
                          ' a distribution with a cut.')
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
     df = dm_den.load_data(df_source)
     if gals == 'discs':
         df = df.drop(['m12w', 'm12z'])
@@ -1550,7 +1550,7 @@ def fit_universal_no_uncert(gals='discs', method='leastsq', update_vals=False,
     if tgt_fname is not None and not plot:
         raise ValueError('tgt_fname for plot image can only be specified if'
                          ' plot is True')
-    import dm_den
+    from . import dm_den
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
@@ -1708,9 +1708,9 @@ def fit_mao(vcut_type, df_source, update_values=False, update_paper=False):
         while answer.lower() not in ['yes', 'no']:
             print('\nPlease type only "yes" or "no".')
             answer = input(warn_txt)
-    import dm_den
-    import dm_den_viz
-    import grid_eval_mao
+    from . import dm_den
+    from . import dm_den_viz
+    from . import grid_eval_mao
     df = dm_den.load_data(df_source).drop(['m12w', 'm12z'])
     pdfs = copy.deepcopy(pdfs_v)
     galnames = list(pdfs.keys())
@@ -1848,8 +1848,8 @@ def fit_mao_naive_aggp(
     if vcut_type != 'lim_fit' and raw_results_fname is not None:
         raise ValueError('You should only update values if you\'re using'
                          ' vcut_type=\'lim_fit\'.')
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
     df = dm_den.load_data(df_source).drop(['m12w', 'm12z'])
     pdfs = copy.deepcopy(pdfs_v)
     galnames = list(pdfs.keys())
@@ -1930,8 +1930,8 @@ def fit_mao_naive_indvp(gal):
     v0 is assumed to be the circular speed.
     vesc is *predicted* from fitting veschat(vc) = vesc0 * (vc/100) ^ epsilon
     '''
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
 
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     vcut_hat_dict = dm_den.load_vcuts('lim_fit', df)
@@ -1976,8 +1976,8 @@ def fit_mao_naive_indvp(gal):
 def fit_universal_sigmoid_exp(update_values=False,
                               method='leastsq', 
                               vc100=True, **kwargs):
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     pdfs = copy.deepcopy(pdfs_v)
     pdfs.pop('m12z')
@@ -2136,8 +2136,8 @@ def plt_universal(gals='discs', update_values=False,
             print('\nPlease type only "yes" or "no".')
             answer = input(warn_txt)
 
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
@@ -2466,7 +2466,7 @@ def plt_universal_mc(gals='discs', m=1.):
     result: lmfit.minimizer.MinimizerResult
         Result of the universal fit
     '''
-    import dm_den
+    from . import dm_den
 
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     df.drop(['m12z', 'm12w'], inplace=True)
@@ -2642,7 +2642,7 @@ def calc_rms_all_methods(
         mao_naive_aggp_results_fname='results_mcmc_mao_naive.pkl',
         mao_ours_results_fname='mcmc_mao_ours_results.pkl',
         update_paper=False):
-    import dm_den
+    from . import dm_den
     with open(paths.data + pdfs_fname, 'rb') as f:
         pdfs = pickle.load(f)
     with open(paths.data + mao_naive_aggp_results_fname, 'rb') as f:
@@ -2795,7 +2795,7 @@ def find_uncertainty(gals, ddfrac=0.1, dhfrac=0.18, v0char=1., N_samples=1000,
     None
 
     '''
-    import dm_den
+    from . import dm_den
 
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
         raise ValueError('Unexpected value provided for gals arg')
@@ -2988,7 +2988,7 @@ def make_samples_mao(N, vs, vc, vesc, d, e, p, ddfrac, dpfrac, dvc=0.):
     return ps_samples
 
 def save_samples(df_source, N=5000):
-    import dm_den
+    from . import dm_den
     df = dm_den.load_data(df_source)
     gals = list(df.index)
     for gal_ in ['m12z', 'm12w']:
@@ -3016,8 +3016,8 @@ def save_samples(df_source, N=5000):
     return samples_dict
 
 def save_samples_mao(df_source, N=5000):
-    import dm_den
-    import grid_eval_mao
+    from . import dm_den
+    from . import grid_eval_mao
     df = dm_den.load_data(df_source)
     gals = list(df.index)
     for gal_ in ['m12z', 'm12w']:
@@ -3148,7 +3148,7 @@ def gal_bands_from_samples(vs, ps_samples, samples_color, ax=None):
     return lowers, uppers
 
 def three_d_distribs():
-    import dm_den
+    from . import dm_den
     df = dm_den.load_data('dm_stats_dz1.0_20230626.h5').drop(['m12w', 'm12z'])
     #if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
     #    raise ValueError('Unexpected value provided for gals arg')
@@ -3334,7 +3334,7 @@ def diff_fr68(params, assume_corr=False, incl_area=True,
     del pdfs['m12z']
 
     def count_within(gal, ddfrac, dhfrac):
-        import dm_den
+        from . import dm_den
         df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
 
         pdf_gal = pdfs[gal]
@@ -3425,7 +3425,7 @@ def count_within_agg(ddfrac, dhfrac, df, assume_corr=False,
         return percent, area
 
 def count_within_agg_mao(ddfrac, dpfrac, df, params):
-    import dm_den
+    from . import dm_den
     pdfs = copy.deepcopy(pdfs_v)
     del pdfs['m12w']
     del pdfs['m12z']
@@ -3542,8 +3542,8 @@ def determine_systematics(
         v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl',
         verbose=False,
         update_paper=False):
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
     import fitting
     '''
     Given a sample of parameters, which carry an implied statistical error,

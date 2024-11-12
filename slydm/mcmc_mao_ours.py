@@ -57,7 +57,7 @@ def run(df_source,
         pdfs_source='v_pdfs_disc_dz1.0_20240606.pkl',
         vesc_fit_source='data_raw.pkl',
         nsteps=int(3e4)):
-    import dm_den
+    from . import dm_den
     import mcmc
     import os
     import emcee
@@ -176,8 +176,8 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
     results_dict: dict
         The best estimates of the parameters from the chains.
     '''
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
     import staudt_utils
     import read_mcmc
     import UCI_tools.tools as uci

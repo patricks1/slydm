@@ -1,4 +1,4 @@
-import fitting
+from . import fitting
 import pickle
 import paths
 import h5py
@@ -35,7 +35,7 @@ else:
 def get_df():
     # It seems to break with h5py but not with pickle. I can't remember why.
     df = pd.read_pickle(paths.data + 'dm_stats_dz1.0_20230626.pkl')
-    #import dm_den
+    #from . import dm_den
     #df = dm_den.load_data('dm_stats_dz1.0_20230626.h5')
     return df
 

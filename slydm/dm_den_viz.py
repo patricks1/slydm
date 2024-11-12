@@ -3,15 +3,13 @@ from IPython.display import display, Latex
 import numpy as np
 import pandas as pd
 import cmasher as cmr
-import dm_den
 import sys
 import paths
 import staudt_utils
 import pickle
 import itertools
 import math
-import grid_eval
-import grid_eval_mao
+from . import grid_eval, grid_eval_mao
 import lmfit
 import copy
 import os
@@ -375,6 +373,7 @@ def ax_slr(ax, fname, xcol, ycol,
         this percentage error applies to the uncertainty in the target vector
         in *linear* space.
     '''
+    from . import dm_den
 
     #Perform the regression in linear space unless we're plotting log data, as
     #opposed to plotting unadjusted data but on a log scale
@@ -687,6 +686,7 @@ def fill_ax_new(ax, df, xcol, ycol,
                 showcorr=True, legend_txt=None, 
                 adjust_text_kwargs={}, xtickspace=None, ytickspace=None,
                 **kwargs):
+    from . import dm_den
     if xcol == 'den_solar' and xadjustment == 'log' and xlabel is None:
         xlabel = log_rho_solar_label
     xs=df[xcol]
@@ -922,7 +922,7 @@ def plt_vlim_vs_vc(
         update_values=False, tgt_fname=None, verbose=False,
         show_vesc=False,
         raw_data_tgt='data_raw.pkl'):
-    import dm_den
+    from . import dm_den
     '''
     Noteworthy parameters
     ---------------------
@@ -1096,6 +1096,8 @@ def plt_vesc_pot_vs_vc(df_source, figsize=(4.5, 4.8), labelsize=11,
     '''
     \hat{vesc}(Phi) vs vc
     '''
+    from . import dm_den
+
     ycol = 'vesc'
     xcol = 'vc100'
     df = dm_den.load_data(df_source)
@@ -1212,6 +1214,8 @@ def plt_vs_vc(ycol, source_fname, tgt_fname=None,
         Whether to show error bars on the markers. The error values come from 
         linear_y_data * linear_dyfrac_data.
     '''
+    from . import dm_den
+
     if show_marker_errs is None:
         if ycol == 'den_disc':
             show_marker_errs = True
@@ -1459,6 +1463,8 @@ def plt_vs_gmr_vc(ycol, tgt_fname=None,
                   forecast_sig=1.-0.682, verbose=False, 
                   adjust_text_kwargs={}, show_formula='outside',
                   figsize=(10,5), labelsize=14., vc=vc_eilers, dvc=dvc_eilers):
+    from . import dm_den
+
     df = dm_den.load_data(source_fname)
 
     fig, axs = plt.subplots(1, 2, figsize=figsize, dpi=110, sharey=True,
@@ -1691,6 +1697,8 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
         If draw_arrow is True (False), an arrow will (will not) link the data
             point with its label.
     '''
+    from . import dm_den
+    
     df = dm_den.load_data(df_source)
     if only_disks:
         df.drop(['m12z', 'm12w'], inplace=True)
@@ -1756,6 +1764,7 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
 
 def plt_particle_counts(df_source, dropgals=None):
     from UCI_tools import cropper
+    from . import dm_den
 
     df = dm_den.load_data(df_source)
     if dropgals is not None:
@@ -1854,8 +1863,9 @@ def plt_naive(gals, vcut_type, df_source, tgt_fname=None, update_vals=False,
     if update_vals and gals != 'discs':
         raise ValueError('You should only update values when you\'re plotting '
                          'all the discs.')
-    import dm_den
+    from . import dm_den
     import fitting
+    
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs_v=pickle.load(f)
     islist = isinstance(gals, (list, np.ndarray, 
@@ -2203,7 +2213,7 @@ def plt_universal_prefit(
         analysis should be done.
 
     '''
-    import dm_den
+    from . import dm_den
     import fitting
     islist = isinstance(gals, (list, np.ndarray, 
                                pd.core.indexes.base.Index))
@@ -2717,7 +2727,7 @@ def plt_universal_prefit_with_mcmc(
         analysis should be done.
 
     '''
-    import dm_den
+    from . import dm_den
     import fitting
     islist = isinstance(gals, (list, np.ndarray, 
                                pd.core.indexes.base.Index))
@@ -3112,7 +3122,7 @@ def plt_errs(
         df_source,
         mcmc_results_fname='results_mcmc.pkl',
         v_by_v0_pdf_fname='v_by_v0_pdfs_disc_dz1.0.pkl'):
-    import dm_den
+    from . import dm_den
     import fitting
 
     df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
@@ -3184,7 +3194,7 @@ def plt_errs(
     return None
 
 def plt_mao_bands(dfsource):
-    import dm_den
+    from . import dm_den
     import fitting
 
     with open(paths.data + 'results_mao_lim_fit.pkl', 'rb') as f:
@@ -3321,8 +3331,8 @@ def plt_mw(
     -------
     None
     '''
-    import grid_eval
-    import dm_den
+    from . import grid_eval
+    from . import dm_den
     import fitting
     df = staudt_tools.init_df()
     df.loc['mw', 'vesc'] = vesc_mw
@@ -3527,7 +3537,7 @@ def plt_halo_integrals(gals,
     ymax: float; default: 9.e-3 for log scale, None for linear scale
         Upper limit for the y-axis. 
     '''
-    import dm_den
+    from . import dm_den
     import fitting
 
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
@@ -3915,7 +3925,7 @@ def plt_halo_integrals_with_mcmc(
     height_override: bool, default None
         The user can specify this to force the figure to have this height.
     '''
-    import dm_den
+    from . import dm_den
     import fitting
 
     if gals != 'discs' and not isinstance(gals, (list, np.ndarray)):
@@ -4244,7 +4254,7 @@ def plt_halo_integrals_dblscale(gals, df_source,
         raise ValueError('You must specify the std_vcut_type if you show_mao'
                          '_naive or show_max_hard.')
     import fitting
-    import dm_den
+    from . import dm_den
     df = dm_den.load_data(df_source)
     with open('./data/v_pdfs_disc_dz1.0.pkl','rb') as f:
         pdfs=pickle.load(f)
@@ -4413,7 +4423,7 @@ def plt_halo_integral_mw(df_source,
                          xtickspace=None,
                          dpi=150):
     import fitting
-    import dm_den
+    from . import dm_den
     with open(paths.data + 'data_raw.pkl', 'rb') as f:
         params = pickle.load(f)
     df = dm_den.load_data(df_source)
@@ -4503,7 +4513,7 @@ def plt_halo_integral_mw_with_ratio(
         xtickspace=None,
         dpi=150):
     import fitting
-    import dm_den
+    from . import dm_den
     with open(paths.data + fit_results_fname, 'rb') as f:
         params = pickle.load(f)
     df = dm_den.load_data(df_source)
@@ -4633,6 +4643,8 @@ def plt_halo_integral_mw_with_ratio(
 
 def plt_anisotropy(df_source, only_discs=True, savefig=False, vertical=False,
                    xticklabel_fontsize=10, figsize=None):
+    from . import dm_den
+
     df_copy = dm_den.load_data(df_source)
     if only_discs:
         df_copy.drop(['m12z', 'm12w'], inplace=True)
@@ -4773,6 +4785,8 @@ def label_axes(axs, fig, gals):
     return None
 
 if __name__=='__main__':
+    from . import dm_den
+
     fname=sys.argv[1]
     df=dm_den.load_data(fname)
     #Take each dict of inputs from make_plot_feed() and make a plot with each:

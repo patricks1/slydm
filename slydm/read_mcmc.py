@@ -179,8 +179,8 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
     results_dict: dict
         The best estimates of the parameters from the chains.
     '''
-    import dm_den
-    import dm_den_viz
+    from . import dm_den
+    from . import dm_den_viz
     import staudt_utils
     import UCI_tools.tools as uci
     import numpy as np
@@ -282,7 +282,7 @@ def make_gal_distrib_samples(df, gal, THETA, vs):
     return ps_samples
 
 def make_distrib_samples(df_source, mcmc_samples_source, tgt_fname):
-    import dm_den
+    from . import dm_den
     import h5py
     import paths
     import numpy as np
@@ -355,7 +355,7 @@ def make_distrib_samples_by_v0(
     -------
     None
     '''
-    import dm_den
+    from . import dm_den
     import h5py
     import paths
     import datetime

@@ -5,7 +5,7 @@ import mcmc_mao_naive
 import read_mcmc
 import paths
 import fitting
-import dm_den
+from . import dm_den
 
 date_str = datetime.datetime.today().strftime('%Y%m%d')
 vescphi_dict_fname = date_str + '_vescs(phi)_rot.pkl'

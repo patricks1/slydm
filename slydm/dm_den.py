@@ -20,7 +20,7 @@ from progressbar import ProgressBar
 from astropy import units as u
 from astropy import constants as c
 from matplotlib import pyplot as plt
-from SHMpp.SHMpp_gvmin_reconcile import vE as vE_f
+from .SHMpp.SHMpp_gvmin_reconcile import vE as vE_f
 
 class rich_dict(dict):
     '''
@@ -1384,7 +1384,6 @@ def make_v_over_v0_pdfs(
     pdf: dict
         A dictionary keyed by galaxy containing the speed distribution data
     '''
-    import dm_den
 
     if type(df_source) != str:
         raise TypeError('df_source should be a str.')
@@ -1415,7 +1414,7 @@ def make_v_over_v0_pdfs(
     vs_by_v0 = (v_by_v0_bins[1:] + v_by_v0_bins[:-1]) / 2.
     d, e = [fit_results[key]
             for key in ['d', 'e']]
-    df = dm_den.load_data(df_source).drop(['m12z', 'm12w'])
+    df = load_data(df_source).drop(['m12z', 'm12w'])
 
     pdfs = {} 
     for i, galname in enumerate(df.index):
@@ -1425,7 +1424,7 @@ def make_v_over_v0_pdfs(
         v_bins = v_by_v0_bins * v0
         vs = (v_bins[1:] + v_bins[:-1]) / 2.
 
-        res = dm_den.v_pdf(df, galname, v_bins, dz=1.)
+        res = v_pdf(df, galname, v_bins, dz=1.)
         pdfs[galname]['vs'] = vs
         (pdfs[galname]['ps'],
          pdfs[galname]['bins'],
@@ -1793,7 +1792,7 @@ def find_vcrits_fr_distrib(df_source, method='direct', update_values=False):
     standard assumption
     '''
     import fitting
-    import dm_den_viz
+    from . import dm_den_viz
 
     if method not in ['direct', 'derivative']:
         raise ValueError('Unexpected argument passed for `method`. \'direct\''
