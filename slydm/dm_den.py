@@ -139,8 +139,13 @@ def unpack_new(df, galname, dr=1.5, drsolar=None, typ='fire',
     h=uci.get_data(almost_full_path,N,'Header','HubbleParam')
 
     # Getting host halo info 
-    p, rvir, v, mvir = get_halo_info(halodirec, suffix, typ, host_key, 
-                                     mass_class)
+    p, rvir, v, mvir = uci.tools.get_halo_info(
+        halodirec,
+        suffix,
+        typ,
+        host_key, 
+        mass_class
+    )
     
     for i,parttype in enumerate(getparts):
         print('Unpacking {0:s} data'.format(parttype))
@@ -200,8 +205,13 @@ def unpack_gas(df, galname, typ='fire'):
     h=uci.get_data(sdir,N,'Header','HubbleParam')
 
     # Getting host halo info
-    p, rvir, v, mvir = get_halo_info(halodirec, suffix, typ, host_key, 
-                                     mass_class)
+    p, rvir, v, mvir = uci.tools.get_halo_info(
+        halodirec,
+        suffix,
+        typ,
+        host_key, 
+        mass_class
+    )
     
     for i,parttype in enumerate(getparts):
         print('Unpacking {0:s} data'.format(parttype))
@@ -298,7 +308,13 @@ def unpack(df, galname, dr=1.5, drsolar=None, typ='fire',
     print('Elapsed time: {0:0.0f}s'.format(time.time()-start))
 
     # Getting host halo info
-    p, r, v, mvir = get_halo_info(halodirec, suffix, typ, host_key, mass_class)
+    p, r, v, mvir = uci.tools.get_halo_info(
+        halodirec,
+        suffix,
+        typ,
+        host_key,
+        mass_class
+    )
     
     v_vecs-=v
     rs=np.linalg.norm(coords-p,axis=1)
@@ -340,8 +356,13 @@ def unpack_4pot(df, galname, typ='fire'):
     h=uci.get_data(sdir,N,'Header','HubbleParam')
 
     # Getting host halo info
-    p, rvir, v, mvir = get_halo_info(halodirec, suffix, typ, 
-                                     host_key, mass_class)
+    p, rvir, v, mvir = uci.tools.get_halo_info(
+        halodirec,
+        suffix,
+        typ, 
+        host_key,
+        mass_class
+    )
     
     for i,parttype in enumerate(getparts):
         print('Unpacking {0:s} data'.format(parttype))
@@ -371,64 +392,6 @@ def unpack_4pot(df, galname, typ='fire'):
                     parttypes=np.concatenate((parttypes,parttypes_add))
     data = {'pos':coords,'parttype':parttypes,'mass':ms}
     return data
-
-def get_halo_info(halodirec, suffix, typ, host_key, mass_class):
-    if mass_class>10: 
-        with h5py.File(halodirec,'r') as f:
-            isrj = suffix=='_elvis_RomeoJuliet'
-            istl = suffix=='_elvis_ThelmaLouise'
-            ishost2 = host_key=='host2.index'
-            isdmo = typ=='dmo'
-            if (isrj or (istl and isdmo)) and ishost2:
-                #RomeoJuliet doesn't have a halo2.index key
-                #ThelmaLouise doesn't have a halo2.index key in the dmo sims
-                ms_hals=f['mass.vir'][:]
-                is_sorted=np.argsort(ms_hals)
-                i=is_sorted[-2]
-            else:
-                i=f[host_key][0]
-            p=f['position'][i]
-            r=f['radius'][i] #Is this virial radius?
-            v=f['velocity'][i]
-            mvir = f['mass.vir'][i]
-    elif mass_class==10:
-        #I think this is going to need correcting. Will prob give an error.
-        hposList = np.loadtxt(path+run+'/'+haloName+'/halo_pos.txt')
-        p = hposList[0]
-        rvirList = np.loadtxt(path+run+'/'+haloName+'/halo_r_vir.txt')
-        r = rvirList[0]
-        mvir=np.nan #Don't have a saved value for mvir
-    else:
-        raise ValueError('Cannot yet handle log M < 10')
-    return p, r, v, mvir
-
-def unpack_mwithin(fname):
-    #I think this might be an abandoned function?
-    df=load_data(fname)
-    for galname in df.index:
-        suffix=df.loc[galname,'fsuffix']
-        res=df.loc[galname,'res']
-        mass_class=df.loc[galname,'mass_class']
-        host_key=df.loc[galname,'host_key']
-        halodirec, direc = build_direcs_old(suffix, res, mass_class, typ=typ)
-        s=600
-        s=str(s)
-        sdir=direc+'snapdir_'+s+'/snapshot_'+s
-
-        coord_halo, rvir, v_halo, mvir = get_halo_info(halodirec, suffix,
-                                                       'fire', host_key,
-                                                       mass_class)
-
-        #Determine number of files
-        N=len(os.listdir(direc+'snapdir_'+s+'/'))
-
-        result=[]
-        pbar=ProgressBar()
-        parttypes=['PartType0','PartType1','PartType4']
-        for i in pbar(range(0,N)):
-            with h5py.File(sdir,'r') as f:
-                ms=f[parttype]['Masses'] #in units of 1e10 M_sun / h
-                rs=f[parttype]['Coordinates']
 
 def get_disp_within(r,rs,v_mags):
     #Note, this is not the right way to get dispersion. Maybe delete this.
@@ -938,7 +901,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
         mass_class = df.loc[galname,'mass_class']
 
         halodirec = staudt_tools.build_direcs(suffix, res, mass_class, typ)[0]
-        rvir = get_halo_info(halodirec, suffix, typ, host_key, 
+        rvir = uci.tools.get_halo_info(halodirec, suffix, typ, host_key, 
                              mass_class)[1]
         #######################################################################
         '''
