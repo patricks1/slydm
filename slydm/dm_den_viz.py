@@ -706,9 +706,9 @@ def fill_ax_new(ax, df, xcol, ycol,
         c = dm_den.load_data('dm_stats_stellar_20221110.h5') \
                   .loc[df.index,['mvir_stellar']].values
         #######################################################################
-        #from UCI_tools import cropper
+        #from UCI_tools import fire_io
         #for galname in df.index:
-        #    gal_data = cropper.load_data(galname, getparts=['PartType4'])
+        #    gal_data = fire_io.load_data(galname, getparts=['PartType4'])
         #    M0 = dm_den.get_mwithin(8.3, 
         #                            gal_data['PartType4']['r'],
         #                            gal_data['PartType4']['mass_phys'])
@@ -1763,7 +1763,7 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
     return None
 
 def plt_particle_counts(df_source, dropgals=None):
-    from UCI_tools import cropper
+    from UCI_tools import fire_io
     from . import dm_den
 
     df = dm_den.load_data(df_source)
@@ -1777,7 +1777,7 @@ def plt_particle_counts(df_source, dropgals=None):
     counts = []
     pbar = ProgressBar()
     for galname in pbar(df.index):
-        gal = cropper.load_data(galname, getparts=['PartType1'], 
+        gal = fire_io.load_data(galname, getparts=['PartType1'], 
                                 verbose=False) 
         rs = gal['PartType1']['r']
         zs = gal['PartType1']['coord_rot'][:,2]
