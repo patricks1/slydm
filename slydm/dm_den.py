@@ -499,7 +499,7 @@ def den_disp_phi_bins(source_fname, save=False, N_slices=15,
     for k, galname in enumerate(pbar(df.index)):
         if verbose:
             print('\n' + galname)
-        gal = fire_io.load_data(galname, getparts=['PartType1'], verbose=False)
+        gal = fire_io.load_cropped_data(galname, getparts=['PartType1'], verbose=False)
         phis = np.array([atan(y,x) \
                          for x,y in gal['PartType1']['coord_rot'][:,:2]])
 
@@ -581,7 +581,7 @@ def shot_noise_fraction(df_source):
     print('Loading particle counts')
     galnames = df.drop(['m12z', 'm12w']).index
     for galname in pbar(galnames):
-        gal = fire_io.load_data(galname, getparts=['PartType1'], 
+        gal = fire_io.load_cropped_data(galname, getparts=['PartType1'], 
                                 verbose=False) 
         rs = gal['PartType1']['r']
         zs = gal['PartType1']['coord_rot'][:,2]
@@ -859,7 +859,7 @@ def analyze(df, galname, dr=1.5, drsolar=None, typ='fire',
             vcircparts=['PartType0','PartType1','PartType4'],
             source='original', dz=1.):
     
-    from UCI_tools.fire_io import load_data as load_cropped
+    from UCI_tools.fire_io import load_cropped_data as load_cropped
     from UCI_tools.fire_io import flatten_particle_data
 
     if drsolar is None:
@@ -1220,7 +1220,7 @@ def v_pdf(df, galname, bins=50, r=8.3, dr=1.5, incl_v_earth=False, dz=0.5):
         raise TypeError('dz should either be a float or None.')
     if type(incl_v_earth) != bool:
         raise TypeError('incl_v_earth should be a boolean.')
-    d = fire_io.load_data(galname, getparts=['PartType1'], verbose=False)
+    d = fire_io.load_cropped_data(galname, getparts=['PartType1'], verbose=False)
     dm = d['PartType1']
     ms = dm['mass_phys']
     rs = dm['r']
@@ -1869,7 +1869,7 @@ def find_max_v(dfsource, r=8.3, bootstrap=False, tgt_fname=None):
     dz = df.attrs['dz']
     speeds_dict = {}
     for gal in df.index:
-        data = fire_io.load_data(gal, getparts=['PartType1'])
+        data = fire_io.load_cropped_data(gal, getparts=['PartType1'])
         speeds = np.linalg.norm(data['PartType1']['v_vec_rot'], axis=1)
         rs = data['PartType1']['r'] 
         zs = data['PartType1']['coord_rot'][:, 2]

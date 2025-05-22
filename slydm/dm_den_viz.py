@@ -708,7 +708,7 @@ def fill_ax_new(ax, df, xcol, ycol,
         #######################################################################
         #from UCI_tools import fire_io
         #for galname in df.index:
-        #    gal_data = fire_io.load_data(galname, getparts=['PartType4'])
+        #    gal_data = fire_io.load_cropped_data(galname, getparts=['PartType4'])
         #    M0 = dm_den.get_mwithin(8.3, 
         #                            gal_data['PartType4']['r'],
         #                            gal_data['PartType4']['mass_phys'])
@@ -1777,7 +1777,7 @@ def plt_particle_counts(df_source, dropgals=None):
     counts = []
     pbar = ProgressBar()
     for galname in pbar(df.index):
-        gal = fire_io.load_data(galname, getparts=['PartType1'], 
+        gal = fire_io.load_cropped_data(galname, getparts=['PartType1'], 
                                 verbose=False) 
         rs = gal['PartType1']['r']
         zs = gal['PartType1']['coord_rot'][:,2]
