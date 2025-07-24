@@ -442,11 +442,18 @@ def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
         in_phi_bin = np.repeat(True, len(inshell))
         v=4./3.*np.pi*(rmax**3.-rmin**3.) #kpc^3
     if verbose:
-        print('{0:0.0f} particles in the ring'.format(np.sum(inshell \
-                                                              & indisc)))
-        print('{0:0.0f} particles in the slice'.format(np.sum(inshell \
-                                                              & indisc \
-                                                              & in_phi_bin)))
+        if zs is not None:
+            shell_or_ring = 'ring'
+        else:
+            shell_or_ring = 'shell'
+        print('{0:0.0f} particles in the {1}'.format(
+            np.sum(inshell & indisc), 
+            shell_or_ring
+        ))
+        if phi_bin is not None:
+            print('{0:0.0f} particles in the slice'.format(
+                np.sum(inshell & indisc & in_phi_bin)
+            ))
     mtot=ms[inshell & indisc & in_phi_bin].sum()
     den=mtot/v
     devs = v_vecs[inshell & indisc & in_phi_bin] \
