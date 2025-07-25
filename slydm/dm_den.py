@@ -408,9 +408,39 @@ def get_den_disp(r, rs, dr, ms, v_mags, v_vecs, zs=None, dz=None, phis=None,
 
     Noteworthy Parameters
     ---------------------
-    phi_bin: list-like, shape=(2,)
-        Edges of the phi slice. The function will isolate particles where
-        phi >= phi_bin[0] and phi < phi_bin[1]
+    r: float
+        The distance from the center of the galaxy at which to evaluate the
+        density and dispersion
+    rs: list-like
+        The distance from the center of the galaxy of each particle. In other
+        words, the spherical radial coordinate, not the cylindrical radial
+        coordinate.
+    dr: float
+        The total thickness of the spherical shell within which to evaluate the
+        density and dispersion. The shell will extend from dr/2 interior to r 
+        to dr/2 exterior to r. 
+    v_mags: None
+        This parameter doesn't do anything, but I'm leaving it for now so
+        nothing breaks.
+    v_vecs: list-like, shape=(N_particles, 3)
+        The velocity vectors of the particles, preferrably rotated so z=0 is in
+        the place of the disc and in cylindrical
+        coordinates.
+    zs: list-like, default None
+        The particles' heights above and below the disc
+    dz: float, default None
+        The total height of the pseudo-ring. The ring will
+        include particles between -dz/2 and +dz/2. If specified, the code will
+        perform the analysis in a psuedo-ring. If not specified, the code will
+        analyze a spherical shell.
+    phis: list-like, default None
+        The particles' azimuthal angles.
+    phi_bin: list-like, shape=(2,), default None
+        Edges of the phi slice. If specified, the function will only evaluate
+        particles where
+        phi >= phi_bin[0] and phi < phi_bin[1].
+    verbonse: bool, default True
+        Whether to print a verbose amount of information while running.
     '''
     rmax=r+dr/2.
     rmin=r-dr/2.
