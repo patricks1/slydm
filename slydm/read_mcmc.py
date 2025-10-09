@@ -182,7 +182,7 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
     from . import dm_den
     from . import dm_den_viz
     import staudt_utils
-    import UCI_tools.tools as uci
+    import uci_tools.tools as uci
     import numpy as np
     from IPython.display import display, Math
 

@@ -1,12 +1,12 @@
-from UCI_tools import rotate_galaxy
+from uci_tools import rotate_galaxy
 from . import dm_den
 import pickle
 import os
 import numpy as np
 import pandas as pd
 from astropy import units as u, constants as c
-from UCI_tools import staudt_tools
-from UCI_tools import tools as uci
+from uci_tools import staudt_tools
+from uci_tools import tools as uci
 
 path = '/DFS-L/DATA/cosmo/grenache/staudt/dm_den/'
 

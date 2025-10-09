@@ -180,7 +180,7 @@ def estimate(samples_fname, result_fname=None, update_paper=False):
     from . import dm_den_viz
     import staudt_utils
     from . import read_mcmc
-    import UCI_tools.tools as uci
+    import uci_tools.tools as uci
     import numpy as np
     from IPython.display import display, Math
 

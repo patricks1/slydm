@@ -15,7 +15,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import multiprocessing as mp
-import UCI_tools.tools as uci
+import uci_tools.tools as uci
 from progressbar import ProgressBar
 from IPython.display import display, Latex
 

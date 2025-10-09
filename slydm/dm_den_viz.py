@@ -13,8 +13,8 @@ from . import grid_eval, grid_eval_mao
 import lmfit
 import copy
 import os
-import UCI_tools.tools as uci
-from UCI_tools import staudt_tools
+import uci_tools.tools as uci
+from uci_tools import staudt_tools
 from progressbar import ProgressBar
 
 import scipy
@@ -706,7 +706,7 @@ def fill_ax_new(ax, df, xcol, ycol,
         c = dm_den.load_data('dm_stats_stellar_20221110.h5') \
                   .loc[df.index,['mvir_stellar']].values
         #######################################################################
-        #from UCI_tools import fire_io
+        #from uci_tools import fire_io
         #for galname in df.index:
         #    gal_data = fire_io.load_cropped_data(galname, getparts=['PartType4'])
         #    M0 = dm_den.get_mwithin(8.3, 
@@ -1763,7 +1763,7 @@ def plt_gmr_vs_vc(df_source, tgt_fname=None,
     return None
 
 def plt_particle_counts(df_source, dropgals=None):
-    from UCI_tools import fire_io
+    from uci_tools import fire_io
     from . import dm_den
 
     df = dm_den.load_data(df_source)
